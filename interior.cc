@@ -46,6 +46,11 @@
 		wfgD are in some w'D as above, and similarly for wgD. Basically,
 		refine the tree of descendents of w of length at most n+d until we
 		get a word which is contained in some w'D.
+		
+		Note: it suffices to try to include wuD in some w'D where w' starts
+		with a *different letter* than w. This will prune the tree (since we
+		won't have to search all the way down to discover that wuD is only
+		contained in wD and in no other w'D) and should be much faster.
 	If we succeed for some w in G_n	then z is in Set A.
 
  */
