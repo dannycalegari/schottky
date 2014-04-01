@@ -23,9 +23,9 @@
 	is a map p: E -> L which takes an infinite word w_infty to the limit
 	w_n(1/2) where w_n is the initial subword of w of length n.
  	
-	Set A is the set of complex numbers z for which L is disconnected
-	(equivalently, for which L is a Cantor set). Set A is closed, and 
-	contains the set of z with |z|>=1/sqrt{2}=0.7071067811 (approximately)
+	Set A is the set of complex numbers z for which L is connected
+	Set A is closed, and contains the set of z with 
+	|z|>=1/sqrt{2}=0.7071067811 (approximately)
 	So we can always just fix D to be the disk of radius 4 centered at 1/2.
 	
 	A word w of length n is *good for z* if there is some m>n so that for every
