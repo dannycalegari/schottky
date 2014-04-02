@@ -3,8 +3,8 @@
 point cpx_to_point(cpx w){
     point p;
 	if(SMALLSCREEN){
-	    p.x = 256 + (int) 256.0*w.real();
-	    p.y = 256 - (int) 256.0*w.imag();
+	    p.x = 512 + (int) 256.0*w.real();
+	    p.y = 512 - (int) 256.0*w.imag();
 	} else {
 		p.x = 512 + (int) 512.0*w.real(); // 512
 		p.y = 512 - (int) 512.0*w.imag(); // 512

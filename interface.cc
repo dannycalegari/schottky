@@ -5,6 +5,7 @@ void ifs::user_interface(){
 	point p,pp;
 	cpx mz;
 	stringstream T;
+	int s;
 	
 	finished=false;
 	
@@ -30,7 +31,7 @@ void ifs::user_interface(){
 					T.str("");
 					T << "mouse location " << mz;
 					pp=p;
-					pp.y=pp.y+50;
+					pp.y=pp.y+100;
 					draw_box(pp, 400, 0xFFFFFF);
 					draw_text(p, T, 0x000000);
 				};
@@ -104,11 +105,13 @@ void ifs::user_interface(){
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_b){ // mode toggle 
+                	s=sync;	// remember sync mode
                 	initialize(center,center);
+                	sync=s;	// don't reset sync mode
                     mode=1-mode;
                     draw();
                     break;
-                } else if(XLookupKeysym(&report.xkey, 0) == XK_v){ // sync toggle 
+                } else if(XLookupKeysym(&report.xkey, 0) == XK_v){ // sync cycle 
                     sync=(sync+1)%3;
                     draw();
                     break;

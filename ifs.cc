@@ -103,7 +103,7 @@ void ifs::draw_limit_set(){
 	if(sync==1){
 		w=z;
 	} else if(sync==2){
-		w=-z;
+		w=conj(z);
 	};
 	erase_field();
 	p.x=1200;
@@ -128,7 +128,7 @@ void ifs::draw_limit_set(){
 	draw_text(p,T,0x000000);
 	T.str("");		
 	p.y=p.y+20;
-	T << "sync w free, w=z, w=-z (cycle with [v]): " << sync;
+	T << "sync w free, w=z, w=conj(z) (cycle with [v]): " << sync;
 	draw_text(p,T,0x000000);
 	T.str("");		
 	p.y=p.y+20;
@@ -189,9 +189,24 @@ void ifs::draw_mandelbrot_set(){
 	
 	p.x=1200;	// 1200
 	p.y=20;
-	T << "connectedness locus; z=w slice";
+	T << "connectedness locus";
 	draw_text(p,T,0x000000);
 	T.str("");
+	p.y=p.y+20;
+	T << "slice: ";
+	if(sync==0){
+		T << "w=" << w << "\n";
+	} else if(sync==1){
+		T << "w=z\n";
+	} else if(sync==2){
+		T << "w=conj(z)\n";
+	};
+	draw_text(p,T,0x000000);
+	T.str("");
+	p.y=p.y+20;
+	T << "cycle slice type with [v]\n";
+	draw_text(p,T,0x000000);
+	T.str("");		
 	p.y=p.y+20;
 	T << "depth (adjust with [d/e]): " << depth;
 	draw_text(p,T,0x000000);
@@ -225,7 +240,11 @@ void ifs::draw_mandelbrot_set(){
 			y=2.0*wind*((double) 1024-j)/1024.0;
 			
 			z=center-wind-(wind*I)+x+(y*I);
-			w=z;	// diagonal slice; could define other slices (eg w=constant)
+			if(sync==1){
+				w=z;	// diagonal slice; could define other slices (eg w=constant,w=conj(z))
+			} else if(sync==2){
+				w=conj(z);
+			};
 			if(abs(z)>1.0){	// could truncate this to sqrt(1/2) actually
 				draw_box(q,mesh,0x000000);
 			} else { // if(abs(z)>0.5){
