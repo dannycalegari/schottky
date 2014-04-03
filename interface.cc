@@ -119,7 +119,14 @@ void ifs::user_interface(){
                     color_ifs=1-color_ifs;
                     draw();
                     break;
-                };
+                } else if (XLookupKeysym(&report.xkey, 0) == XK_f) { //toggle disconnected depth
+                    disconnection_depth = !disconnection_depth;
+                    //if (disconnection_depth) {
+                    //  cout << "Disconnection depth is on\n";
+                    //}
+                    draw();
+                    break;
+                }
 
             default:
             	break;

@@ -16,6 +16,8 @@ class ifs{
 		double wind;	// size of window in mandelbrot mode
 		int mesh;		// size of mesh in mandelbrot mode in pixels
 		int mode;		// draw mode: 0 for limit set, 1 for mandelbrot set
+		
+		bool disconnection_depth; // whether to draw the depth for disconnected sets
 						
 		// default initial values
 		
@@ -58,6 +60,7 @@ void ifs::initialize(cpx a, cpx b){
 	w=b;
 	sync=0;
 	color_ifs=true;
+	disconnection_depth=false;
 	step=0.01;	// size of adjustments to z and w
 	seed=0.0;	// initial seed point for IFS
 	center=0.0;	// in mandelbrot mode; center of screen, size of window, and mesh of accuracy
@@ -228,6 +231,10 @@ void ifs::draw_mandelbrot_set(){
 	draw_text(p,T,0x000000);
 	T.str("");
 	p.y=p.y+20;
+	T << "disconnection depth (toggle [f]";
+	draw_text(p,T,0x000000);
+	T.str("");
+	p.y=p.y+20;
 	T << "quit with [q]";
 	draw_text(p,T,0x000000);
 	T.str("");	
@@ -250,7 +257,9 @@ void ifs::draw_mandelbrot_set(){
 			} else { // if(abs(z)>0.5){
 				if(circ_connected()){
 					draw_box(q,mesh,0x000001*exit_depth);
-				};
+				} else if (disconnection_depth) {
+				  draw_box(q,mesh,exit_depth<<16);
+				}
 			};
 			
 	

@@ -7,4 +7,5 @@ all: schottky
 schottky: schottky.cc points.cc graphics.cc ifs.cc connected.cc interface.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -o schottky schottky.cc $(LFLAGS) -lm
 
-clean: rm schottky
+clean:
+	rm schottky
