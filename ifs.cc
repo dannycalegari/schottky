@@ -231,7 +231,7 @@ void ifs::draw_mandelbrot_set(){
 	draw_text(p,T,0x000000);
 	T.str("");
 	p.y=p.y+20;
-	T << "disconnection depth (toggle [f]";
+	T << "toggle disconnection depth with [f]";
 	draw_text(p,T,0x000000);
 	T.str("");
 	p.y=p.y+20;
@@ -258,7 +258,7 @@ void ifs::draw_mandelbrot_set(){
 				if(circ_connected()){
 					draw_box(q,mesh,0x000001*exit_depth);
 				} else if (disconnection_depth) {
-				  draw_box(q,mesh,exit_depth<<16);
+					draw_box(q,mesh,0x010000*exit_depth);
 				}
 			};
 			
