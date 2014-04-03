@@ -19,7 +19,7 @@ void ifs::user_interface(){
 				if(mode==1){	// mandelbrot mode
 					zoom(p);
 					draw();
-				};
+				};	
 				break;
 			case MotionNotify:
 				p=mouse_location();
@@ -121,9 +121,24 @@ void ifs::user_interface(){
                     break;
                 } else if (XLookupKeysym(&report.xkey, 0) == XK_f) { //toggle disconnected depth
                     disconnection_depth = !disconnection_depth;
-                    //if (disconnection_depth) {
-                    //  cout << "Disconnection depth is on\n";
-                    //}
+                    draw();
+                    break;
+                } else if(XLookupKeysym(&report.xkey, 0) == XK_t){ // toggle color_ifs
+                    draw_trap_mode = !draw_trap_mode;
+		    if (mode == 0) {
+                        draw();
+		    }
+                    break;
+		} else if (XLookupKeysym(&report.xkey, 0) == XK_x) { //toggle chunky ifs
+                    chunky_ifs = !chunky_ifs;
+                    if (mode == 0) draw();
+                    break;
+                } else if (XLookupKeysym(&report.xkey, 0) == XK_bracketleft) { //adjust chunky radius
+                    chunky_radius /= 1.5;
+                    draw();
+                    break;
+                } else if (XLookupKeysym(&report.xkey, 0) == XK_bracketright) { //adjust chunky radius
+                    chunky_radius *= 1.5;
                     draw();
                     break;
                 }

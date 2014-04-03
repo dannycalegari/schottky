@@ -7,6 +7,8 @@ class ifs{
 		the other scales by w and is centered at 1. */
 		cpx z,w;		// parameters for IFS
 		bool color_ifs;	// draw fL and gL in different colors
+		bool chunky_ifs;       //draw the ifs with chunky balls
+		double chunky_radius;  //the radius of the balls
 		int sync;		// sync=0 w is arbitrary, sync=1 w=z, sync=2 w=-z
 		int depth;		// depth to recurse to draw or detect connectedness
 		int exit_depth;	// size of tree to detect connectedness
@@ -18,6 +20,9 @@ class ifs{
 		int mode;		// draw mode: 0 for limit set, 1 for mandelbrot set
 		
 		bool disconnection_depth; // whether to draw the depth for disconnected sets
+		bool draw_trap_mode;      //whether to check for a trap and draw it in limit set mode
+		Trap current_trap;        //the last trap we created
+		
 						
 		// default initial values
 		
@@ -32,10 +37,17 @@ class ifs{
 		bool circles_intersect(cpx c1, cpx a1, cpx c2, cpx a2, double R, int d); // recursive test; do circles intersect?
 		bool circ_connected();	// circle algorithm to test for connectedness
 				
+		
+		// find and draw a trap
+		
+		bool find_trap();
+		void draw_trap();		
+		
 		// draw limit set
 		
 		void draw_dots(int depth, cpx u);
 		void draw_color_dots(int d, cpx u, long color);
+		void draw_color_chunky_dots(int d, cpx u, long color, double radius);
 
 		void draw_limit_set();
 		
@@ -60,7 +72,10 @@ void ifs::initialize(cpx a, cpx b){
 	w=b;
 	sync=0;
 	color_ifs=true;
+	chunky_ifs=false;
+	chunky_radius=2;
 	disconnection_depth=false;
+	draw_trap_mode = false;
 	step=0.01;	// size of adjustments to z and w
 	seed=0.0;	// initial seed point for IFS
 	center=0.0;	// in mandelbrot mode; center of screen, size of window, and mesh of accuracy
@@ -97,6 +112,18 @@ void ifs::draw_color_dots(int d, cpx u, long color){
 		draw_color_dots(d-1, iterate(1,u), 0x00AAFF);
 	};
 };
+
+void ifs::draw_color_chunky_dots(int d, cpx u, long color, double radius) {
+	//draw IFS with chunky dots
+	if (d<=0) {
+		draw_circle(cpx_to_point(u), radius, color);
+		//cout << "radius: " << radius;
+		//cout << "abs(z): " << abs(z);
+	} else {
+		draw_color_chunky_dots(d-1, iterate(0,u), 0xFFAA00, radius);//*abs(z));
+		draw_color_chunky_dots(d-1, iterate(1,u), 0x00AAFF, radius);//*abs(w));
+	}
+}
 
 void ifs::draw_limit_set(){
 	// draw IFS and write values of parameters to screen
@@ -135,6 +162,19 @@ void ifs::draw_limit_set(){
 	draw_text(p,T,0x000000);
 	T.str("");		
 	p.y=p.y+20;
+	if (draw_trap_mode) {
+		if (find_trap()) {
+			T << "trap found (toggle trap mode with [t])";
+			draw_trap();
+		} else {
+			T << "trap not found (toggle trap mode with [t])";
+		}
+	} else {
+		T << "trap drawing disabled (toggle trap mode with [t])";
+	}
+	draw_text(p,T,0x000000);
+	T.str("");
+	p.y=p.y+20;
 	T << "2-color IFS (toggle with [c]): ";
 	if(color_ifs){
 		T << "on";
@@ -144,6 +184,15 @@ void ifs::draw_limit_set(){
 	draw_text(p,T,0x000000);
 	T.str("");		
 	p.y=p.y+20;
+	T << "chunky IFS (toggle with [x], adjust radius with l/r brackets): ";
+	if (chunky_ifs) {
+		T << "on (radius: " << chunky_radius << ")";
+	} else {
+		T << "off";
+	}
+	draw_text(p,T,0);
+	T.str("");
+	p.y=p.y+20;	
 	T << "connected: ";
 	if(circ_connected()){
 		T << "yes";
@@ -161,7 +210,11 @@ void ifs::draw_limit_set(){
 	draw_text(p,T,0x000000);
 	T.str("");	
 	if(color_ifs){
-		draw_color_dots(depth,seed,0x000000);	// actual IFS is drawn
+		if (chunky_ifs) {
+			draw_color_chunky_dots(depth,seed,0x000000,chunky_radius);
+		} else {
+			draw_color_dots(depth,seed,0x000000);	// actual IFS is drawn
+		}
 	} else {
 		draw_dots(depth,seed);
 	};

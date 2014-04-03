@@ -42,9 +42,11 @@ cpx I (0.0,1.0);
 
 #include "points.cc"
 #include "graphics.cc"
+#include "trap.cc"
 #include "ifs.cc"
 #include "connected.cc"
 #include "interface.cc"
+#include "ifs_trap.cc"
 
 
 int main(int argc, char *argv[]){ 

@@ -136,6 +136,13 @@ void draw_circle(point p, int r, long col){
     XDrawArc(display, win, gc, p.x-r, p.y-r, 2*r, 2*r, 0, 23040);
 };
 
+void draw_circle(point p, double r, long col){
+    XSetForeground(display, gc, col);
+    XSetLineAttributes(display, gc, 1, LineSolid, 1, 1);
+    XSetFillStyle(display, gc, FillSolid);
+    XFillArc(display, win, gc, p.x-r, p.y-r, 2*r+1, 2*r+1, 0, 23040);
+};
+
 void draw_dot(point p, long col){
     XSetForeground(display, gc, col);
     XSetLineAttributes(display, gc, 1, LineSolid, 1, 1);

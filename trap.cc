@@ -1,1 +1,4 @@
-//File to check for a trap
+
+struct Trap {
+  vector<cpx> polygon;
+};
