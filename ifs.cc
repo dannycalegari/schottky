@@ -21,6 +21,7 @@ class ifs{
 		
 		bool disconnection_depth; // whether to draw the depth for disconnected sets
 		bool draw_trap_mode;      //whether to check for a trap and draw it in limit set mode
+		int trap_depth;           //maximal depth to look for traps
 		Trap current_trap;        //the last trap we created
 		
 						
@@ -81,7 +82,8 @@ void ifs::initialize(cpx a, cpx b){
 	center=0.0;	// in mandelbrot mode; center of screen, size of window, and mesh of accuracy
 	wind=1.0;
 	mesh=1;
-	depth=12;	// depth to iterate IFS or detect connectedness to
+	depth=12;	  // depth to iterate IFS or detect connectedness to
+	trap_depth = depth;  //depth to search for traps 
 };
 
 cpx ifs::iterate(int index, cpx u){
