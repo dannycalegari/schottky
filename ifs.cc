@@ -58,6 +58,8 @@ class ifs{
 		void draw_dots(int depth, cpx u);
 		void draw_color_dots(int d, cpx u, long color);
 		void draw_color_chunky_dots(int d, cpx u, long color, double radius);
+		void compute_chunky_radius();
+		
 
 		void draw_limit_set();
 		
@@ -76,6 +78,20 @@ class ifs{
 };
 
 
+
+void ifs::compute_chunky_radius() {
+  //initialize the chunky radius to contain the whole set
+  double z_restriction = abs(0.5*z-0.5)/(1.0-az);
+	double w_restriction = abs(0.5-0.5*w)/(1.0-aw);
+  chunky_radius = (z_restriction > w_restriction 
+                                  ? z_restriction 
+                                  : w_restriction);
+  //cout << "z: " << z << " az: " << az << " w: " << w << " aw: " << aw << "\n"; 
+  //cout << "Z restriction: " << z_restriction << "\n";
+  //cout << "W restriction: " << w_restriction << "\n";
+  //cout << "Computed initial radius as " << chunky_radius << "\n";
+}
+
 void ifs::initialize(cpx a, cpx b){
 	// initialize z to a and w to b
 	z=a;
@@ -85,7 +101,6 @@ void ifs::initialize(cpx a, cpx b){
 	sync=0;
 	color_ifs=true;
 	chunky_ifs=false;
-	chunky_radius=2;
 	disconnection_depth=false;
 	draw_trap_mode = false;
 	step=0.01;	// size of adjustments to z and w
@@ -95,6 +110,9 @@ void ifs::initialize(cpx a, cpx b){
 	mesh=1;
 	depth=12;	  // depth to iterate IFS or detect connectedness to
 	trap_depth = depth;  //depth to search for traps 
+	compute_chunky_radius();
+
+	
 };
 
 cpx ifs::iterate(int index, cpx u){
@@ -131,12 +149,15 @@ void ifs::draw_color_dots(int d, cpx u, long color){
 void ifs::draw_color_chunky_dots(int d, cpx u, long color, double radius) {
 	//draw IFS with chunky dots
 	if (d<=0) {
-		draw_circle(cpx_to_point(u), radius, color);
+	  //the radius should get multiplied by 512
+	  double draw_radius = radius*512;
+	  if (draw_radius < 1) draw_radius = 1;
+		draw_circle(cpx_to_point(u), draw_radius, color);
 		//cout << "radius: " << radius;
 		//cout << "abs(z): " << abs(z);
 	} else {
-		draw_color_chunky_dots(d-1, iterate(0,u), 0xFFAA00, radius);//*abs(z));
-		draw_color_chunky_dots(d-1, iterate(1,u), 0x00AAFF, radius);//*abs(w));
+		draw_color_chunky_dots(d-1, iterate(0,u), 0xFFAA00, radius*az);
+		draw_color_chunky_dots(d-1, iterate(1,u), 0x00AAFF, radius*aw);
 	}
 }
 
@@ -147,8 +168,10 @@ void ifs::draw_limit_set(){
 	
 	if(sync==1){
 		w=z;
+		aw = az;
 	} else if(sync==2){
 		w=conj(z);
+		aw = az;
 	};
 	erase_field();
 	p.x=1200;
@@ -226,6 +249,8 @@ void ifs::draw_limit_set(){
 	T.str("");	
 	if(color_ifs){
 		if (chunky_ifs) {
+		  compute_chunky_radius();
+		  //cout << "Chunky radius: " << chunky_radius << "\n";
 			draw_color_chunky_dots(depth,seed,0x000000,chunky_radius);
 		} else {
 			draw_color_dots(depth,seed,0x000000);	// actual IFS is drawn

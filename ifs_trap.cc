@@ -75,14 +75,29 @@ void ifs::compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int com
 bool ifs::find_trap() {
   //find the radius of the smallest closed ball about 1/2 which 
   //is mapped inside itself under both f and g
-  double z_restriction = abs(0.5*z-0.5)/(1.0-abs(z));
-  double w_restriction = abs(0.5*w+0.5)/(1.0-abs(w));
-  double min_initial_radius = (z_restriction < w_restriction ? z_restriction : w_restriction);
+  double z_restriction = abs(0.5*z-0.5)/(1.0-az);
+	double w_restriction = abs(0.5-0.5*w)/(1.0-aw);
+  double min_initial_radius = (z_restriction > w_restriction 
+                                             ? z_restriction 
+                                             : w_restriction);
+  
   
   //starting depth will always be 8?
   int current_depth = 8;
   std::vector<Ball> balls;
   compute_balls(balls, Ball(0.5, min_initial_radius), current_depth);
+  
+  //now we need to effectively increase the radius of the 
+  //*previous* step until the balls of the *current* step 
+  //form a connected set for both f and g
+  //we'll start by doubling the radius (it's probably pretty small)
+  double more_dramatic_action = (az < aw ? az : aw);
+  double smallest_previous_radius = pow( more_dramatic_action, current_depth-1 ) * min_initial_radius;
+  //double epsilon = 
+  
+  
+  
+  
   
   //figure out a radius boost such that adding this much on to the 
   //radius of all image balls makes the f ball union connected and 
@@ -91,10 +106,10 @@ bool ifs::find_trap() {
   double max_current_radius = pow( larger_action, current_depth ) * min_initial_radius;
   //this needs to be some positive number; this is kind of random
   double current_radius_boost = 0.1*max_current_radius;
-  while (true) {
+  //while (true) {
     //fill out the grid with the current balls and radius boost
     
-  }
+  //}
   
   //starting mesh size will always be 512?
   
