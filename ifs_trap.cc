@@ -1,29 +1,49 @@
 //Functions to check for a trap
 
+#include "XGraphics.h"
 
 //this records a ball
 struct Ball {
+  cpx center;
+  double radius;
+  int word;     //the f and g word we applied to get here (highest bit is most recent application)
+  int word_len; //the number of significant bits
   Ball() { 
     center = 0.5;
     radius = 1.0;
+    word = 0;
+    word_len = 0;
   }
   Ball(cpx c, double r) {
     center = c;
     radius = r;
+    word = 0;
+    word_len = 0; //just a ball, no words, to start
   }
-  cpx center;
-  double radius;
+  Ball(cpx c, double r, int w, int wl) {
+    center = c;
+    radius = r;
+    word = w;
+    word_len = wl; //just a ball, no words, to start
+  }
+  int last_gen_index() const {
+    return (word >> (word_len-1))&1;
+  }
 };
 
 //compute the image ball
 //(left action)
 Ball ifs::act_on_left(int index, const Ball& b) {
+  int word = b.word;
+  int word_len = b.word_len;
   if (index == 0) {
-    return Ball( z*b.center, az*b.radius );
+    return Ball( z*b.center, az*b.radius, word, word_len+1 );
   } else {
-    return Ball( (w*(b.center - 1.0)) + 1.0, aw*b.radius );
+    return Ball( (w*(b.center - 1.0)) + 1.0, aw*b.radius, word | (1 << word_len), word_len+1 );
   }
 }
+
+
 
 
 //Trap computation grid functions
@@ -50,24 +70,24 @@ struct GridPixel {
   
   
 struct TrapGrid {
-  int pixel_width; //the number of pixels on a side(it's a square)
-  cpx lower_left;
-  cpx upper_right;
-  double pixel_radius; //half the height of the pixels
+  int num_pixels; //the number of pixels on a side(it's a square)
+  cpx lower_left;  //the lower left corner of the lower left pixel
+  cpx upper_right; //the upper right corner of the upper right pixel
+  double pixel_diameter; //the height/width of a pixel
+  double box_width; //the real width/height of the grid (upper_right.real() - lower_left.real())
   
   //the pixel grid grid[i][j] is the ith pixel in the x direction (horizontal), and 
   //the jth in the y direction.  grid[0][0] is the lower left pixel
   std::vector<std::vector<GridPixel> > grid;
   
   TrapGrid() {
-    width = 0;
+    num_pixels = 0;
     grid.resize(0);
   }
   
   TrapGrid(const std::vector<Ball>& balls, int w, double rad_mul);
   void reset_grid(cpx ll, cpx ur);
-  void fill_pixels(const std::vector<Ball>& balls, double rad_mul);
-  void fill_pixels(const Ball& b, double rad_mul); 
+  void fill_pixels(const std::vector<Ball>& balls, double rad_mul); 
   void pixel_indices(int& i, int&j, const cpx& u); //find the pixel with the given point
   cpx pixel_center(int i, int j);  //return the point which is the center of the pixel
   cpx pixel_center(const cpx& u);  //return the point which is the center of pixel containing the given point
@@ -79,7 +99,7 @@ struct TrapGrid {
 TrapGrid::TrapGrid(const std::vector<Ball>& balls, 
                    int w,
                    double rad_mul) {
-  pixel_width = w;
+  num_pixels = w;
   lower_left = cpx(100,100);
   upper_right = cpx(-100,-100);
   int nb = (int)balls.size();
@@ -115,7 +135,7 @@ TrapGrid::TrapGrid(const std::vector<Ball>& balls,
   }
   
   //build the blank grid
-  
+  grid = std::vector<std::vector<GridPixel> >(num_pixels, std::vector<GridPixel>(num_pixels));
   
   //initialize the pixels
   reset_grid(lower_left, upper_right);
@@ -128,27 +148,149 @@ TrapGrid::TrapGrid(const std::vector<Ball>& balls,
 //set the lower left and upper right, clear all the pixels, and 
 //set their centers
 void TrapGrid::reset_grid(cpx ll, cpx ur) {
-}
-
-//fill all the pixels with the given balls
-void TrapGrid::fill_pixels(const std::vector<Ball>& balls, 
-                           double rad_mul) {
-  int nb = (int)balls.size();
-  for (int i=0; i<nb; ++i) {
-    fill_pixels(G, balls[i], rad_mul);
+  lower_left = ll;
+  upper_right = ur;
+  box_width = ur.real() - ll.real();
+  if (box_width < 1e-10) std::cout << "Grid precision is too low!\n";
+  pixel_diameter = box_width/double(num_pixels);
+  for (int i=0; i<num_pixels; ++i) {
+    double rp = lower_left.real() + (double(i)+0.5)*pixel_diameter;
+    for (int j=0; j<num_pixels; ++j) {
+      grid[i][j].center = cpx(rp, lower_left.imag() + (double(j)+0.5)*pixel_diameter);
+      grid[i][j].z_ball_containing = -1;
+      grid[i][j].w_ball_containing = -1;
+      grid[i][j].z_ball_touching = -1;
+      grid[i][j].z_touching_distance = -1;
+      grid[i][j].w_ball_touching = -1;
+      grid[i][j].w_touching_distance = -1;
+    }
   }
 }
 
 //fill the pixels for a given ball
 //this just naively checks everything in a square
-void TrapGrid::fills_pixels(const Ball& ball, double rad_mul) {
-  double r = ball.radius * rad_mul;
-  double c = ball.center;
+void TrapGrid::fill_pixels(const std::vector<Ball>& balls, double rad_mul) {
+  int nb = (int)balls.size();
+  for (int bi=0; bi<nb; ++bi) {
+    double r = balls[bi].radius * rad_mul;
+    const cpx& c = balls[bi].center;
+    int ll_touching_i, ll_touching_j;
+    int ur_touching_i, ur_touching_j;
+    double pixel_radius = 0.5*pixel_diameter;
+    pixel_indices(ll_touching_i, ll_touching_j, cpx(c.real()-r, c.imag()-r));
+    pixel_indices(ur_touching_i, ur_touching_j, cpx(c.real()+r, c.imag()+r));
+    for (int i=ll_touching_i; i<=ur_touching_i; ++i) {
+      for (int j=ll_touching_j; j<=ur_touching_j; ++j) {
+        //determine the quadrant that grid[i][j] is in relative to the center
+        //first, the four most likely things:
+        cpx p_c = grid[i][j].center;
+        cpx p_ur(p_c.real() + pixel_radius, p_c.imag() + pixel_radius);
+        cpx p_lr(p_c.real() + pixel_radius, p_c.imag() - pixel_radius);
+        cpx p_ul(p_c.real() - pixel_radius, p_c.imag() + pixel_radius);
+        cpx p_ll(p_c.real() - pixel_radius, p_c.imag() - pixel_radius);
+        bool touching = false;
+        bool containing = false;
+        if (p_ur.real() < c.real() && p_ur.imag() < c.imag()) { 
+          //pixel is to the lower left of the center
+          //it suffices to check the upper right for touching and lower left for containing
+          if (abs(c-p_ll) < r) containing = true;
+          else if (abs(c-p_ur) < r) touching = true;
+                
+        } else if (p_lr.real() < c.real() && p_lr.imag() > c.imag()) {
+          //pixel is to the upper left
+          //it suffices to check lr for touching and upper left for containing
+          if (abs(c-p_ul) < r) containing = true;
+          else if (abs(c-p_lr) < r) touching = true;
+          
+        } else if (p_ll.real() > c.real() && p_ll.imag() > c.imag()) {
+          //pixel is to the upper right
+          //suffices to check ll for touching and ur for containing
+          if (abs(c-p_ur) < r) containing = true;
+          else if (abs(c-p_ll) < r) touching = true;
+          
+        } else if (p_ul.real() > c.real() && p_ul.imag() < c.imag()) {
+          //pixel is to the lower right
+          //it suffices to check ul for touching and lr for containing
+          if (abs(c-p_lr) < r) containing = true;
+          else if (abs(c-p_ul) < r) touching = true;
+        
+        } else {
+          //those were the four easier cases
+          if (p_ur.real() < c.real()) { 
+            //the pixel is to the left
+            //it suffices to check that p_ll.real() > c.real() - r for touching
+            //and that it contains p_ll and p_ul
+            if (abs(c-p_ll) < r && abs(c-p_ul)) containing = true;
+            else if (p_ll.real() > c.real() - r) touching = true;
+          
+          } else if (p_ll.imag() > c.imag()) {
+            //the pixel is above
+            //it suffices to check that p_ll.imag() < c.imag() + r for touching
+            //and that it contains the top ones for containing
+            if (abs(c-p_ur)<r && abs(c-p_ul)<r) containing = true;
+            else if (p_ll.imag() > c.imag() + r) touching = true;
+            
+          } else if (p_ll.real() > c.real()) {
+            //the pixel is to the right
+            //it suffices to check that p_ll.real() < c.real() + r for touching 
+            //and that it contains the right ones for containing
+            if (abs(c-p_ur)<r && abs(c-p_lr)<r) containing = true;
+            else if (p_ll.real() > c.real() + r) touching = true;
+            
+          } else if (p_ur.imag() < c.imag()) {
+            //the pixel is below
+            //it suffices to check that p_ur.imag() > c.imag() - r for touching and 
+            //that it contains the bottom ones for containing
+            if (abs(c-p_ll)<r && abs(c-p_lr)<r) containing = true;
+            else if (p_ur.imag() > c.imag() -r) touching = true;
+          
+          } else { 
+            //the pixel is directly over the center of the circle
+            //it *is* touching, and its containing if all the corners are contained 
+            if (abs(c-p_ll)<r && abs(c-p_lr)<r && abs(c-p_ur)<r && abs(c-p_ul)<r) containing = true;
+            else touching = true;
+          }
+        }
+        if (containing) touching = true;
+        if (balls[bi].last_gen_index() == 0) {                //it's in the z set
+          if (containing) grid[i][j].z_ball_containing = bi;  //might as well overwrite it
+          if (touching) {
+            double d = abs(p_c-c);
+            if (!grid[i][j].z_ball_touching || d < grid[i][j].z_touching_distance) {
+              grid[i][j].z_ball_touching = bi;
+              grid[i][j].z_touching_distance = d;
+            }
+          }
+        } else {                                              //it's in the w set
+          if (containing) grid[i][j].w_ball_containing = bi;  //might as well overwrite it
+          if (touching) {
+            double d = abs(p_c-c);
+            if (!grid[i][j].w_ball_touching || d < grid[i][j].w_touching_distance) {
+              grid[i][j].w_ball_touching = bi;
+              grid[i][j].w_touching_distance = d;
+            }
+          }
+        }
+      }
+    }//<-- end of loop over pixels
+    
+  }//<-- end of loop over balls
   
 }
 
+
 //find the pixel containing the given point
 void TrapGrid::pixel_indices(int& i, int&j, const cpx& u) {
+  double h_dist = u.real() - lower_left.real();
+  double v_dist = u.imag() - lower_left.imag();
+  if (h_dist < 0 || v_dist < 0 
+                 || upper_right.real() - u.real() < 0 
+                 || upper_right.imag() - u.imag() < 0) { //point is outside the grid
+    i=-1;
+    j=-1;
+  }
+  i = int(h_dist/pixel_diameter);
+  j = int(v_dist/pixel_diameter);
 }
 
 //return the point which is the center of the pixel
@@ -158,7 +300,9 @@ cpx TrapGrid::pixel_center(int i, int j) {
 
 //return the point which is the center of pixel containing the given point
 cpx TrapGrid::pixel_center(const cpx& u) {
-  
+  int i,j;
+  pixel_indices(i,j,u);
+  return grid[i][j].center;
 }
 
 
@@ -206,11 +350,11 @@ bool ifs::find_trap() {
                                              : w_restriction);
   
   
-  //starting depth will always be 8?
-  int current_depth = 8;
+  //starting depth will always be 10?
+  int current_depth = 10;
   std::vector<Ball> balls;
   compute_balls(balls, Ball(0.5, min_initial_radius), current_depth);
-  
+
   //now we need to effectively increase the radius of the 
   //*previous* step until the balls of the *current* step 
   //form a connected set for both f and g
@@ -225,7 +369,9 @@ bool ifs::find_trap() {
   
   //now fill out the grid using this prev_rad_mul
   //grid size is always 512?
-  TrapGrid TG(*this, balls, 512, prev_rad_mul);
+  TrapGrid TG(balls, 512, prev_rad_mul);
+  
+  TG.show();
 
   
   

@@ -149,12 +149,12 @@ void ifs::draw_color_dots(int d, cpx u, long color){
 void ifs::draw_color_chunky_dots(int d, cpx u, long color, double radius) {
 	//draw IFS with chunky dots
 	if (d<=0) {
-	  //the radius should get multiplied by 512
-	  double draw_radius = radius*512;
-	  if (draw_radius < 1) draw_radius = 1;
-		draw_circle(cpx_to_point(u), draw_radius, color);
-		//cout << "radius: " << radius;
-		//cout << "abs(z): " << abs(z);
+	        //the radius should get multiplied by 512
+	        double draw_radius = radius*512;
+	        //if (draw_radius < 1) draw_radius = 1;
+	        draw_circle(cpx_to_point(u), draw_radius, color);
+	        //cout << "radius: " << radius;
+	        //cout << "abs(z): " << abs(z);
 	} else {
 		draw_color_chunky_dots(d-1, iterate(0,u), 0xFFAA00, radius*az);
 		draw_color_chunky_dots(d-1, iterate(1,u), 0x00AAFF, radius*aw);
