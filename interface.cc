@@ -52,34 +52,42 @@ void ifs::user_interface(){
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_Left){          
                     z=z-step;
+                    az = abs(z);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_Right){           
                     z=z+step;
+                    az = abs(z);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_Up){          
                     z=z+(step*I);
+                    az = abs(z);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_Down){           
                     z=z-(step*I);
+                    az = abs(z);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_j){          
                     w=w+step;
+                    aw = abs(w);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_l){           
                     w=w-step;
+                    aw = abs(w);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_i){          
                     w=w-(step*I);
+                    aw = abs(w);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_k){           
                     w=w+(step*I);
+                    aw = abs(w);
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_s){ // speed up       
