@@ -1,20 +1,6 @@
 //Functions to check for a trap
 
 
-//this records the trap computation grid
-struct TrapGrid {
-  int width; //it's a square
-  
-  std::vector<int> f_ball_hit;
-  std::vector<int> g_ball_hit;
-  TrapGrid() {
-    width = 0;
-    f_ball_hit = std::vector<int>(0);
-    g_ball_hit = std::vector<int>(0);
-  }
-};
-
-
 //this records a ball
 struct Ball {
   Ball() { 
@@ -38,6 +24,144 @@ Ball ifs::act_on_left(int index, const Ball& b) {
     return Ball( (w*(b.center - 1.0)) + 1.0, aw*b.radius );
   }
 }
+
+
+//Trap computation grid functions
+
+struct GridPixel {
+  cpx center; //the center of this pixel
+  
+  //the data on balls *containing* the pixel
+  //bool contained_in_z;
+  int z_ball_containing;
+  //double z_containing_distance; 
+  //bool contained_in_w;
+  int w_ball_containing;
+  //double w_containing_distance;
+  
+  //the data on balls *touching* the pixel
+  //bool touching_z;
+  int z_ball_touching;
+  double z_touching_distance;
+  //bool touching_w;
+  int w_ball_touching;
+  double w_touching_distance;
+};
+  
+  
+struct TrapGrid {
+  int pixel_width; //the number of pixels on a side(it's a square)
+  cpx lower_left;
+  cpx upper_right;
+  double pixel_radius; //half the height of the pixels
+  
+  //the pixel grid grid[i][j] is the ith pixel in the x direction (horizontal), and 
+  //the jth in the y direction.  grid[0][0] is the lower left pixel
+  std::vector<std::vector<GridPixel> > grid;
+  
+  TrapGrid() {
+    width = 0;
+    grid.resize(0);
+  }
+  
+  TrapGrid(const std::vector<Ball>& balls, int w, double rad_mul);
+  void reset_grid(cpx ll, cpx ur);
+  void fill_pixels(const std::vector<Ball>& balls, double rad_mul);
+  void fill_pixels(const Ball& b, double rad_mul); 
+  void pixel_indices(int& i, int&j, const cpx& u); //find the pixel with the given point
+  cpx pixel_center(int i, int j);  //return the point which is the center of the pixel
+  cpx pixel_center(const cpx& u);  //return the point which is the center of pixel containing the given point
+};
+
+
+//initialize the grid by finding the min/max of x,y coordinates
+//and then filling in the balls
+TrapGrid::TrapGrid(const std::vector<Ball>& balls, 
+                   int w,
+                   double rad_mul) {
+  pixel_width = w;
+  lower_left = cpx(100,100);
+  upper_right = cpx(-100,-100);
+  int nb = (int)balls.size();
+  //compute the max/min
+  for (int i=0; i<nb; ++i) {
+    cpx rad_vec = rad_mul*cpx(balls[i].radius, balls[i].radius);
+    cpx temp_ll = balls[i].center - rad_vec;
+    cpx temp_ur = balls[i].center + rad_vec;
+    if (temp_ll.real() < lower_left.real()) {
+      lower_left = cpx(temp_ll.real(), lower_left.imag());
+    }
+    if (temp_ll.imag() < lower_left.imag()) {
+      lower_left = cpx(lower_left.real(), temp_ll.imag());
+    }
+    if (temp_ur.real() > upper_right.real()) {
+      upper_right = cpx(temp_ur.real(), upper_right.imag());
+    }
+    if (temp_ur.imag() > upper_right.imag()) {
+      upper_right - cpx(upper_right.imag(), temp_ur.imag());
+    }
+  }
+  //make it a square so we don't go insane?
+  double putative_width = upper_right.real() - lower_left.real();
+  double putative_height = upper_right.imag() - lower_left.imag();
+  if (putative_width > putative_height) { //the width is larger -- use it
+    double height_adjustment = (putative_width-putative_height)/2.0;
+    upper_right = cpx(upper_right.real(), upper_right.imag() + height_adjustment);
+    lower_left = cpx(lower_left.real(), lower_left.imag() - height_adjustment);
+  } else { //the height is larger -- use it
+    double width_adjustment = (putative_height-putative_width)/2.0;
+    upper_right = cpx(upper_right.real() + width_adjustment, upper_right.imag());
+    lower_left = cpx(lower_left.real() - width_adjustment, lower_left.imag());
+  }
+  
+  //build the blank grid
+  
+  
+  //initialize the pixels
+  reset_grid(lower_left, upper_right);
+  
+  //fill in the pixels
+  fill_pixels(balls, rad_mul);
+  
+}
+
+//set the lower left and upper right, clear all the pixels, and 
+//set their centers
+void TrapGrid::reset_grid(cpx ll, cpx ur) {
+}
+
+//fill all the pixels with the given balls
+void TrapGrid::fill_pixels(const std::vector<Ball>& balls, 
+                           double rad_mul) {
+  int nb = (int)balls.size();
+  for (int i=0; i<nb; ++i) {
+    fill_pixels(G, balls[i], rad_mul);
+  }
+}
+
+//fill the pixels for a given ball
+//this just naively checks everything in a square
+void TrapGrid::fills_pixels(const Ball& ball, double rad_mul) {
+  double r = ball.radius * rad_mul;
+  double c = ball.center;
+  
+}
+
+//find the pixel containing the given point
+void TrapGrid::pixel_indices(int& i, int&j, const cpx& u) {
+}
+
+//return the point which is the center of the pixel
+cpx TrapGrid::pixel_center(int i, int j) {
+  return grid[i][j].center;
+}
+
+//return the point which is the center of pixel containing the given point
+cpx TrapGrid::pixel_center(const cpx& u) {
+  
+}
+
+
 
 //take a list of balls and compute one more level of depth 
 //(on the left)
@@ -76,7 +200,7 @@ bool ifs::find_trap() {
   //find the radius of the smallest closed ball about 1/2 which 
   //is mapped inside itself under both f and g
   double z_restriction = abs(0.5*z-0.5)/(1.0-az);
-	double w_restriction = abs(0.5-0.5*w)/(1.0-aw);
+  double w_restriction = abs(0.5-0.5*w)/(1.0-aw);
   double min_initial_radius = (z_restriction > w_restriction 
                                              ? z_restriction 
                                              : w_restriction);
@@ -90,29 +214,19 @@ bool ifs::find_trap() {
   //now we need to effectively increase the radius of the 
   //*previous* step until the balls of the *current* step 
   //form a connected set for both f and g
-  //we'll start by doubling the radius (it's probably pretty small)
+  //we'll start by multiplying the radius by 1.1 (it's probably pretty small)
   double more_dramatic_action = (az < aw ? az : aw);
-  double smallest_previous_radius = pow( more_dramatic_action, current_depth-1 ) * min_initial_radius;
-  //double epsilon = 
+  double min_prev_rad = pow( more_dramatic_action, current_depth-1 ) * min_initial_radius;
+  double prev_rad_mul = 1.1;
   
+  //epsilon is the amount we *know* the disks contain an epsilon nbhd of L
+  //the smallest absolute increase will be on the smallest ball
+  double epsilon = min_prev_rad*(prev_rad_mul-1.0);
   
-  
-  
-  
-  //figure out a radius boost such that adding this much on to the 
-  //radius of all image balls makes the f ball union connected and 
-  //the g ball union also connected
-  double larger_action = (az < aw ? az : aw);
-  double max_current_radius = pow( larger_action, current_depth ) * min_initial_radius;
-  //this needs to be some positive number; this is kind of random
-  double current_radius_boost = 0.1*max_current_radius;
-  //while (true) {
-    //fill out the grid with the current balls and radius boost
-    
-  //}
-  
-  //starting mesh size will always be 512?
-  
+  //now fill out the grid using this prev_rad_mul
+  //grid size is always 512?
+  TrapGrid TG(*this, balls, 512, prev_rad_mul);
+
   
   
   return true;
