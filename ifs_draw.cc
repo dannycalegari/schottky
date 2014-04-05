@@ -24,9 +24,9 @@ void ifs::draw_color_dots(int d, cpx u, long color){
 void ifs::draw_color_chunky_dots(int d, cpx u, long color, double radius) {
 	if (d<=0) {
 	        //the radius should get multiplied by 512
-	        double draw_radius = radius*512;
+	        double draw_radius = radius*drawing_radius;
 	        if (draw_radius < 1) draw_radius = 1;
-	        X.draw_circle(cpx_to_point(u), draw_radius, color);
+	        X.draw_disk(cpx_to_point(u), draw_radius, color);
 	        //cout << "radius: " << radius;
 	        //cout << "abs(z): " << abs(z);
 	} else {
@@ -37,7 +37,7 @@ void ifs::draw_color_chunky_dots(int d, cpx u, long color, double radius) {
 
 //draw the IFS and print out the data and stuff
 void ifs::draw_limit_set(){
-	stringstream T;
+	std::stringstream T;
 	Point2d<int> p;
 	
 	if(sync==1){
@@ -48,32 +48,32 @@ void ifs::draw_limit_set(){
 		aw = az;
 	}
 	X.erase_field();
-	p.x=1200;
-	p.y=20;
+	p.x=drawing_width+100;
+	p.y=drawing_width - 40;
 	T << "limit set (IFS attractor)";
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;	
+	p.y=p.y-20;	
 	T << "z (adjust with [arrows]): " << z;
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;	
+	p.y=p.y-20;	
 	T << "w (adjust with [ijkl]): " << w;
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "depth (adjust with [d/e]): " << depth;
 	X.draw_text(p,T,0x000000);
 	T.str("");	
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "step (adjust with [a/s]): " << step;
 	X.draw_text(p,T,0x000000);
 	T.str("");		
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "sync w free, w=z, w=conj(z) (cycle with [v]): " << sync;
 	X.draw_text(p,T,0x000000);
 	T.str("");		
-	p.y=p.y+20;
+	p.y=p.y-20;
 	if (draw_trap_mode) {
 		if (find_trap()) {
 			T << "trap found (toggle trap mode with [t])";
@@ -86,7 +86,7 @@ void ifs::draw_limit_set(){
 	}
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "2-color IFS (toggle with [c]): ";
 	if(color_ifs){
 		T << "on";
@@ -95,16 +95,16 @@ void ifs::draw_limit_set(){
 	};
 	X.draw_text(p,T,0x000000);
 	T.str("");		
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "chunky IFS (toggle with [x]): ";
 	if (chunky_ifs) {
-		T << "on (radius: " << chunky_radius << ")";
+		T << "on (radius: " << minimal_enclosing_radius() << ")";
 	} else {
 		T << "off";
 	}
 	X.draw_text(p,T,0);
 	T.str("");
-	p.y=p.y+20;	
+	p.y=p.y-20;	
 	T << "connected: ";
 	if(circ_connected()){
 		T << "yes";
@@ -113,24 +113,24 @@ void ifs::draw_limit_set(){
 	};
 	X.draw_text(p,T,0x000000);
 	T.str("");	
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "toggle ifs/mandelbrot with [b]";
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "quit with [q]";
 	X.draw_text(p,T,0x000000);
 	T.str("");	
 	if(color_ifs){
 		if (chunky_ifs) {
-			compute_chunky_radius();
+			double r = minimal_enclosing_radius();
 			//cout << "Chunky radius: " << chunky_radius << "\n";
-			draw_color_chunky_dots(depth,seed,0x000000,chunky_radius);
+			draw_color_chunky_dots(depth, seed, 0x000000, r);
 		} else {
 			draw_color_dots(depth,seed,0x000000);	// actual IFS is drawn
 		}
 	} else {
-		draw_dots(depth,seed);
+		draw_dots(depth, seed);
 	};
 	X.draw_dot(cpx_to_point(z),0xFF0000);	// z
 	X.draw_dot(cpx_to_point(1.0-w),0x00FF00);	// 1-w
@@ -138,7 +138,7 @@ void ifs::draw_limit_set(){
 	X.draw_dot(cpx_to_point(1.0),0xBDB76B);	// 1
 };
 
-void ifs::zoom(Point2d<int> p){
+void ifs::zoom(const Point2d<int>& p){
 	// in mandelbrot
 	cpx cc;
 	cc=point_to_cpx(p);
@@ -149,20 +149,21 @@ void ifs::zoom(Point2d<int> p){
 
 void ifs::draw_mandelbrot_set(){
 	// draw mandelbrot set (connectedness locus) and write values of parameters to screen
-	stringstream T;
+	std::stringstream T;
 	Point2d<int> p,q;
+	cpx I(0,1);
 	cpx zz;
 	int i,j;
 	double x,y;
 	
 	X.erase_field();
 	
-	p.x=1200;	// 1200
-	p.y=20;
+	p.x=drawing_width + 100;
+	p.y=drawing_width-40;
 	T << "connectedness locus";
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "slice: ";
 	if(sync==0){
 		T << "w=" << w << "\n";
@@ -173,35 +174,35 @@ void ifs::draw_mandelbrot_set(){
 	};
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "cycle slice type with [v]\n";
 	X.draw_text(p,T,0x000000);
 	T.str("");		
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "depth (adjust with [d/e]): " << depth;
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "center (adjust by mouse click): " << center;
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "window (zoom out with [g]): " << wind;
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "mesh (adjust with [n/m]): " << mesh;
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "toggle ifs/mandelbrot with [b]";
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "toggle disconnection depth with [f]";
 	X.draw_text(p,T,0x000000);
 	T.str("");
-	p.y=p.y+20;
+	p.y=p.y-20;
 	T << "quit with [q]";
 	X.draw_text(p,T,0x000000);
 	T.str("");	
@@ -211,7 +212,7 @@ void ifs::draw_mandelbrot_set(){
 			q.x=i;
 			q.y=j;
 			x=2.0*wind*double(i)/double(drawing_width);
-			y=2.0*wind*double(drawing_width-j)/drawing_width;
+			y=2.0*wind*double(j)/double(drawing_width);
 			
 			z=center-wind-(wind*I)+x+(y*I);
 			if(sync==1){
@@ -220,24 +221,24 @@ void ifs::draw_mandelbrot_set(){
 				w=conj(z);
 			};
 			if(abs(z)>1.0){	// could truncate this to sqrt(1/2) actually
-				draw_box(q,mesh,0x000000);
+				X.draw_box(q,mesh,0x000000);
 			} else { // if(abs(z)>0.5){
 				if(circ_connected()){
 					X.draw_box(q,mesh,0x000001*exit_depth);
 				} else if (disconnection_depth) {
 					X.draw_box(q,mesh,0x010000*exit_depth);
 				}
-			};
+			}
 			
 	
-		};
-	};
-};
+		}
+	}
+}
 
 void ifs::draw(){
 	if(mode==0){
 		draw_limit_set();
 	} else if(mode==1){
 		draw_mandelbrot_set();
-	};
-};
+	}
+}

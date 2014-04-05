@@ -13,16 +13,44 @@
 #include "ifs_trap.cc"         //functions to build a trap
 
 
+//first some ball functions
+Ball::Ball() { 
+  center = 0.5;
+  radius = 1.0;
+  word = 0;
+  word_len = 0;
+}
+
+Ball::Ball(cpx c, double r) {
+  center = c;
+  radius = r;
+  word = 0;
+  word_len = 0; //just a ball, no words, to start
+}
+
+Ball::Ball(cpx c, double r, int w, int wl) {
+  center = c;
+  radius = r;
+  word = w;
+  word_len = wl; //just a ball, no words, to start
+}
+
+int Ball::last_gen_index() const {
+  return (word >> (word_len-1))&1;
+}
+
+
+/****************  IFS functions ****************************/
 ifs::ifs() {
-  initialize(0,0, 1024);
 }
 
-ifs::ifs(cpx a, cpx b, int width) {
-  initialize(a,b, width);
+ifs::ifs(cpx a, cpx b, int width, int mode) {
+  initialize(a,b, width, mode);
+  
 }
 
-
-void ifs::initialize(cpx a, cpx b, int width){
+//set everything and start graphics
+void ifs::initialize(cpx a, cpx b, int width, int mode){
 	// initialize z to a and w to b
 	z=a;
 	w=b;
@@ -37,16 +65,23 @@ void ifs::initialize(cpx a, cpx b, int width){
 	seed=0.0;	// initial seed point for IFS
 	center=0.0;	// in mandelbrot mode; center of screen, size of window, and mesh of accuracy
 	wind=1.0;
-	mesh=1;
-	depth=12;	  // depth to iterate IFS or detect connectedness to
+	mesh=2;
+	depth=10;	  // depth to iterate IFS or detect connectedness to
 	trap_depth = depth;  //depth to search for traps 
 	drawing_width = width;
-	drawing_radius = drawing_width/2;
+	drawing_radius = drawing_width/2;  
+	this->mode = mode;
 	
-	//initialize the graphics window
-	//extra 580 for the right hand text
-	X = XGraphics(drawing_width+580, drawing_width, 1, Point2d<float>(0,0));
-};
+}
+
+//reset stuff when switching
+void ifs::reinitialize(cpx a, cpx b) {
+  z=a;
+	w=b;
+	az = abs(z);
+	aw = abs(w);
+}
+
 
 
 
@@ -61,6 +96,41 @@ Ball ifs::act_on_left(int index, const Ball& b) {
     return Ball( (w*(b.center - 1.0)) + 1.0, aw*b.radius, word | (1 << word_len), word_len+1 );
   }
 }
+
+//take a list of balls and compute one more level of depth 
+//(on the left)
+void ifs::compute_next_ball_depth(std::vector<Ball>& balls, int current_depth) {
+  std::vector<Ball> balls_temp;
+  balls_temp.swap(balls);
+  int L_cur = 1<<current_depth;
+  int L_new = 1<<(current_depth+1);
+  balls.resize(L_new);
+  for (int j=0; j<L_cur; ++j) {
+    //for each j, we want to append on the left both a 0 and a 1
+    //(the highest bit position is the last function we applied)
+    Ball parent_ball = balls_temp[j];
+    balls[j] = act_on_left(0, parent_ball);
+    balls[(j | (1<<current_depth))] = act_on_left(1, parent_ball);
+  }
+}
+
+//take a seed ball and compute all the image balls
+//create a list of image points
+//each image point is indexed by the binary digits
+//so 1011 means fgff, and it's a left action
+//of course we need to know the word length to parse how many g's are in front
+void ifs::compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth) {
+  std::vector<Ball> balls_temp;
+  balls.resize(2);
+  balls[0] = act_on_left(0, ball_seed);
+  balls[1] = act_on_left(1, ball_seed);
+  for (int i=1; i<compute_depth; ++i) {
+    compute_next_ball_depth(balls, i);
+  }
+}
+
+
+
 
 double ifs::minimal_enclosing_radius() {
   //initialize the chunky radius to contain the whole set
@@ -86,7 +156,7 @@ cpx ifs::iterate(int index, cpx u){
 //convert a complex to the point in the drawing
 //0 is the center, and the range is [-1,1]x[-1,1]
 Point2d<int> ifs::cpx_to_point(cpx w) {
-  Point2d<int> p();
+  Point2d<int> p;
   p.x = drawing_radius + int(drawing_radius*w.real());
   p.y = drawing_radius + int(drawing_radius*w.imag());
   return p;

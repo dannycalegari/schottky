@@ -16,33 +16,9 @@ struct Ball {
   Ball();
   Ball(cpx c, double r);
   Ball(cpx c, double r, int w, int wl);
-  int last_gen_index();
+  int last_gen_index() const;
 };
 
-Ball::Ball() { 
-  center = 0.5;
-  radius = 1.0;
-  word = 0;
-  word_len = 0;
-}
-
-Ball:Ball(cpx c, double r) {
-  center = c;
-  radius = r;
-  word = 0;
-  word_len = 0; //just a ball, no words, to start
-}
-
-Ball::Ball(cpx c, double r, int w, int wl) {
-  center = c;
-  radius = r;
-  word = w;
-  word_len = wl; //just a ball, no words, to start
-}
-
-int Ball::last_gen_index() const {
-  return (word >> (word_len-1))&1;
-}
 
 
 /**************************************************************************
@@ -61,8 +37,9 @@ class ifs{
 		
 		// these are the construction functions
 		ifs();
-		ifs(cpx a, cpx b, int width);
-		void initialize(cpx a, cpx b, int width);
+		ifs(cpx a, cpx b, int width, int mode);
+		void initialize(cpx a, cpx b, int width, int mode);
+		void reinitialize(cpx a, cpx b);
 		
 		
 		//general computation
@@ -71,6 +48,7 @@ class ifs{
 		Ball act_on_left(int index, const Ball& b);
 		void compute_next_ball_depth(std::vector<Ball>& balls, int current_depth);
 		void compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth);
+		double minimal_enclosing_radius();
 		
 		
 		//IFS drawing
@@ -92,7 +70,7 @@ class ifs{
 		int mode;              // draw mode: 0 for limit set, 1 for mandelbrot set
 		bool disconnection_depth; // whether to draw the depth for disconnected sets
 		
-		void zoom(point p);
+		void zoom(const Point2d<int>& p);
 		void draw_mandelbrot_set();
 		
 		
@@ -107,7 +85,7 @@ class ifs{
 		//trap construction
 		bool draw_trap_mode;      //whether to check for a trap and draw it in limit set mode
 		int trap_depth;           //maximal depth to look for traps
-		Trap current_trap;        //the last trap we created
+		//Trap current_trap;        //the last trap we created
 		
 		bool find_trap();
 		void draw_trap();	

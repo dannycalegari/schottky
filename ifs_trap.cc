@@ -1,7 +1,5 @@
 //Functions to check for a trap
 
-#include "XGraphics.h"
-
 
 //Trap computation grid functions
 
@@ -48,6 +46,7 @@ struct TrapGrid {
   void pixel_indices(int& i, int&j, const cpx& u); //find the pixel with the given point
   cpx pixel_center(int i, int j);  //return the point which is the center of the pixel
   cpx pixel_center(const cpx& u);  //return the point which is the center of pixel containing the given point
+  void show();
 };
 
 
@@ -264,37 +263,6 @@ cpx TrapGrid::pixel_center(const cpx& u) {
 
 
 
-//take a list of balls and compute one more level of depth 
-//(on the left)
-void ifs::compute_next_ball_depth(std::vector<Ball>& balls, int current_depth) {
-  std::vector<Ball> balls_temp;
-  balls_temp.swap(balls);
-  int L_cur = 1<<current_depth;
-  int L_new = 1<<(current_depth+1);
-  balls.resize(L_new);
-  for (int j=0; j<L_cur; ++j) {
-    //for each j, we want to append on the left both a 0 and a 1
-    //(the highest bit position is the last function we applied)
-    Ball parent_ball = balls_temp[j];
-    balls[j] = act_on_left(0, parent_ball);
-    balls[(j | (1<<current_depth))] = act_on_left(1, parent_ball);
-  }
-}
-
-//take a seed ball and compute all the image balls
-//create a list of image points
-//each image point is indexed by the binary digits
-//so 1011 means fgff, and it's a left action
-//of course we need to know the word length to parse how many g's are in front
-void ifs::compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth) {
-  std::vector<Ball> balls_temp;
-  balls.resize(2);
-  balls[0] = act_on_left(0, ball_seed);
-  balls[1] = act_on_left(1, ball_seed);
-  for (int i=1; i<compute_depth; ++i) {
-    compute_next_ball_depth(balls, i);
-  }
-}
 
 
 bool ifs::find_trap() {
@@ -341,7 +309,7 @@ void ifs::draw_trap() {
 
 
 
-
+void TrapGrid::show() {}
 
 
 

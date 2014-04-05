@@ -11,6 +11,7 @@ extern "C" {
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <vector>
 #include <map>
 
 #include "point.h"
@@ -56,8 +57,9 @@ private:
 public:
   
   XGraphics();
-  XGraphics(int w, int h, float s, Point2d<float>& t);
+  XGraphics(int w, int h, float s, const Point2d<float>& t);
   ~XGraphics();
+  void initialize(int w, int h, float s, const Point2d<float>& t);
   int get_color(std::string c);
   int get_rgb_color(double r, double g, double b);
   void flush();
@@ -76,6 +78,8 @@ public:
   Point2d<int> mouse_location();
   void draw_point(const Point2d<int>& p, long col);
   void draw_point(const Point2d<float>& p, long col);
+  void draw_dot(const Point2d<int>& p, long col);
+  void draw_box(const Point2d<int>& p, int w, long col);
   void draw_line(const Point2d<int>& p1, const Point2d<int>& p2, long col);
   void draw_line(const Point2d<float>& p1, const Point2d<float>& p2, long col);
   void draw_line(const Point2d<float>& p1, const Point2d<float>& p2, long col, int thickness);
@@ -87,12 +91,14 @@ public:
   void draw_square(int x, int y, int z, long col);  
   void draw_rectangle(int x, int y, int zx, int zy, long col);
   void draw_filled_rectangle(int x, int y, int zx, int zy, long col);
+  void draw_filled_rectangle(const Point2d<int>& p, int w, int h, long col);
   void draw_filled_polygon(const std::vector<Point2d<float> >& points, int col);
   void draw_box_radius(Point2d<float>& center, float radius, long col);
   void draw_faint_line(const Point2d<int>& p1, const Point2d<int>& p2, long col);
   void erase_circle(const Point2d<int>& p, int r);
   void draw_circle(const Point2d<int>& p, int r, long col);
   void draw_circle(const Point2d<float>& p, int r, long col);
+  void draw_disk(const Point2d<int>& p, double r, long col);
   void draw_concentric_circles(const Point2d<int>& p, int r, long col);
   void draw_path(const std::vector<Point2d<int> >& L, long col);
   void draw_text(const Point2d<int>& p, std::stringstream &T, long col);
@@ -101,7 +107,7 @@ public:
   void draw_text_centered(const Point2d<float>& p, const std::string &S, long col);
   void draw_label(const Point2d<int>& p, int i, long col);
   std::string wait_for_key();
-  XEvent get_next_event();
+  void get_next_event(XEvent& xe);
 };
 
 

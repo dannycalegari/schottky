@@ -6,6 +6,7 @@
 #include "graphics.h"
 
 XGraphics::XGraphics() {
+/* //maybe it's better if this does nothing?
   border_width = 4;
   display=XOpenDisplay(NULL);
   screen_num = DefaultScreen(display);  
@@ -38,10 +39,17 @@ XGraphics::XGraphics() {
     if (e.type == Expose) break;
   }
   setup_font();
+  */
 }
 
-XGraphics::XGraphics(int w, int h, float s, Point2d<float>& t) {
-  border_width = 4;
+XGraphics::XGraphics(int w, int h, float s, const Point2d<float>& t) {
+  initialize(w,h,s,t);
+}
+
+
+
+void XGraphics::initialize(int w, int h, float s, const Point2d<float>& t) {
+    border_width = 4;
   display=XOpenDisplay(NULL);
   screen_num = DefaultScreen(display);  
   display_width = DisplayWidth(display, screen_num);
@@ -74,7 +82,6 @@ XGraphics::XGraphics(int w, int h, float s, Point2d<float>& t) {
   }
   setup_font();
 }
-
 
 
 
@@ -184,7 +191,7 @@ Point2d<int> XGraphics::mouse_location(){
           &window_returned, &root_x, &root_y, &win_x, &win_y,
           &mask_return);
   p.x=win_x;
-  p.y=win_y;
+  p.y=height-win_y;
   return p;
 }
 
@@ -193,29 +200,29 @@ void XGraphics::draw_point(const Point2d<int>& p, long col){
   XDrawPoint(display, win, gc, p.x, height-p.y);
 }
 
-void draw_dot(const Point2d<int>& p, long col){
+void XGraphics::draw_dot(const Point2d<int>& p, long col) {
     XSetForeground(display, gc, col);
     XSetLineAttributes(display, gc, 1, LineSolid, 1, 1);
     XSetFillStyle(display, gc, FillSolid);
-    XDrawArc(display, win, gc, p.x-3, height-(p.y-3), 6, 6, 0, 23040);
-    XDrawArc(display, win, gc, p.x-2, height-(p.y-2), 4, 4, 0, 23040);
-    XDrawArc(display, win, gc, p.x-1, height-(p.y-1), 2, 2, 0, 23040);
+    XDrawArc(display, win, gc, p.x-3, height-p.y-3, 6, 6, 0, 23040);
+    XDrawArc(display, win, gc, p.x-2, height-p.y-2, 4, 4, 0, 23040);
+    XDrawArc(display, win, gc, p.x-1, height-p.y-1, 2, 2, 0, 23040);
 }
 
-void draw_box(const Point2d<int>& p, int w, long col){
+void XGraphics::draw_box(const Point2d<int>& p, int w, long col) {
   if(w==1){
     draw_point(p, col);
   } else {
     XPoint corners[4];
     XSetForeground(display, gc, col);
     corners[0].x = p.x;
-    corners[0].y = height-p.y;
+    corners[0].y = height-p.y-w;
     corners[1].x = corners[0].x+w;
     corners[1].y = corners[0].y;
     corners[2].x = corners[1].x;
-    corners[2].y = corners[1].y-w;
+    corners[2].y = corners[1].y+w;
     corners[3].x = corners[0].x;
-    corners[3].y = corners[0].y-w;
+    corners[3].y = corners[0].y+w;
     XFillPolygon(display, win, gc, corners, 4, Convex, CoordModeOrigin);
   }
 }
@@ -323,6 +330,13 @@ void XGraphics::draw_filled_rectangle(int x, int y, int zx, int zy, long col) {
   XFillRectangle(display, win, gc, x, height-(y+zy), zx, zy);
 }
 
+
+void XGraphics::draw_filled_rectangle(const Point2d<int>& p, int w, int h, long col) {
+  XSetForeground(display, gc, col);
+  XFillRectangle(display, win, gc, p.x, height-p.y-h, w, h);
+}
+
+
 void XGraphics::draw_box_radius(Point2d<float>& center, float radius, long col) {
   Point2d<int> LL_real = Point2d<int>( (int)((center.x-radius)*scale + translate.x),
                                        (int)((center.y-radius)*scale + translate.y));
@@ -372,6 +386,13 @@ void XGraphics::draw_circle(const Point2d<float>& p, int r, long col){
     XSetFillStyle(display, gc, FillSolid); 
     Point2d<int> real_p((int)(p.x*scale + translate.x), (int)(p.y*scale + translate.y));
     XDrawArc(display, win, gc, (real_p.x-r), (height-(real_p.y+r)), 2*r, 2*r, 0, 23040);
+}
+
+void XGraphics::draw_disk(const Point2d<int>& p, double r, long col) {
+    XSetForeground(display, gc, col);
+    XSetLineAttributes(display, gc, 1, LineSolid, 1, 1);
+    XSetFillStyle(display, gc, FillSolid);
+    XFillArc(display, win, gc, p.x-r, height-p.y-r, 2*r, 2*r, 0, 23040);
 }
 
 
@@ -457,10 +478,8 @@ std::string XGraphics::wait_for_key() {
   return "u";
 }
 
-XEvent XGraphics::next_event() {
-  XEvent ans;
-  XNextEvent(display, &ans);
-  return ans;
+void XGraphics::get_next_event(XEvent& xe) {
+  XNextEvent(display, &xe);
 }
 
 

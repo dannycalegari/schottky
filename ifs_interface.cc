@@ -1,46 +1,53 @@
 /* interface.cc */
 
-void ifs::user_interface(){
+void ifs::user_interface() {
 	bool finished;
-	point p,pp;
+	Point2d<int> p,pp;
 	cpx mz;
-	stringstream T;
+	std::stringstream T;
 	int s;
+	cpx I(0,1);
 	
 	finished=false;
 	
-	cout << "Entering interactive mode. Press [q] to exit.\n";
-	cout << "(note: mouse must be focussed in X-window)\n";
+	std::cout << "Entering interactive mode. Press [q] to exit.\n";
+	std::cout << "(note: mouse must be focussed in X-window)\n";
+	
+	//initialize the graphics window
+	//extra 580 for the right hand text
+	X.initialize(drawing_width+580, drawing_width, 1, Point2d<float>(0,0));
+	
+	draw();
+	
 	while(finished==false){
-		XNextEvent(display, &report);
+	  XEvent report;
+	  X.get_next_event(report);
 		switch(report.type) {
 			case ButtonPress:
-				p=mouse_location();
+				p=X.mouse_location();
 				if(mode==1){	// mandelbrot mode
 					zoom(p);
 					draw();
 				};	
 				break;
 			case MotionNotify:
-				p=mouse_location();
+				p=X.mouse_location();
 				if(mode==1){	// mandelbrot mode
 					mz=point_to_cpx(p);
 					mz=(mz*wind)+center;
-					p.x=1200;	// 1200
-					p.y=500;
+					p.x=drawing_width + 100;
+					p.y=drawing_width/2;
 					T.str("");
 					T << "mouse location " << mz;
 					pp=p;
-					pp.y=pp.y+100;
-					draw_box(pp, 400, 0xFFFFFF);
-					draw_text(p, T, 0x000000);
+					pp.y=pp.y-30;
+					X.draw_filled_rectangle(pp, 300, 40, 0xFFFFFF);
+					X.draw_text(p, T, 0x000000);
 				};
 				break;
 			case KeyPress:
 				if(XLookupKeysym(&report.xkey, 0) == XK_q){ // quit           
                     finished=true;
-                    XCloseDisplay(display);
-                    exit(0);
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_d){ // increment depth    
                 	depth++;
@@ -113,9 +120,9 @@ void ifs::user_interface(){
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_b){ // mode toggle 
-                	s=sync;	// remember sync mode
-                	initialize(center,center);
-                	sync=s;	// don't reset sync mode
+                	  s=sync;	// remember sync mode
+                	  reinitialize(center,center);
+                	  sync=s;	// don't reset sync mode
                     mode=1-mode;
                     draw();
                     break;
@@ -141,18 +148,10 @@ void ifs::user_interface(){
                     chunky_ifs = !chunky_ifs;
                     if (mode == 0) draw();
                     break;
-                } else if (XLookupKeysym(&report.xkey, 0) == XK_bracketleft) { //adjust chunky radius
-                    chunky_radius /= 1.5;
-                    draw();
-                    break;
-                } else if (XLookupKeysym(&report.xkey, 0) == XK_bracketright) { //adjust chunky radius
-                    chunky_radius *= 1.5;
-                    draw();
-                    break;
                 }
 
             default:
             	break;
-        };
-    };
-};
+        }
+    }
+}
