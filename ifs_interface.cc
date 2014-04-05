@@ -15,7 +15,7 @@ void ifs::user_interface() {
 	
 	//initialize the graphics window
 	//extra 580 for the right hand text
-	X.initialize(drawing_width+580, drawing_width, 1, Point2d<float>(0,0));
+	X.initialize(drawing_width+350, drawing_width, 1, Point2d<float>(0,0));
 	
 	draw();
 	
@@ -35,7 +35,7 @@ void ifs::user_interface() {
 				if(mode==1){	// mandelbrot mode
 					mz=point_to_cpx(p);
 					mz=(mz*wind)+center;
-					p.x=drawing_width + 100;
+					p.x=drawing_width + 15;
 					p.y=drawing_width/2;
 					T.str("");
 					T << "mouse location " << mz;

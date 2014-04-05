@@ -48,7 +48,7 @@ void ifs::draw_limit_set(){
 		aw = az;
 	}
 	X.erase_field();
-	p.x=drawing_width+100;
+	p.x=drawing_width+15;
 	p.y=drawing_width - 40;
 	T << "limit set (IFS attractor)";
 	X.draw_text(p,T,0x000000);
@@ -158,7 +158,7 @@ void ifs::draw_mandelbrot_set(){
 	
 	X.erase_field();
 	
-	p.x=drawing_width + 100;
+	p.x=drawing_width + 15;
 	p.y=drawing_width-40;
 	T << "connectedness locus";
 	X.draw_text(p,T,0x000000);
