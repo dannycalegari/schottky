@@ -101,6 +101,7 @@ public:
   void draw_text_centered(const Point2d<float>& p, const std::string &S, long col);
   void draw_label(const Point2d<int>& p, int i, long col);
   std::string wait_for_key();
+  XEvent get_next_event();
 };
 
 

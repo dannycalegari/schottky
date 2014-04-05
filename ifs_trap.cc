@@ -2,49 +2,6 @@
 
 #include "XGraphics.h"
 
-//this records a ball
-struct Ball {
-  cpx center;
-  double radius;
-  int word;     //the f and g word we applied to get here (highest bit is most recent application)
-  int word_len; //the number of significant bits
-  Ball() { 
-    center = 0.5;
-    radius = 1.0;
-    word = 0;
-    word_len = 0;
-  }
-  Ball(cpx c, double r) {
-    center = c;
-    radius = r;
-    word = 0;
-    word_len = 0; //just a ball, no words, to start
-  }
-  Ball(cpx c, double r, int w, int wl) {
-    center = c;
-    radius = r;
-    word = w;
-    word_len = wl; //just a ball, no words, to start
-  }
-  int last_gen_index() const {
-    return (word >> (word_len-1))&1;
-  }
-};
-
-//compute the image ball
-//(left action)
-Ball ifs::act_on_left(int index, const Ball& b) {
-  int word = b.word;
-  int word_len = b.word_len;
-  if (index == 0) {
-    return Ball( z*b.center, az*b.radius, word, word_len+1 );
-  } else {
-    return Ball( (w*(b.center - 1.0)) + 1.0, aw*b.radius, word | (1 << word_len), word_len+1 );
-  }
-}
-
-
-
 
 //Trap computation grid functions
 
