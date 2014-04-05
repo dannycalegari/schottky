@@ -131,7 +131,8 @@ void ifs::compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int com
 
 
 
-
+//compute the minimal radius of a ball around 1/2 which contains 
+//its image under both actions
 double ifs::minimal_enclosing_radius() {
   //initialize the chunky radius to contain the whole set
   double z_restriction = abs(0.5*z-0.5)/(1.0-az);
@@ -154,11 +155,13 @@ cpx ifs::iterate(int index, cpx u){
 
 
 //convert a complex to the point in the drawing
-//0 is the center, and the range is [-1,1]x[-1,1]
+//1/2 is the center, and the box must contain [-1,2]x[-1.5,1.5]
 Point2d<int> ifs::cpx_to_point(cpx w) {
   Point2d<int> p;
-  p.x = drawing_radius + int(drawing_radius*w.real());
-  p.y = drawing_radius + int(drawing_radius*w.imag());
+  double x = (w.real() + 1.0)/3.0;
+  double y = (w.imag() + 1.5)/3.0;
+  p.x = int(drawing_width*x);
+  p.y = int(drawing_width*y);
   return p;
 }
 

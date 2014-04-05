@@ -32,7 +32,6 @@ int main(int argc, char *argv[]) {
 	std::cin >> c;
 	mode = (c=='i' ? 0 : 1);
 	ifs G(cos(TWOPI/3.0)+I*sin(TWOPI/3.0), 0.5, w, mode);      // default value : Sierpinski triangle
-	std::cout << G.cpx_to_point(cpx(0,0));
 	G.user_interface();
 	
 	return 0;
