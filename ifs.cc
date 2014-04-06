@@ -39,6 +39,10 @@ int Ball::last_gen_index() const {
   return (word >> (word_len-1))&1;
 }
 
+std::ostream& operator<<(std::ostream& os, const Ball& b) {
+  return os << "Ball(" << b.center << "," << b.radius << "," << b.word << "," << b.word_len << ")";
+}
+
 
 /****************  IFS functions ****************************/
 ifs::ifs() {

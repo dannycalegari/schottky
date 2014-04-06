@@ -1,6 +1,8 @@
 #ifndef __IFS__
 #define __IFS__
 
+#include <ostream>
+
 #include "graphics.h"
 #include "cpx.h"
 
@@ -19,7 +21,7 @@ struct Ball {
   int last_gen_index() const;
 };
 
-
+std::ostream& operator<<(std::ostream& os, const Ball& b);
 
 /**************************************************************************
  * data defining and IFS
