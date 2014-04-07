@@ -50,8 +50,6 @@ bool ifs::find_trap() {
   std::cout << "number of w cut by z components: " << TG.w_cut_by_z_components.size() << "\n";
   std::cout << "number of intersection components: " << TG.intersection_components.size() << "\n";
   
-  TG.show_connected_components();
-
   //find the boundaries of the intersection components
   TG.compute_intersection_boundaries();
   
@@ -62,6 +60,19 @@ bool ifs::find_trap() {
     }
     std::cout << "\n";
   }
+  
+  std::vector<Point3d<int> > ic;
+  if (TG.find_interleaved_components(ic)) {
+    std::cout << "Found interleaved components: ";
+    for (int i=0; i<4; ++i) {
+      std::cout << ic[i] << " ";
+    }
+    std::cout << "\n";
+  }
+  
+  TG.show_connected_components();
+
+  
   
   return true;
 }

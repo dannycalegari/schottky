@@ -20,7 +20,10 @@ struct GridPixel {
   //which components this pixel is in
   int z_comp, z_cut_by_w_comp;
   int w_comp, w_cut_by_z_comp;
-  int intersection_comp;
+  int i_comp;
+  
+  //this is the L1 distance between this pixel and the z/w set
+  int distance;
 };
   
   
@@ -49,11 +52,13 @@ struct TrapGrid {
   //contained in the w balls and also not contained in the z balls
   std::vector<std::vector<Point2d<int> > > w_cut_by_z_components;
   //these are connected components of intersection pixels 
-  //(at least touched by z and w)
+  //(touched by both z and w)
   std::vector<std::vector<Point2d<int> > > intersection_components;
   //these are ordered lists of (<z or w>, original component, cut component) triples
   //one for each boundary
   std::vector<std::vector<Point3d<int> > > intersection_boundaries;
+
+  
   
   TrapGrid() {
     num_pixels = 0;
@@ -74,6 +79,11 @@ struct TrapGrid {
   void pursue_intersection_comp(int i, int j, int ind);
   void compute_intersection_boundaries();
   void pursue_intersection_boundary(int i, int j, int ind, std::vector<Point3d<int> >& bd);
+  bool find_interleaved_components(std::vector<Point3d<int> >& interleaved_components);
+  void populate_distances_on_component(Point2d<int>& p, 
+                                       int z_or_w, 
+                                       const std::vector<Point2d<int> >& comp);
+  Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp);
   void show();
   void show_connected_components();
 };

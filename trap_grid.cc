@@ -245,7 +245,7 @@ void TrapGrid::compute_connected_components() {
     for (int j=0; j<num_pixels; ++j) {
       grid[i][j].z_comp = grid[i][j].w_comp = 
       grid[i][j].z_cut_by_w_comp = grid[i][j].w_cut_by_z_comp = 
-      grid[i][j].intersection_comp = -1;
+      grid[i][j].i_comp = -1;
     }
   }
   //go through and pursue all the components we encounter
@@ -274,9 +274,9 @@ void TrapGrid::compute_connected_components() {
         pursue_w_cut_by_z_comp(i,j,w_cut_by_z_components.size()-1);
       }
       //or intersection component
-      if (grid[i][j].z_ball_status > 0 && 
-          grid[i][j].w_ball_status > 0 &&
-          grid[i][j].intersection_comp == -1) {
+      if (grid[i][j].z_ball_status >0 && 
+          grid[i][j].w_ball_status >0 &&
+          grid[i][j].i_comp == -1) {
         intersection_components.push_back(std::vector<Point2d<int> >(0));
         pursue_intersection_comp(i,j,intersection_components.size()-1);
       }
@@ -600,46 +600,46 @@ void TrapGrid::pursue_w_cut_by_z_comp(int i, int j, int ind) {
 //I think it's enough to not go diagonally
 void TrapGrid::pursue_intersection_comp(int i, int j, int ind) {
   std::deque<Point2d<int> > stack(1, Point2d<int>(i,j));
-  grid[i][j].intersection_comp = -2;
+  grid[i][j].i_comp = -2;
   while (stack.size() > 0) {
     Point2d<int> p = stack.back();
     stack.pop_back();
     //mark p as done
-    grid[p.x][p.y].intersection_comp = ind;
+    grid[p.x][p.y].i_comp = ind;
     intersection_components[ind].push_back(p);
     //check the non-diagonals
     int ii = p.x + 1;
     int jj = p.y;
     if (ii < num_pixels 
-        && grid[ii][jj].intersection_comp == -1
-        && grid[ii][jj].w_ball_status > 0 
-        && grid[ii][jj].z_ball_status > 0) {
-      grid[ii][jj].intersection_comp = -2;
+        && grid[ii][jj].i_comp == -1
+        && grid[ii][jj].w_ball_status >0 
+        && grid[ii][jj].z_ball_status >0) {
+      grid[ii][jj].i_comp = -2;
       stack.push_front(Point2d<int>(ii,jj));
     }
     ii = p.x-1;
     if (ii > 0
-        && grid[ii][jj].intersection_comp == -1
-        && grid[ii][jj].w_ball_status > 0 
-        && grid[ii][jj].z_ball_status > 0) {
-      grid[ii][jj].intersection_comp = -2;
+        && grid[ii][jj].i_comp == -1
+        && grid[ii][jj].w_ball_status >0 
+        && grid[ii][jj].z_ball_status >0) {
+      grid[ii][jj].i_comp = -2;
       stack.push_front(Point2d<int>(ii,jj));
     }    
     ii = p.x;
     jj = p.y+1;
     if (jj < num_pixels
-        && grid[ii][jj].intersection_comp == -1
-        && grid[ii][jj].w_ball_status > 0 
-        && grid[ii][jj].z_ball_status > 0) {
-      grid[ii][jj].intersection_comp = -2;
+        && grid[ii][jj].i_comp == -1
+        && grid[ii][jj].w_ball_status >0 
+        && grid[ii][jj].z_ball_status >0) {
+      grid[ii][jj].i_comp = -2;
       stack.push_front(Point2d<int>(ii,jj));
     }
     jj = p.y-1;
     if (jj > 0
-        && grid[ii][jj].intersection_comp == -1
-        && grid[ii][jj].w_ball_status > 0 
-        && grid[ii][jj].z_ball_status > 0) {
-      grid[ii][jj].intersection_comp = -2;
+        && grid[ii][jj].i_comp == -1
+        && grid[ii][jj].w_ball_status >0 
+        && grid[ii][jj].z_ball_status >0) {
+      grid[ii][jj].i_comp = -2;
       stack.push_front(Point2d<int>(ii,jj));
     }    
   }
@@ -657,11 +657,11 @@ void TrapGrid::compute_intersection_boundaries() {
   std::vector<bool> icomp_done(intersection_components.size(), false);
   for (int i=0; i<num_pixels; ++i) {
     for (int j=1; j<num_pixels; ++j) {
-      if (grid[i][j-1].intersection_comp == -1 &&
-          grid[i][j].intersection_comp >= 0 &&
-          icomp_done[grid[i][j].intersection_comp] == false) {
-        pursue_intersection_boundary(i,j,0,intersection_boundaries[grid[i][j].intersection_comp]);
-        icomp_done[grid[i][j].intersection_comp] = true;
+      if (grid[i][j-1].i_comp == -1 &&
+          grid[i][j].i_comp >= 0 &&
+          icomp_done[grid[i][j].i_comp] == false) {
+        pursue_intersection_boundary(i,j,0,intersection_boundaries[grid[i][j].i_comp]);
+        icomp_done[grid[i][j].i_comp] = true;
       }
     }
   }
@@ -702,7 +702,7 @@ void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<P
         bd.push_back(this_pair);
       }
     }
-    if (grid[ii][jj].intersection_comp == -1) {
+    if (grid[ii][jj].i_comp == -1) {
       current_ind = (current_ind+1)%4;
     } else {
       current_pixel = Point2d<int>(ii,jj);
@@ -711,6 +711,90 @@ void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<P
     
   } while (current_pixel != start_pixel || current_ind != start_ind);
 }
+
+//this finds one example of interleaved components
+//the result is a 4-tuple of Point3d<int> triples as above such that 
+//t[0], t[2] are the same z component but different z cut by w components
+//t[1], t[3] are the same w component but different w cut by z components
+//algorithm: for every intersection component and for every component we 
+//encounter around the boundary, go around again and see if we see it again.
+//if so, divide up the boundary into two pieces and iterate over all possibilities
+//there has to be a better way.
+bool TrapGrid::find_interleaved_components(std::vector<Point3d<int> >& interleaved_components) {
+  interleaved_components.resize(4);
+  for (int b=0; b<(int)intersection_boundaries.size(); ++b) {
+    std::vector<Point3d<int> >& ib = intersection_boundaries[b];
+    int bL = (int)ib.size();
+    for (int j0=0; j0<bL; ++j0) {
+      if (ib[j0].x != 0) continue;
+      for (int j1=j0+1; j1<bL; ++j1) {
+        if (ib[j0].x == ib[j1].x && 
+            ib[j0].y == ib[j1].y && 
+            ib[j0].z != ib[j1].z) {
+          for (int k0=j0+1; k0<j1; ++k0) {
+            if (ib[k0].x != 1) continue;
+            for (int k1p=0; k1p<(j0-j1+bL); ++k1p) {
+              int k1 = (j1+k1p)%bL;
+              if (ib[k0].x == ib[k1].x && 
+                  ib[k0].y == ib[k1].y && 
+                  ib[k0].z != ib[k1].z) {
+                interleaved_components[0] = ib[j0];
+                interleaved_components[1] = ib[k0];
+                interleaved_components[2] = ib[j1];
+                interleaved_components[3] = ib[k1];
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+
+
+
+//for all the pixels in a component, find the distance from any pixel
+//touched by the other gen
+void TrapGrid::populate_distances_on_component(Point2d<int>& p, 
+                                               int z_or_w, 
+                                               const std::vector<Point2d<int> >& comp) {
+  if (grid[p.x][p.y].distance != -1) {
+    return grid[p.x][p.y];
+  } else if ((z_or_w == 0 && grid[p.x][p.y].w_ball_status > 0) ||
+             (z_or_w == 1 && grid[p.x][p.y].z_ball_status > 0)) {
+    return 0;
+  }
+  int d0 = (p.y == 0 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x,p.y-1), z_or_w, comp));
+  int d1 = (p.x == num_pixels-1 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x+1,p.y), z_or_w, comp));
+  int d2 = (p.y == num_pixels-1 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x,p.y+1), z_or_w, comp));
+  int d3 = (p.x == 0 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x-1,p.y), z_or_w, comp));
+  int m1 = (d0 < d1 ? d0 : d1);
+  int m3 = (d2 < d3 ? d2 : d3);
+  return (m1 < m3 ? m1 : m3);
+}
+
+Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp) {
+  std::vector<Point2d<int> >& c = (z_or_w == 0 ? z_cut_by_w_components[cut_comp] 
+                                               : w_cut_by_z_components[cut_comp]);
+  for (int i=0; i<(int)c.size(); ++i) {
+    grid[c[i].x][c[i].y].distance = -1;
+  }
+  populate_distances_on_component(c[0], z_or_w, c);
+  int min_dist = 0;
+  int min_ind = -1;
+  for (int i=0; i<(int)c.size(); ++i) {
+    if (min_ind == -1 || grid[c[i].x][c[i].y].distance < min_dist) {
+      min_ind = i;
+      min_dist = grid[c[i].x][c[i].y].distance;
+    }
+  }
+  return c[min_ind];
+}
+
+
 
 
 //find the pixel containing the given point
@@ -779,8 +863,8 @@ void TrapGrid::show_connected_components() {
       if (grid[i][j].w_comp != -1) {
         col = wc[grid[i][j].w_comp];
       }
-      if (grid[i][j].intersection_comp != -1) {
-        col = ic[grid[i][j].intersection_comp];
+      if (grid[i][j].i_comp != -1) {
+        col = ic[grid[i][j].i_comp];
       }
       if (num_pixels<512) {
         X2.draw_box(p, pixel_group_width, col);
@@ -811,8 +895,8 @@ void TrapGrid::show_connected_components() {
       if (grid[i][j].w_cut_by_z_comp != -1) {
         col = wczc[grid[i][j].w_cut_by_z_comp];
       }
-      if (grid[i][j].intersection_comp != -1) {
-        col = ic[grid[i][j].intersection_comp];
+      if (grid[i][j].i_comp != -1) {
+        col = ic[grid[i][j].i_comp];
       }
       if (num_pixels<512) {
         X3.draw_box(p, pixel_group_width, col);
