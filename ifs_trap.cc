@@ -1,6 +1,13 @@
 //Functions to check for a trap
 
 
+#include <deque>
+
+
+
+
+
+
 //Trap computation grid functions
 
 struct GridPixel {
@@ -49,6 +56,9 @@ struct TrapGrid {
   //these are connected components of intersection pixels 
   //(at least touched by z and w)
   std::vector<std::vector<Point2d<int> > > intersection_components;
+  //these are ordered lists of (original component, cut component) pairs
+  //one for each boundary
+  std::vector<std::vector<Point2d<int> > > intersection_boundaries;
   
   TrapGrid() {
     num_pixels = 0;
@@ -67,7 +77,9 @@ struct TrapGrid {
   void pursue_z_cut_by_w_comp(int i, int j, int ind);
   void pursue_w_cut_by_z_comp(int i, int j, int ind);
   void pursue_intersection_comp(int i, int j, int ind);
+  void compute_intersection_boundaries();
   void show();
+  void show_connected_components();
 };
 
 
@@ -313,42 +325,407 @@ void TrapGrid::compute_connected_components() {
       //does it form a new z component?
       if (grid[i][j].z_ball_status==2 && grid[i][j].z_comp == -1) {
         z_components.push_back(std::vector<Point2d<int> >(0));
-        int ind = z_components.size()-1;
-        pursue_z_comp(i,j, ind);
-        if (grid[i][j].w_ball_status==0 && grid[i][j].z_cut_by_w_comp == -1) {
-          z_cut_by_w_components.push_back(std::vector<Point2d<int> >(0));
-          int ind = z_cut_by_w_components.size()-1;
-          pursue_z_cut_by_w_comp(i,j,ind);
-        }
+        pursue_z_comp(i,j, z_components.size()-1);
       }
+      if (grid[i][j].z_ball_status==2 && 
+          grid[i][j].z_cut_by_w_comp == -1 &&
+          grid[i][j].w_ball_status==0) {
+        z_cut_by_w_components.push_back(std::vector<Point2d<int> >(0));
+        pursue_z_cut_by_w_comp(i,j,z_cut_by_w_components.size()-1);
+      }
+      //how about a w component?
       if (grid[i][j].w_ball_status==2 && grid[i][j].w_comp == -1) {
         w_components.push_back(std::vector<Point2d<int> >(0));
-        int ind = w_components.size()-1;
-        pursue_w_comp(i,j, ind);
-        if (grid[i][j].z_ball_status==0 && grid[i][j].w_cut_by_z_comp == -1) {
-          w_cut_by_z_components.push_back(std::vector<Point2d<int> >(0));
-          int ind = w_cut_by_z_components.size()-1;
-          pursue_w_cut_by_z_comp(i,j,ind);
-        }
+        pursue_w_comp(i,j, w_components.size()-1);
       }
-      if (grid[i][j].z_ball_status > 0 && grid[i][j].w_ball_status > 0) {
+      if (grid[i][j].w_ball_status==2 && 
+          grid[i][j].w_cut_by_z_comp == -1 &&
+          grid[i][j].z_ball_status==0) {
+        w_cut_by_z_components.push_back(std::vector<Point2d<int> >(0));
+        pursue_w_cut_by_z_comp(i,j,w_cut_by_z_components.size()-1);
+      }
+      //or intersection component
+      if (grid[i][j].z_ball_status > 0 && 
+          grid[i][j].w_ball_status > 0 &&
+          grid[i][j].intersection_comp == -1) {
         intersection_components.push_back(std::vector<Point2d<int> >(0));
-        int ind = intersection_components.size()-1;
-        pursue_intersection_comp(i,j,ind);
+        pursue_intersection_comp(i,j,intersection_components.size()-1);
       }
     }
   }
 }
 
+//These are all the component-finding functions.
+//There are slight differences, so there are multiple functions
+//I guess these will use breadth-first search?
 void TrapGrid::pursue_z_comp(int i, int j, int ind) {
+  std::deque<Point2d<int> > stack(1, Point2d<int>(i,j));
+  grid[i][j].z_comp = -2;
+  while (stack.size() > 0) {
+    Point2d<int> p = stack.back();
+    stack.pop_back();
+    //mark p as done
+    grid[p.x][p.y].z_comp = ind;
+    z_components[ind].push_back(p);
+    //go around to the others  
+    for (int ii=-1; ii<=1; ++ii) {
+      int iii = ii + p.x;
+      if (iii < 0) continue;
+      else if (iii >= num_pixels) break;
+      for (int jj=-1; jj<=1; ++jj) {
+        if (jj == 0 && ii == 0) continue;
+        int jjj = jj + p.y;
+        if (jjj < 0) continue;
+        else if (jjj >= num_pixels) break;
+        if (grid[iii][jjj].z_comp == -1 && grid[iii][jjj].z_ball_status == 2) {
+          grid[iii][jjj].z_comp = -2;
+          stack.push_front(Point2d<int>(iii,jjj));
+        }
+      }
+    }
+  }
 }
+
 void TrapGrid::pursue_w_comp(int i, int j, int ind) {
+  std::deque<Point2d<int> > stack(1, Point2d<int>(i,j));
+  grid[i][j].w_comp = -2;
+  while (stack.size() > 0) {
+    Point2d<int> p = stack.back();
+    stack.pop_back();
+    //mark p as done
+    grid[p.x][p.y].w_comp = ind;
+    w_components[ind].push_back(p);
+    //go around to the others  
+    for (int ii=-1; ii<=1; ++ii) {
+      int iii = ii + p.x;
+      if (iii < 0) continue;
+      else if (iii >= num_pixels) break;
+      for (int jj=-1; jj<=1; ++jj) {
+        if (jj == 0 && ii == 0) continue;
+        int jjj = jj + p.y;
+        if (jjj < 0) continue;
+        else if (jjj >= num_pixels) break;
+        if (grid[iii][jjj].w_comp == -1 && grid[iii][jjj].w_ball_status == 2) {
+          grid[iii][jjj].w_comp = -2;
+          stack.push_front(Point2d<int>(iii,jjj));
+        }
+      }
+    }
+  }
 }
+
+//this finds components of z-contained pixels, where the components 
+//aren't allowed to go through w-contained pixels.  
+//because it is safer to assume that things *are* connected, 
+//we *allow* these components to go through pixels which are 
+//touched by w (including going diagonally when one side is contained 
+//in w and one side is touched by w)
 void TrapGrid::pursue_z_cut_by_w_comp(int i, int j, int ind) {
+  std::deque<Point2d<int> > stack(1, Point2d<int>(i,j));
+  grid[i][j].z_cut_by_w_comp = -2;
+  int ii,jj;
+  while (stack.size() > 0) {
+    Point2d<int> p = stack.back();
+    stack.pop_back();
+    //mark p as done
+    grid[p.x][p.y].z_cut_by_w_comp = ind;
+    z_cut_by_w_components[ind].push_back(p);
+    //figure out which sides run against the edge of the pixels
+    bool right_max, top_max, left_min, bottom_min; 
+    if (p.x == num_pixels - 1) {
+      right_max = true;
+      left_min = false;
+    } else if (p.x == 0) {
+      left_min = true;
+      right_max = false;
+    } else {
+      left_min = right_max = false;
+    }
+    if (p.y == num_pixels - 1) {
+      top_max = true;
+      bottom_min = false;
+    } else if (p.y == 0) {
+      top_max = false;
+      bottom_min = true;
+    } else {
+      top_max = bottom_min = false;
+    }
+    //right column
+    if (!right_max) {
+      ii = p.x+1;
+      //bottom
+      if (!bottom_min) {
+        jj=p.y-1;
+        if (grid[ii][jj].z_ball_status == 2
+            && grid[ii][jj].z_cut_by_w_comp == -1
+            && grid[ii][jj].w_ball_status < 2 
+            && (grid[ii-1][jj].w_ball_status < 2 || grid[ii][jj+1].w_ball_status < 2)) {
+          grid[ii][jj].z_cut_by_w_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }      
+      //middle   
+      jj = p.y;
+      if (grid[ii][jj].z_ball_status == 2 
+          && grid[ii][jj].w_ball_status < 2 
+          && grid[ii][jj].z_cut_by_w_comp == -1) { 
+        grid[ii][jj].z_cut_by_w_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+      //right top
+      if (!top_max) {
+        jj = p.y+1;
+        if (grid[ii][jj].z_ball_status == 2
+            && grid[ii][jj].z_cut_by_w_comp == -1
+            && grid[ii][jj].w_ball_status < 2 
+            && (grid[ii-1][jj].w_ball_status < 2 || grid[ii][jj-1].w_ball_status < 2)) {
+          grid[ii][jj].z_cut_by_w_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }
+    }
+    //top spot
+    if (!top_max) {
+      ii = p.x;
+      jj = p.y + 1;
+      if (grid[ii][jj].z_ball_status == 2
+          && grid[ii][jj].z_cut_by_w_comp == -1
+          && grid[ii][jj].w_ball_status < 2) {
+        grid[ii][jj].z_cut_by_w_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+    }
+    //left column
+    if (!left_min) {
+      ii = p.x-1;
+      //top
+      if (!top_max) {
+        jj = p.y+1;
+        if (grid[ii][jj].z_ball_status == 2
+            && grid[ii][jj].z_cut_by_w_comp == -1
+            && grid[ii][jj].w_ball_status < 2 
+            && (grid[ii+1][jj].w_ball_status < 2 || grid[ii][jj-1].w_ball_status < 2)) {
+          grid[ii][jj].z_cut_by_w_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }
+      //middle
+      jj = p.y;
+      if (grid[ii][jj].z_ball_status == 2 
+          && grid[ii][jj].w_ball_status < 2 
+          && grid[ii][jj].z_cut_by_w_comp == -1) { 
+        grid[ii][jj].z_cut_by_w_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+      //bottom
+      if (!bottom_min) {
+        jj=p.y-1;
+        if (grid[ii][jj].z_ball_status == 2
+            && grid[ii][jj].z_cut_by_w_comp == -1
+            && grid[ii][jj].w_ball_status < 2 
+            && (grid[ii+1][jj].w_ball_status < 2 || grid[ii][jj+1].w_ball_status < 2)) {
+          grid[ii][jj].z_cut_by_w_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }
+    }
+    //bottom middle
+    if (!bottom_min) {
+      ii = p.x;
+      jj = p.y - 1;
+      if (grid[ii][jj].z_ball_status == 2
+          && grid[ii][jj].z_cut_by_w_comp == -1
+          && grid[ii][jj].w_ball_status < 2) {
+        grid[ii][jj].z_cut_by_w_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+    }
+     
+  }//<-- end of while
 }
+
 void TrapGrid::pursue_w_cut_by_z_comp(int i, int j, int ind) {
+  std::deque<Point2d<int> > stack(1, Point2d<int>(i,j));
+  grid[i][j].w_cut_by_z_comp = -2;
+  int ii,jj;
+  while (stack.size() > 0) {
+    Point2d<int> p = stack.back();
+    stack.pop_back();
+    //mark p as done
+    grid[p.x][p.y].w_cut_by_z_comp = ind;
+    w_cut_by_z_components[ind].push_back(p);
+    //figure out which sides run against the edge of the pixels
+    bool right_max, top_max, left_min, bottom_min; 
+    if (p.x == num_pixels - 1) {
+      right_max = true;
+      left_min = false;
+    } else if (p.x == 0) {
+      left_min = true;
+      right_max = false;
+    } else {
+      left_min = right_max = false;
+    }
+    if (p.y == num_pixels - 1) {
+      top_max = true;
+      bottom_min = false;
+    } else if (p.y == 0) {
+      top_max = false;
+      bottom_min = true;
+    } else {
+      top_max = bottom_min = false;
+    }
+    //right column
+    if (!right_max) {
+      ii = p.x+1;
+      //bottom
+      if (!bottom_min) {
+        jj=p.y-1;
+        if (grid[ii][jj].w_ball_status == 2
+            && grid[ii][jj].w_cut_by_z_comp == -1
+            && grid[ii][jj].z_ball_status < 2 
+            && (grid[ii-1][jj].z_ball_status < 2 || grid[ii][jj+1].z_ball_status < 2)) {
+          grid[ii][jj].w_cut_by_z_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }      
+      //middle   
+      jj = p.y;
+      if (grid[ii][jj].w_ball_status == 2 
+          && grid[ii][jj].z_ball_status < 2 
+          && grid[ii][jj].w_cut_by_z_comp == -1) { 
+        grid[ii][jj].w_cut_by_z_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+      //right top
+      if (!top_max) {
+        jj = p.y+1;
+        if (grid[ii][jj].w_ball_status == 2
+            && grid[ii][jj].w_cut_by_z_comp == -1
+            && grid[ii][jj].z_ball_status < 2 
+            && (grid[ii-1][jj].z_ball_status < 2 || grid[ii][jj-1].z_ball_status < 2)) {
+          grid[ii][jj].w_cut_by_z_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }
+    }
+    //top spot
+    if (!top_max) {
+      ii = p.x;
+      jj = p.y + 1;
+      if (grid[ii][jj].w_ball_status == 2
+          && grid[ii][jj].w_cut_by_z_comp == -1
+          && grid[ii][jj].z_ball_status < 2) {
+        grid[ii][jj].w_cut_by_z_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+    }
+    //left column
+    if (!left_min) {
+      ii = p.x-1;
+      //top
+      if (!top_max) {
+        jj = p.y+1;
+        if (grid[ii][jj].w_ball_status == 2
+            && grid[ii][jj].w_cut_by_z_comp == -1
+            && grid[ii][jj].z_ball_status < 2 
+            && (grid[ii+1][jj].z_ball_status < 2 || grid[ii][jj-1].z_ball_status < 2)) {
+          grid[ii][jj].w_cut_by_z_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }
+      //middle
+      jj = p.y;
+      if (grid[ii][jj].w_ball_status == 2 
+          && grid[ii][jj].z_ball_status < 2 
+          && grid[ii][jj].w_cut_by_z_comp == -1) { 
+        grid[ii][jj].w_cut_by_z_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+      //bottom
+      if (!bottom_min) {
+        jj=p.y-1;
+        if (grid[ii][jj].w_ball_status == 2
+            && grid[ii][jj].w_cut_by_z_comp == -1
+            && grid[ii][jj].z_ball_status < 2 
+            && (grid[ii+1][jj].z_ball_status < 2 || grid[ii][jj+1].z_ball_status < 2)) {
+          grid[ii][jj].w_cut_by_z_comp = -2;
+          stack.push_front(Point2d<int>(ii,jj));
+        }
+      }
+    }
+    //bottom middle
+    if (!bottom_min) {
+      ii = p.x;
+      jj = p.y - 1;
+      if (grid[ii][jj].w_ball_status == 2
+          && grid[ii][jj].w_cut_by_z_comp == -1
+          && grid[ii][jj].z_ball_status < 2) {
+        grid[ii][jj].w_cut_by_z_comp = -2;
+        stack.push_front(Point2d<int>(ii,jj));
+      }
+    }
+     
+  }//<-- end of while
 }
+
+//I think it's enough to not go diagonally
 void TrapGrid::pursue_intersection_comp(int i, int j, int ind) {
+  std::deque<Point2d<int> > stack(1, Point2d<int>(i,j));
+  grid[i][j].intersection_comp = -2;
+  while (stack.size() > 0) {
+    Point2d<int> p = stack.back();
+    stack.pop_back();
+    //mark p as done
+    grid[p.x][p.y].intersection_comp = ind;
+    intersection_components[ind].push_back(p);
+    //check the non-diagonals
+    int ii = p.x + 1;
+    int jj = p.y;
+    if (ii < num_pixels 
+        && grid[ii][jj].intersection_comp == -1
+        && grid[ii][jj].w_ball_status > 0 
+        && grid[ii][jj].z_ball_status > 0) {
+      grid[ii][jj].intersection_comp = -2;
+      stack.push_front(Point2d<int>(ii,jj));
+    }
+    ii = p.x-1;
+    if (ii > 0
+        && grid[ii][jj].intersection_comp == -1
+        && grid[ii][jj].w_ball_status > 0 
+        && grid[ii][jj].z_ball_status > 0) {
+      grid[ii][jj].intersection_comp = -2;
+      stack.push_front(Point2d<int>(ii,jj));
+    }    
+    ii = p.x;
+    jj = p.y+1;
+    if (jj < num_pixels
+        && grid[ii][jj].intersection_comp == -1
+        && grid[ii][jj].w_ball_status > 0 
+        && grid[ii][jj].z_ball_status > 0) {
+      grid[ii][jj].intersection_comp = -2;
+      stack.push_front(Point2d<int>(ii,jj));
+    }
+    jj = p.y-1;
+    if (jj > 0
+        && grid[ii][jj].intersection_comp == -1
+        && grid[ii][jj].w_ball_status > 0 
+        && grid[ii][jj].z_ball_status > 0) {
+      grid[ii][jj].intersection_comp = -2;
+      stack.push_front(Point2d<int>(ii,jj));
+    }    
+  }
+}
+
+
+//for each intersection boundary, follow it around and get an ordered 
+//list of what components appear
+void TrapGrid::compute_intersection_boundaries() {
+  intersection_boundaries.resize(intersection_components.size(), std::vector<Point2d<int> >(0));
+  for (int i=0; i<(int)intersection_components.size(); ++i) {
+    //find a point which has some boundary
+    
+  }
+  
 }
 
 //find the pixel containing the given point
@@ -414,14 +791,106 @@ bool ifs::find_trap() {
   //grid size is always 512?
   TrapGrid TG(balls, 512, prev_rad_mul);
   
+  TG.show();
+  
   //find the connected components
   TG.compute_connected_components();
   
-  TG.show();
+  std::cout << "number of z components: " << TG.z_components.size() << "\n";
+  std::cout << "number of w components: " << TG.w_components.size() << "\n";
+  std::cout << "number of z cut by w components: " << TG.z_cut_by_w_components.size() << "\n";
+  std::cout << "number of w cut by z components: " << TG.w_cut_by_z_components.size() << "\n";
+  std::cout << "number of intersection components: " << TG.intersection_components.size() << "\n";
+  
+  TG.show_connected_components();
 
   
   
   return true;
+}
+
+
+void TrapGrid::show_connected_components() {
+  int pixel_group_width = -1;
+  int num_drawing_pixels = -1;
+  if (num_pixels < 512) {
+    pixel_group_width = 512 / num_pixels;
+    num_drawing_pixels = pixel_group_width*num_pixels;
+  } else {
+    pixel_group_width = 1;
+    num_drawing_pixels = num_pixels;
+  }
+  XGraphics X2(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+  Point2d<int> p;
+  std::vector<int> zc(z_components.size());
+  std::vector<int> wc(w_components.size());
+  std::vector<int> ic(intersection_components.size());
+  
+  for (int i=0; i<(int)z_components.size(); ++i) {
+    zc[i] = X2.get_rgb_color(0,0,0.5 + 0.5*double(i)/(double(z_components.size())));
+  }
+  for (int i=0; i<(int)w_components.size(); ++i) {
+    wc[i] = X2.get_rgb_color(0,0.5 + 0.5*double(i)/(double(w_components.size())),0);
+  }
+  for (int i=0; i<(int)intersection_components.size(); ++i) {
+    ic[i] = X2.get_rgb_color(0.5 + 0.5*double(i)/(double(intersection_components.size())),0,0);
+  }  
+  int wh = X2.get_rgb_color(1,1,1);
+  int col;
+  for (int i=0; i<num_pixels; ++i) {
+    p.x = pixel_group_width*i;
+    for (int j=0; j<num_pixels; ++j) {
+      p.y = pixel_group_width*j;
+      col = wh;
+      if (grid[i][j].z_comp != -1) {
+        col = zc[grid[i][j].z_comp];
+      }
+      if (grid[i][j].w_comp != -1) {
+        col = wc[grid[i][j].w_comp];
+      }
+      if (grid[i][j].intersection_comp != -1) {
+        col = ic[grid[i][j].intersection_comp];
+      }
+      if (num_pixels<512) {
+        X2.draw_box(p, pixel_group_width, col);
+      } else {
+        X2.draw_point(p, col);
+      }
+    }
+  }
+  
+  XGraphics X3(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+  
+  std::vector<int> zcwc(z_cut_by_w_components.size());
+  std::vector<int> wczc(w_cut_by_z_components.size());
+   for (int i=0; i<(int)z_cut_by_w_components.size(); ++i) {
+    zcwc[i] = X3.get_rgb_color(0,0,0.5 + 0.5*double(i)/(double(z_cut_by_w_components.size())));
+  }
+  for (int i=0; i<(int)w_cut_by_z_components.size(); ++i) {
+    wczc[i] = X3.get_rgb_color(0,0.5 + 0.5*double(i)/(double(w_cut_by_z_components.size())),0);
+  }
+  for (int i=0; i<num_pixels; ++i) {
+    p.x = pixel_group_width*i;
+    for (int j=0; j<num_pixels; ++j) {
+      p.y = pixel_group_width*j;
+      col = wh;
+      if (grid[i][j].z_cut_by_w_comp != -1) {
+        col = zcwc[grid[i][j].z_cut_by_w_comp];
+      }
+      if (grid[i][j].w_cut_by_z_comp != -1) {
+        col = wczc[grid[i][j].w_cut_by_z_comp];
+      }
+      if (grid[i][j].intersection_comp != -1) {
+        col = ic[grid[i][j].intersection_comp];
+      }
+      if (num_pixels<512) {
+        X3.draw_box(p, pixel_group_width, col);
+      } else {
+        X3.draw_point(p, col);
+      }
+    }
+  }
+  (void)X3.wait_for_key();
 }
 
 
