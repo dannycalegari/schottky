@@ -653,15 +653,15 @@ void TrapGrid::pursue_intersection_comp(int i, int j, int ind) {
 //and (i,j+1) which *is*.  I think this must always exist for any boundary.
 //Then it walks around
 void TrapGrid::compute_intersection_boundaries() {
-  intersection_boundaries.resize(intersection_components.size(), std::vector<Point2d<int> >(0));
-  std:vector<bool> icomp_done(intersection_components.size(), false);
+  intersection_boundaries.resize(intersection_components.size(), std::vector<Point3d<int> >(0));
+  std::vector<bool> icomp_done(intersection_components.size(), false);
   for (int i=0; i<num_pixels; ++i) {
     for (int j=1; j<num_pixels; ++j) {
-      if (grid[i][j-1].intersection_component == -1 &&
-          grid[i][j].intersection_component >= 0 &&
-          icomp_done[grid[i][j].intersection_component] == false) {
-        pursue_intersection_component(i,j,0,intersection_boundaries[grid[i][j].intersection_component]);
-        icomp_done[grid[i][j].intersection_component] = true;
+      if (grid[i][j-1].intersection_comp == -1 &&
+          grid[i][j].intersection_comp >= 0 &&
+          icomp_done[grid[i][j].intersection_comp] == false) {
+        pursue_intersection_boundary(i,j,0,intersection_boundaries[grid[i][j].intersection_comp]);
+        icomp_done[grid[i][j].intersection_comp] = true;
       }
     }
   }
@@ -670,21 +670,44 @@ void TrapGrid::compute_intersection_boundaries() {
 
 //pursue a boundary component by following it around
 //the indices around a pixel start 0=bottom and go ccw around
-void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<Point2d<int> >& bd) {
+void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<Point3d<int> >& bd) {
   Point2d<int> start_pixel(i,j);
   int start_ind = ind;
   Point2d<int> current_pixel = start_pixel;
   int current_ind = start_ind;
   int i_offset[4] = {0,1,0,-1};
-  int j_offset[4] = {-1,0,1,0}
+  int j_offset[4] = {-1,0,1,0};
+  bd.resize(0);
   do {
     int ii = current_pixel.x + i_offset[current_ind];
     int jj = current_pixel.y + j_offset[current_ind];
-    if (ii < 0 || ii >= num_pixels || jj < 0 || jj > num_pixels)
-    
-    
-    
-    
+    if (ii < 0 || ii >= num_pixels || jj < 0 || jj >= num_pixels) {
+      current_ind = (current_ind+1)%4;
+      continue;
+    }
+    int zcwc = grid[ii][jj].z_cut_by_w_comp;
+    int wczc = grid[ii][jj].w_cut_by_z_comp;
+    if (zcwc >= 0) {
+      Point3d<int> this_pair(0, grid[ii][jj].z_comp, zcwc);
+      if (bd.size() == 0 || 
+         (bd.size() == 1 && bd[0] != this_pair) ||
+         (bd.size() >1 && bd[bd.size()-1] != this_pair && bd[0] != this_pair)) {
+        bd.push_back(this_pair);
+      }
+    } else if (wczc >= 0) {
+      Point3d<int> this_pair(1, grid[ii][jj].w_comp, wczc);
+      if (bd.size() == 0 || 
+         (bd.size() == 1 && bd[0] != this_pair) ||
+         (bd.size() >1 && bd[bd.size()-1] != this_pair && bd[0] != this_pair)) {
+        bd.push_back(this_pair);
+      }
+    }
+    if (grid[ii][jj].intersection_comp == -1) {
+      current_ind = (current_ind+1)%4;
+    } else {
+      current_pixel = Point2d<int>(ii,jj);
+      current_ind = (current_ind+3)%4; //i.e. -1 mod 4 to stay on the boundary
+    }
     
   } while (current_pixel != start_pixel || current_ind != start_ind);
 }

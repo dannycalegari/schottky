@@ -37,6 +37,16 @@ Point2d<T> operator*(T sf, Point2d<T> a) {
 }
 
 template <class T>
+bool operator==(const Point2d<T>& a, const Point2d<T>& b) {
+  return a.x == b.x && a.y == b.y;
+}
+
+template <class T>
+bool operator!=(const Point2d<T>& a, const Point2d<T>& b) {
+  return a.x != b.x || a.y != b.y;
+}
+
+template <class T>
 std::ostream& operator<<(std::ostream& os, const Point2d<T>& p) {
   return os << "(" << p.x << "," << p.y << ")";
 }
@@ -89,5 +99,96 @@ template <class T>
 T max(T a, T b) {
   return (a > b ? a : b);
 }
+
+
+
+//3d point
+
+template <class T>
+struct Point3d {
+        T x,y,z;
+  Point3d(T X, T Y, T Z);
+  Point3d();
+};
+
+template <class T>
+Point3d<T>::Point3d() {
+  x = y = z = 0;
+}
+
+template <class T>
+Point3d<T>::Point3d(T X, T Y, T Z) {
+  x = X;
+  y = Y;
+  z = Z;
+}
+
+template <class T>
+Point3d<T> operator+(Point3d<T> a, Point3d<T> b) {
+  return Point3d<T>(a.x+b.x, a.y+b.y, a.z+b.z);
+}
+
+template <class T>
+Point3d<T> operator-(Point3d<T> a, Point3d<T> b) {
+  return Point2d<T>(a.x-b.x, a.y-b.y, a.z-b.z);
+}
+
+template <class T>
+Point3d<T> operator*(T sf, Point3d<T> a) {
+  return Point3d<T>(sf*a.x, sf*a.y, sf*a.z);
+}
+
+template <class T>
+bool operator==(const Point3d<T>& a, const Point3d<T>& b) {
+  return a.x == b.x && a.y == b.y && a.z == b.z;
+}
+
+template <class T>
+bool operator!=(const Point3d<T>& a, const Point3d<T>& b) {
+  return a.x != b.x || a.y != b.y || a.z != b.z;
+}
+
+
+template <class T>
+std::ostream& operator<<(std::ostream& os, const Point3d<T>& p) {
+  return os << "(" << p.x << "," << p.y << "," << p.z << ")";
+}
+
+template <class T>
+T dot(const Point3d<T>& a, const Point3d<T>& b) {
+  return (a.x*b.x) + (a.y*b.y) + (a.z*b.z);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #endif

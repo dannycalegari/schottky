@@ -51,9 +51,9 @@ struct TrapGrid {
   //these are connected components of intersection pixels 
   //(at least touched by z and w)
   std::vector<std::vector<Point2d<int> > > intersection_components;
-  //these are ordered lists of (original component, cut component) pairs
+  //these are ordered lists of (<z or w>, original component, cut component) triples
   //one for each boundary
-  std::vector<std::vector<Point2d<int> > > intersection_boundaries;
+  std::vector<std::vector<Point3d<int> > > intersection_boundaries;
   
   TrapGrid() {
     num_pixels = 0;
@@ -73,7 +73,7 @@ struct TrapGrid {
   void pursue_w_cut_by_z_comp(int i, int j, int ind);
   void pursue_intersection_comp(int i, int j, int ind);
   void compute_intersection_boundaries();
-  void pursue_intersection_boundary(int i, int j, int ind, std::vector<Point2d<int> >& bd);
+  void pursue_intersection_boundary(int i, int j, int ind, std::vector<Point3d<int> >& bd);
   void show();
   void show_connected_components();
 };

@@ -52,7 +52,16 @@ bool ifs::find_trap() {
   
   TG.show_connected_components();
 
+  //find the boundaries of the intersection components
+  TG.compute_intersection_boundaries();
   
+  for (int i=0; i<(int)TG.intersection_components.size(); ++i) {
+    std::cout << "Boundary of intersection component " << i << ":\n";
+    for (int j=0; j<(int)TG.intersection_boundaries[i].size(); ++j) {
+      std::cout << TG.intersection_boundaries[i][j] << ",";
+    }
+    std::cout << "\n";
+  }
   
   return true;
 }

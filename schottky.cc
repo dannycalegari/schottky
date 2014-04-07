@@ -11,6 +11,7 @@
 // standard libraries to include
 
 #include <iostream>
+#include <cstdlib>
 #include <cmath>
 
 #include "ifs.h"
