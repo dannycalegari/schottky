@@ -23,7 +23,8 @@ struct GridPixel {
   int i_comp;
   
   //this is the L1 distance between this pixel and the z/w set
-  int distance;
+  int z_distance;
+  int w_distance;
 };
   
   
@@ -80,12 +81,13 @@ struct TrapGrid {
   void compute_intersection_boundaries();
   void pursue_intersection_boundary(int i, int j, int ind, std::vector<Point3d<int> >& bd);
   bool find_interleaved_components(std::vector<Point3d<int> >& interleaved_components);
-  void populate_distances_on_component(Point2d<int>& p, 
-                                       int z_or_w, 
-                                       const std::vector<Point2d<int> >& comp);
+  void compute_distances();
   Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp);
-  void show();
+  bool disjoint_from_z_or_w(const Ball& b, int z_or_w);
+  void show(std::vector<Point2d<int> >* marked_points,
+            std::vector<Ball>* b);
   void show_connected_components();
+  void show_distance_functions();
 };
 
 

@@ -16,7 +16,7 @@ bool ifs::find_trap() {
   //starting depth will always be 10?
   int current_depth = depth; //10;
   std::vector<Ball> balls;
-  compute_balls(balls, Ball(0.5, min_initial_radius), current_depth);
+  compute_balls(balls, Ball(0.5, 0.5, min_initial_radius), current_depth);
   
   //std::cout << "Computed " << balls.size() << " balls\n";
   //for (int i=0; i<(int)balls.size(); ++i) {
@@ -39,7 +39,7 @@ bool ifs::find_trap() {
   //grid size is always 512?
   TrapGrid TG(balls, 512, prev_rad_mul);
   
-  TG.show();
+  TG.show(NULL, NULL);
   
   //find the connected components
   TG.compute_connected_components();
@@ -61,17 +61,95 @@ bool ifs::find_trap() {
     std::cout << "\n";
   }
   
+  TG.show_connected_components();
+  
   std::vector<Point3d<int> > ic;
-  if (TG.find_interleaved_components(ic)) {
-    std::cout << "Found interleaved components: ";
-    for (int i=0; i<4; ++i) {
-      std::cout << ic[i] << " ";
-    }
-    std::cout << "\n";
+  if (!TG.find_interleaved_components(ic)) {
+    std::cout << "Didn't find interleaved components\n";
+    return false;
+  }
+  std::cout << "Found interleaved components: ";
+  for (int i=0; i<4; ++i) {
+    std::cout << ic[i] << " ";
+  }
+  std::cout << "\n";
+  
+  TG.compute_distances();
+  
+  std::cout << "Found distance functions\n";
+  
+  TG.show_distance_functions();
+  
+  std::vector<Point2d<int> > farthest_points(4);
+  for (int i=0; i<4; ++i) {
+    farthest_points[i] = TG.farthest_from_other_component(ic[i].x, ic[i].z);
+    std::cout << "Farthest point in " << ic[i] << " is " << farthest_points[i] << "\n";
   }
   
-  TG.show_connected_components();
-
+  TG.show(&farthest_points, NULL);
+  
+  std::vector<Ball> good_balls(4);
+  bool found_all_balls = true;
+  for (int i=0; i<4; ++i) {
+    Point2d<int>& p = farthest_points[i];
+    if (ic[i].x == 0) {
+      if (TG.grid[p.x][p.y].w_distance == 0) {
+        found_all_balls = false;
+        break;
+      }
+      Ball b = balls[TG.grid[p.x][p.y].closest_z_ball];
+      std::cout << "Starting with ball " << b << "\n";
+      int attempt = 0;
+      while (true) {
+        if (attempt > 5) {
+          found_all_balls = false;
+          break;
+        }
+        if (TG.disjoint_from_z_or_w(b, 1)) {
+          good_balls[i] = b;
+          break;
+        }
+        b = act_on_right(0, b);
+        std::cout << "No good; trying next ball " << b << "\n";
+        ++attempt;
+      }
+      if (!found_all_balls) break;
+    
+    } else { //p[0] == 1 (i.e. w component)
+      if (TG.grid[p.x][p.y].z_distance == 0) {
+        found_all_balls = false;
+        break;
+      }
+      Ball b = balls[TG.grid[p.x][p.y].closest_w_ball];
+      std::cout << "Starting with ball " << b << "\n";
+      int attempt = 0;
+      while (true) {
+        if (attempt > 5) {
+          found_all_balls = false;
+          break;
+        }
+        if (TG.disjoint_from_z_or_w(b, 0)) {
+          good_balls[i] = b;
+          break;
+        }
+        b = act_on_right(1, b);
+        std::cout << "No good; trying next ball " << b << "\n";
+        ++attempt;
+      }
+      if (!found_all_balls) break;
+    }
+  }
+    
+  if (!found_all_balls) {
+    std::cout << "Didn't find four disjoint balls\n";
+    return false;
+  }
+  std::cout << "Found four disjoint balls!\n";
+  TG.show(NULL, &good_balls);
+  
+  //at this point, the only thing we need to check is that 
+  //there are two points epsilon apart
+  
   
   
   return true;

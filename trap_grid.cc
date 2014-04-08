@@ -232,6 +232,141 @@ void TrapGrid::fill_pixels(const std::vector<Ball>& balls, double rad_mul) {
 }
 
 
+//decide if the ball b is disjoint from z or w pixels
+//unfortunately, this seems like it needs to be just as complicated 
+//as the function above
+bool TrapGrid::disjoint_from_z_or_w(const Ball& b, int z_or_w) {
+  double r = b.radius;
+  const cpx c = b.center;
+  //std::cout << "Filling pixels for ball at " << c << ", " << r << "\n";
+  int ll_touching_i, ll_touching_j;
+  int ur_touching_i, ur_touching_j;
+  double pixel_radius = 0.5*pixel_diameter;
+  pixel_indices(ll_touching_i, ll_touching_j, cpx(c.real()-r, c.imag()-r));
+  pixel_indices(ur_touching_i, ur_touching_j, cpx(c.real()+r, c.imag()+r));
+  for (int i=ll_touching_i; i<=ur_touching_i; ++i) {
+    if (i >= num_pixels) break;
+    else if (i < 0) continue; 
+    for (int j=ll_touching_j; j<=ur_touching_j; ++j) {
+      if (j >= num_pixels) break;
+      else if (j < 0) continue;
+      cpx p_c = grid[i][j].center;
+      cpx p_ur(p_c.real() + pixel_radius, p_c.imag() + pixel_radius);
+      cpx p_lr(p_c.real() + pixel_radius, p_c.imag() - pixel_radius);
+      cpx p_ul(p_c.real() - pixel_radius, p_c.imag() + pixel_radius);
+      cpx p_ll(p_c.real() - pixel_radius, p_c.imag() - pixel_radius);
+      if (p_ur.real() < c.real() && p_ur.imag() < c.imag()) { 
+        if (abs(c-p_ur) < r) {
+          if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+              (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+            return false;
+          }
+        }
+              
+      } else if (p_lr.real() < c.real() && p_lr.imag() > c.imag()) {
+        //pixel is to the upper left
+        //it suffices to check lr for touching and upper left for containing
+        if (abs(c-p_lr) < r) {
+          if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+              (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+            return false;
+          }
+        }
+        
+      } else if (p_ll.real() > c.real() && p_ll.imag() > c.imag()) {
+        //pixel is to the upper right
+        //suffices to check ll for touching and ur for containing
+        if (abs(c-p_ll) < r) {
+          if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+              (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+            return false;
+          }
+        }
+        
+      } else if (p_ul.real() > c.real() && p_ul.imag() < c.imag()) {
+        //pixel is to the lower right
+        //it suffices to check ul for touching and lr for containing
+        if (abs(c-p_ul) < r) {
+          if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+              (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+            return false;
+          }
+        }
+      
+      } else {
+        //those were the four easier cases
+        if (p_ur.real() < c.real()) { 
+          //the pixel is to the left
+          //it suffices to check that p_lr.real() > c.real() - r for touching
+          //and that it contains p_ll and p_ul for containing
+          if (p_lr.real() > c.real() - r) {
+            if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+              (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+              return false;
+            }
+          }
+        
+        } else if (p_ll.imag() > c.imag()) {
+          //the pixel is above
+          //it suffices to check that p_ll.imag() < c.imag() + r for touching
+          //and that it contains the top ones for containing
+          if (p_ll.imag() < c.imag() + r) {
+            if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+                (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+              return false;
+            }
+          }
+          
+        } else if (p_ll.real() > c.real()) {
+          //the pixel is to the right
+          //it suffices to check that p_ll.real() < c.real() + r for touching 
+          //and that it contains the right ones for containing
+          if (p_ll.real() < c.real() + r) {
+            if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+              (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+              return false;
+            }
+          }
+          
+        } else if (p_ur.imag() < c.imag()) {
+          //the pixel is below
+          //it suffices to check that p_ur.imag() > c.imag() - r for touching and 
+          //that it contains the bottom ones for containing
+          if (p_ur.imag() > c.imag() - r) {
+            if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+                (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+              return false;
+            }
+          }
+        
+        } else { 
+          //the pixel is directly over the center of the circle
+          //it *is* touching, and its containing if all the corners are contained 
+          if ((z_or_w == 0 && grid[i][j].z_ball_status > 0) ||
+              (z_or_w == 1 && grid[i][j].w_ball_status > 0)) {
+            return false;
+          }
+        }
+      }
+    }
+  }//<-- end of loop over pixels
+  return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //fill out the connected components
 //during this computation, the grid[i][j].*comp is -1 if nothing 
 //has touched it, -2 if it's been stacked, and >=0 if it records 
@@ -754,44 +889,94 @@ bool TrapGrid::find_interleaved_components(std::vector<Point3d<int> >& interleav
 }
 
 
-
-
-//for all the pixels in a component, find the distance from any pixel
-//touched by the other gen
-void TrapGrid::populate_distances_on_component(Point2d<int>& p, 
-                                               int z_or_w, 
-                                               const std::vector<Point2d<int> >& comp) {
-  if (grid[p.x][p.y].distance != -1) {
-    return grid[p.x][p.y];
-  } else if ((z_or_w == 0 && grid[p.x][p.y].w_ball_status > 0) ||
-             (z_or_w == 1 && grid[p.x][p.y].z_ball_status > 0)) {
-    return 0;
-  }
-  int d0 = (p.y == 0 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x,p.y-1), z_or_w, comp));
-  int d1 = (p.x == num_pixels-1 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x+1,p.y), z_or_w, comp));
-  int d2 = (p.y == num_pixels-1 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x,p.y+1), z_or_w, comp));
-  int d3 = (p.x == 0 ? 1e10 : populate_distances_on_component(Point2d<int>(p.x-1,p.y), z_or_w, comp));
-  int m1 = (d0 < d1 ? d0 : d1);
-  int m3 = (d2 < d3 ? d2 : d3);
-  return (m1 < m3 ? m1 : m3);
-}
-
-Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp) {
-  std::vector<Point2d<int> >& c = (z_or_w == 0 ? z_cut_by_w_components[cut_comp] 
-                                               : w_cut_by_z_components[cut_comp]);
-  for (int i=0; i<(int)c.size(); ++i) {
-    grid[c[i].x][c[i].y].distance = -1;
-  }
-  populate_distances_on_component(c[0], z_or_w, c);
-  int min_dist = 0;
-  int min_ind = -1;
-  for (int i=0; i<(int)c.size(); ++i) {
-    if (min_ind == -1 || grid[c[i].x][c[i].y].distance < min_dist) {
-      min_ind = i;
-      min_dist = grid[c[i].x][c[i].y].distance;
+//populate the z_distance and w_distance on the pixels
+//here it is distance to a pixel which is just touched by w or z
+//this sets the appropriate pixels to have distance 0 and then
+//does a breadth-first search (it's important that it's breadth-first)
+void TrapGrid::compute_distances() {
+  std::deque<Point2d<int> > z_stack(0);
+  std::deque<Point2d<int> > w_stack(0);
+  //clear the distances
+  for (int i=0; i<num_pixels; ++i) {
+    for (int j=0; j<num_pixels; ++j) {
+      grid[i][j].z_distance = grid[i][j].w_distance = -1;
     }
   }
-  return c[min_ind];
+  //initialize the ones of length 0
+  for (int i=0; i<num_pixels; ++i) {
+    for (int j=0; j<num_pixels; ++j) {
+      if (grid[i][j].z_ball_status > 0) {
+        grid[i][j].z_distance = 0;
+        z_stack.push_front(Point2d<int>(i,j));
+      }
+      if (grid[i][j].w_ball_status > 0) {
+        grid[i][j].w_distance = 0;
+        w_stack.push_front(Point2d<int>(i,j));
+      }
+    }
+  }
+  //now do the stacks; if we encounter anything new, set its length
+  //to be 1+ours and push it on the stack
+  while (z_stack.size() > 0) {
+    Point2d<int> p = z_stack.back();
+    z_stack.pop_back();
+    if (p.y > 0 && grid[p.x][p.y-1].z_distance == -1) {
+      grid[p.x][p.y-1].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x, p.y-1));
+    }
+    if (p.x < num_pixels-1 && grid[p.x+1][p.y].z_distance == -1) {
+      grid[p.x+1][p.y].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x+1, p.y));
+    }
+    if (p.y < num_pixels-1 && grid[p.x][p.y+1].z_distance == -1) {
+      grid[p.x][p.y+1].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x, p.y+1));
+    }
+    if (p.x > 0 && grid[p.x-1][p.y].z_distance == -1) {
+      grid[p.x-1][p.y].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x-1, p.y));
+    }
+  }
+  while (w_stack.size() > 0) {
+    Point2d<int> p = w_stack.back();
+    w_stack.pop_back();
+    if (p.y > 0 && grid[p.x][p.y-1].w_distance == -1) {
+      grid[p.x][p.y-1].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x, p.y-1));
+    }
+    if (p.x < num_pixels-1 && grid[p.x+1][p.y].w_distance == -1) {
+      grid[p.x+1][p.y].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x+1, p.y));
+    }
+    if (p.y < num_pixels-1 && grid[p.x][p.y+1].w_distance == -1) {
+      grid[p.x][p.y+1].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x, p.y+1));
+    }
+    if (p.x > 0 && grid[p.x-1][p.y].w_distance == -1) {
+      grid[p.x-1][p.y].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x-1, p.y));
+    }
+  }
+        
+    
+}
+
+//compute_distances must have already been called.  This finds 
+//the point in a z_cut_by_w component (or vice versa) which 
+//is farthest from the other component
+Point2d<int> TrapGrid::farthest_from_other_component(int z_or_w, int cut_comp) {
+  std::vector<Point2d<int> >& c = (z_or_w == 0 ? z_cut_by_w_components[cut_comp] 
+                                               : w_cut_by_z_components[cut_comp]);
+  int max_dist = 0;
+  int max_ind = -1;
+  for (int i=0; i<(int)c.size(); ++i) {
+    int d = (z_or_w==0 ? grid[c[i].x][c[i].y].w_distance : grid[c[i].x][c[i].y].z_distance);
+    if (max_ind == -1 || d > max_dist) {
+      max_ind = i;
+      max_dist = d;
+    }
+  }
+  return c[max_ind];
 }
 
 
@@ -909,7 +1094,8 @@ void TrapGrid::show_connected_components() {
 }
 
 
-void TrapGrid::show() {
+void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
+                    std::vector<Ball>* b) {
   int pixel_group_width = -1;
   int num_drawing_pixels = -1;
   if (num_pixels < 512) {
@@ -967,8 +1153,101 @@ void TrapGrid::show() {
       }
     }
   }
+  int bc = X2.get_rgb_color(0,0,0);
+  if (b != NULL) {
+    //now draw the balls
+    double real_pixel_width = box_width/num_drawing_pixels;
+    int bc = X2.get_rgb_color(0,0,0);
+    for (int i=0; i<(int)b->size(); ++i) {
+      int x = int( ((*b)[i].center.real()-lower_left.real())/real_pixel_width );
+      int y = int( ((*b)[i].center.imag()-lower_left.imag())/real_pixel_width );
+      double draw_radius = (*b)[i].radius / real_pixel_width;
+      std::cout << "Drawing disk of radius " << (*b)[i].radius << " at " << (*b)[i].center << "\n";
+      std::cout << "In the drawing, at " << Point2d<int>(x,y) << " radius: " << draw_radius << "\n";
+      X2.draw_disk(Point2d<int>(x,y), draw_radius, bc);
+    }
+  }
+  if (marked_points != NULL) {
+    for (int i=0; i<(int)marked_points->size(); ++i) {
+      if (pixel_group_width > 1) {
+        Point2d<int> p((*marked_points)[i].x*pixel_group_width, 
+                       (*marked_points)[i].y*pixel_group_width);
+        X2.draw_box(p, pixel_group_width,  bc);
+      } else {
+        X2.draw_point((*marked_points)[i],  bc);
+      }
+    }
+  }
   (void)X2.wait_for_key();
 }
+
+void TrapGrid::show_distance_functions() {
+  int pixel_group_width = -1;
+  int num_drawing_pixels = -1;
+  if (num_pixels < 512) {
+    pixel_group_width = 512 / num_pixels;
+    num_drawing_pixels = pixel_group_width*num_pixels;
+  } else {
+    pixel_group_width = 1;
+    num_drawing_pixels = num_pixels;
+  }
+  XGraphics X2(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+  Point2d<int> p;
+  int z_max_dist = 0;
+  int w_max_dist = 0;
+  for (int i=0; i<num_pixels; ++i) {
+    for (int j=0; j<num_pixels; ++j) {
+      if (grid[i][j].z_distance > z_max_dist) z_max_dist = grid[i][j].z_distance;
+      if (grid[i][j].w_distance > w_max_dist) w_max_dist = grid[i][j].w_distance;
+    }
+  }
+  std::vector<int> z_cols(z_max_dist+1);
+  for (int i=0; i<z_max_dist; ++i) {
+    z_cols[i] = X2.get_rgb_color(0,0,double(i)/double(z_max_dist));
+  }
+  std::vector<int> w_cols(w_max_dist+1);
+  for (int i=0; i<w_max_dist; ++i) {
+    w_cols[i] = X2.get_rgb_color(0,double(i)/double(w_max_dist),0);
+  }
+  for (int i=0; i<num_pixels; ++i) {
+    p.x = pixel_group_width*i;
+    for (int j=0; j<num_pixels; ++j) {
+      p.y = pixel_group_width*j;
+      if (pixel_group_width > 1) {
+        X2.draw_box(p, pixel_group_width, z_cols[grid[i][j].z_distance]);
+      } else {
+        X2.draw_point(p, z_cols[grid[i][j].z_distance]);
+      }
+    }
+  }
+  (void)X2.wait_for_key();
+  X2.erase_field();
+  for (int i=0; i<num_pixels; ++i) {
+    p.x = pixel_group_width*i;
+    for (int j=0; j<num_pixels; ++j) {
+      p.y = pixel_group_width*j;
+      if (pixel_group_width > 1) {
+        X2.draw_box(p, pixel_group_width, w_cols[grid[i][j].w_distance]);
+      } else {
+        X2.draw_point(p, w_cols[grid[i][j].w_distance]);
+      }
+    }
+  }
+  (void)X2.wait_for_key();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

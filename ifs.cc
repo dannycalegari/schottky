@@ -16,20 +16,23 @@
 //first some ball functions
 Ball::Ball() { 
   center = 0.5;
+  crad = 0.5;
   radius = 1.0;
   word = 0;
   word_len = 0;
 }
 
-Ball::Ball(cpx c, double r) {
+Ball::Ball(cpx c, cpx cr, double r) {
   center = c;
+  crad = cr;
   radius = r;
   word = 0;
   word_len = 0; //just a ball, no words, to start
 }
 
-Ball::Ball(cpx c, double r, int w, int wl) {
+Ball::Ball(cpx c, cpx cr, double r, int w, int wl) {
   center = c;
+  crad = cr;
   radius = r;
   word = w;
   word_len = wl; //just a ball, no words, to start
@@ -40,7 +43,7 @@ int Ball::last_gen_index() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const Ball& b) {
-  return os << "Ball(" << b.center << "," << b.radius << "," << b.word << "," << b.word_len << ")";
+  return os << "Ball(" << b.center << "," << b.crad << "," << b.radius << "," << b.word << "," << b.word_len << ")";
 }
 
 
@@ -95,11 +98,25 @@ Ball ifs::act_on_left(int index, const Ball& b) {
   int word = b.word;
   int word_len = b.word_len;
   if (index == 0) {
-    return Ball( z*b.center, az*b.radius, word, word_len+1 );
+    return Ball( z*b.center, z*b.crad, az*b.radius, word, word_len+1 );
   } else {
-    return Ball( (w*(b.center - 1.0)) + 1.0, aw*b.radius, word | (1 << word_len), word_len+1 );
+    return Ball( (w*(b.center - 1.0)) + 1.0, w*b.crad, aw*b.radius, word | (1 << word_len), word_len+1 );
   }
 }
+
+
+Ball ifs::act_on_right(int index, const Ball& b) {
+  int word = b.word;
+  int word_len = b.word_len;
+  if (index == 0) {
+    //the new center should be at the end of -crad (which points to 1)
+    return Ball( b.center - b.crad, z*b.crad, az*b.radius, word<<1, word_len+1 );
+  } else {
+    return Ball( b.center + b.crad, w*b.crad, aw*b.radius, (word<<1)|1, word_len+1 );
+  }
+}
+
+
 
 //take a list of balls and compute one more level of depth 
 //(on the left)
