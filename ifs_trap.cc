@@ -38,119 +38,111 @@ bool ifs::find_trap() {
   //now fill out the grid using this prev_rad_mul
   //grid size is always 512?
   TrapGrid TG(balls, 512, prev_rad_mul);
+
   
-  TG.show(NULL, NULL);
+  //the grid is initialized
+  while (true) {
   
-  //find the connected components
-  TG.compute_connected_components();
-  
-  std::cout << "number of z components: " << TG.z_components.size() << "\n";
-  std::cout << "number of w components: " << TG.w_components.size() << "\n";
-  std::cout << "number of z cut by w components: " << TG.z_cut_by_w_components.size() << "\n";
-  std::cout << "number of w cut by z components: " << TG.w_cut_by_z_components.size() << "\n";
-  std::cout << "number of intersection components: " << TG.intersection_components.size() << "\n";
-  
-  //find the boundaries of the intersection components
-  TG.compute_intersection_boundaries();
-  
-  for (int i=0; i<(int)TG.intersection_components.size(); ++i) {
-    std::cout << "Boundary of intersection component " << i << ":\n";
-    for (int j=0; j<(int)TG.intersection_boundaries[i].size(); ++j) {
-      std::cout << TG.intersection_boundaries[i][j] << ",";
-    }
-    std::cout << "\n";
-  }
-  
-  TG.show_connected_components();
-  
-  std::vector<Point3d<int> > ic;
-  if (!TG.find_interleaved_components(ic)) {
-    std::cout << "Didn't find interleaved components\n";
-    return false;
-  }
-  std::cout << "Found interleaved components: ";
-  for (int i=0; i<4; ++i) {
-    std::cout << ic[i] << " ";
-  }
-  std::cout << "\n";
-  
-  TG.compute_distances();
-  
-  std::cout << "Found distance functions\n";
-  
-  TG.show_distance_functions();
-  
-  std::vector<Point2d<int> > farthest_points(4);
-  for (int i=0; i<4; ++i) {
-    farthest_points[i] = TG.farthest_from_other_component(ic[i].x, ic[i].z);
-    std::cout << "Farthest point in " << ic[i] << " is " << farthest_points[i] << "\n";
-  }
-  
-  TG.show(&farthest_points, NULL);
-  
-  std::vector<Ball> good_balls(4);
-  bool found_all_balls = true;
-  for (int i=0; i<4; ++i) {
-    Point2d<int>& p = farthest_points[i];
-    if (ic[i].x == 0) {
-      if (TG.grid[p.x][p.y].w_distance == 0) {
-        found_all_balls = false;
-        break;
+    //show what it looks like
+    TG.show(NULL, NULL);
+        
+    //find the connected components
+    TG.compute_connected_components();
+    
+    std::cout << "number of z components: " << TG.z_components.size() << "\n";
+    std::cout << "number of w components: " << TG.w_components.size() << "\n";
+    std::cout << "number of z cut by w components: " << TG.z_cut_by_w_components.size() << "\n";
+    std::cout << "number of w cut by z components: " << TG.w_cut_by_z_components.size() << "\n";
+    std::cout << "number of intersection components: " << TG.intersection_components.size() << "\n";
+    
+    //find the boundaries of the intersection components
+    TG.compute_intersection_boundaries();
+    
+    for (int i=0; i<(int)TG.intersection_components.size(); ++i) {
+      std::cout << "Boundary of intersection component " << i << ":\n";
+      for (int j=0; j<(int)TG.intersection_boundaries[i].size(); ++j) {
+        std::cout << TG.intersection_boundaries[i][j] << ",";
       }
-      Ball b = balls[TG.grid[p.x][p.y].closest_z_ball];
-      std::cout << "Starting with ball " << b << "\n";
-      int attempt = 0;
-      while (true) {
-        if (attempt > 5) {
+      std::cout << "\n";
+    }
+    
+    TG.show_connected_components();
+    
+    std::vector<std::vector<Point3d<int> > > ic;
+    if (!TG.find_interleaved_components(ic)) {
+      std::cout << "Didn't find interleaved components\n";
+      return false;
+    }
+    std::cout << "Found interleaved components: ";
+    for (int i=0; i<(int)ic.size(); ++i) {
+      for (int j=0; j<4; ++j) {
+        std::cout << ic[i][j] << " ";
+      }
+      std::cout << "\n";
+    }
+    
+    TG.compute_distances();
+    
+    std::cout << "Found distance functions\n";
+    
+    TG.show_distance_functions();
+    
+    bool found_all_balls = true;
+    std::vector<Ball> good_balls(4);
+    for (int i=0; i<(int)ic.size(); ++i) {
+      std::cout << "Trying the interleaved components number " << i << "\n";
+    
+      std::vector<Point2d<int> > farthest_points(4);
+      for (int j=0; j<4; ++j) {
+        farthest_points[j] = TG.farthest_from_other_component(ic[i][j].x, ic[i][j].z);
+        std::cout << "Farthest point in " << ic[i][j] << " is " << farthest_points[j] << "\n";
+      }
+    
+      TG.show(&farthest_points, NULL);
+
+      found_all_balls = true;
+      for (int j=0; j<4; ++j) {      
+        Point2d<int>& p = farthest_points[j];
+        int zw = ic[i][j].x;
+        //if the pixel is touching a ball, it can't be good
+        if ((zw == 0 ? TG.grid[p.x][p.y].w_distance == 0
+                    : TG.grid[p.x][p.y].z_distance == 0)) {
           found_all_balls = false;
           break;
         }
-        if (TG.disjoint_from_z_or_w(b, 1)) {
-          good_balls[i] = b;
-          break;
+        Ball b = balls[(zw==0 ? TG.grid[p.x][p.y].closest_z_ball
+                              : TG.grid[p.x][p.y].closest_w_ball)];
+        Ball b2 = b;
+        std::cout << "Starting with ball " << b << "\n";
+        for (int k=0; k<4; ++k) {
+          b = act_on_right(0,b);
+          b2 = act_on_right(1,b2);
         }
-        b = act_on_right(0, b);
-        std::cout << "No good; trying next ball " << b << "\n";
-        ++attempt;
-      }
-      if (!found_all_balls) break;
-    
-    } else { //p[0] == 1 (i.e. w component)
-      if (TG.grid[p.x][p.y].z_distance == 0) {
-        found_all_balls = false;
-        break;
-      }
-      Ball b = balls[TG.grid[p.x][p.y].closest_w_ball];
-      std::cout << "Starting with ball " << b << "\n";
-      int attempt = 0;
-      while (true) {
-        if (attempt > 5) {
+        std::cout << "Refined to balls:\n" << b << "\n" << b2 << "\n";
+        if (TG.disjoint_from_z_or_w(b, 1-zw)) {
+          good_balls[j] = b;
+        } else if (TG.disjoint_from_z_or_w(b2, 1-zw)) {
+          good_balls[j] = b2;
+        } else {
           found_all_balls = false;
           break;
         }
-        if (TG.disjoint_from_z_or_w(b, 0)) {
-          good_balls[i] = b;
-          break;
-        }
-        b = act_on_right(1, b);
-        std::cout << "No good; trying next ball " << b << "\n";
-        ++attempt;
       }
-      if (!found_all_balls) break;
+      if (found_all_balls) break; //we're done already
     }
-  }
+    if (found_all_balls) {
+      std::cout << "Found four disjoint balls!\n";
+      TG.show(NULL, &good_balls);
+      break;
+    }
     
-  if (!found_all_balls) {
-    std::cout << "Didn't find four disjoint balls\n";
-    return false;
-  }
-  std::cout << "Found four disjoint balls!\n";
-  TG.show(NULL, &good_balls);
-  
-  //at this point, the only thing we need to check is that 
-  //there are two points epsilon apart
-  
-  
+    //otherwise, we need to zoom in and stuff
+    //to do this, find the largest connected component and zoom in
+    //until it fills the middle third of the screen
+    
+    
+    
+  }//<- end of trap searching
   
   return true;
 }

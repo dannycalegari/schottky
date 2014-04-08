@@ -232,6 +232,7 @@ void TrapGrid::fill_pixels(const std::vector<Ball>& balls, double rad_mul) {
 }
 
 
+
 //decide if the ball b is disjoint from z or w pixels
 //unfortunately, this seems like it needs to be just as complicated 
 //as the function above
@@ -847,7 +848,7 @@ void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<P
   } while (current_pixel != start_pixel || current_ind != start_ind);
 }
 
-//this finds one example of interleaved components
+//this finds a list of all interleaved components
 //the result is a 4-tuple of Point3d<int> triples as above such that 
 //t[0], t[2] are the same z component but different z cut by w components
 //t[1], t[3] are the same w component but different w cut by z components
@@ -855,8 +856,9 @@ void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<P
 //encounter around the boundary, go around again and see if we see it again.
 //if so, divide up the boundary into two pieces and iterate over all possibilities
 //there has to be a better way.
-bool TrapGrid::find_interleaved_components(std::vector<Point3d<int> >& interleaved_components) {
-  interleaved_components.resize(4);
+bool TrapGrid::find_interleaved_components(std::vector<std::vector<Point3d<int> > >& interleaved_components) {
+  interleaved_components.resize(0);
+  std::vector<Point3d<int> > temp_ic(4);
   for (int b=0; b<(int)intersection_boundaries.size(); ++b) {
     std::vector<Point3d<int> >& ib = intersection_boundaries[b];
     int bL = (int)ib.size();
@@ -873,11 +875,11 @@ bool TrapGrid::find_interleaved_components(std::vector<Point3d<int> >& interleav
               if (ib[k0].x == ib[k1].x && 
                   ib[k0].y == ib[k1].y && 
                   ib[k0].z != ib[k1].z) {
-                interleaved_components[0] = ib[j0];
-                interleaved_components[1] = ib[k0];
-                interleaved_components[2] = ib[j1];
-                interleaved_components[3] = ib[k1];
-                return true;
+                temp_ic[0] = ib[j0];
+                temp_ic[1] = ib[k0];
+                temp_ic[2] = ib[j1];
+                temp_ic[3] = ib[k1];
+                interleaved_components.push_back(temp_ic);
               }
             }
           }
@@ -885,7 +887,7 @@ bool TrapGrid::find_interleaved_components(std::vector<Point3d<int> >& interleav
       }
     }
   }
-  return false;
+  return (interleaved_components.size() > 0);
 }
 
 
