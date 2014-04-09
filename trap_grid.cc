@@ -17,6 +17,7 @@
 TrapGrid::TrapGrid(const std::vector<Ball>& balls, 
                    int max_num_pixels,
                    double rad_mul) {
+  grid_error = false;
   lower_left = cpx(100,100);
   upper_right = cpx(-100,-100);
   int nb = (int)balls.size();
@@ -46,28 +47,42 @@ TrapGrid::TrapGrid(const std::vector<Ball>& balls,
   //make it a square so we don't go insane?
   double putative_width = upper_right.real() - lower_left.real();
   double putative_height = upper_right.imag() - lower_left.imag();
-  std::cout << "Putative ll, ur: " << lower_left << ", " << upper_right << "\n";
-  std::cout << "Putative width and height: " << putative_width << ", " << putative_height << "\n";
+  //std::cout << "Putative ll, ur: " << lower_left << ", " << upper_right << "\n";
+  //std::cout << "Putative width and height: " << putative_width << ", " << putative_height << "\n";
   if (putative_width > putative_height) { //the width is larger -- use it
     double height_adjustment = (putative_width-putative_height)/2.0;
-    std::cout << "Height adjustment: " << height_adjustment << "\n";
+    //std::cout << "Height adjustment: " << height_adjustment << "\n";
     upper_right = cpx(upper_right.real(), upper_right.imag() + height_adjustment);
     lower_left = cpx(lower_left.real(), lower_left.imag() - height_adjustment);
   } else { //the height is larger -- use it
     double width_adjustment = (putative_height-putative_width)/2.0;
-    std::cout << "Width adjustment: " << width_adjustment << "\n";
+    //std::cout << "Width adjustment: " << width_adjustment << "\n";
     upper_right = cpx(upper_right.real() + width_adjustment, upper_right.imag());
     lower_left = cpx(lower_left.real() - width_adjustment, lower_left.imag());
   }
-  std::cout << "Grid will run " << lower_left << " -- " << upper_right << "\n";
+  //std::cout << "Grid will run " << lower_left << " -- " << upper_right << "\n";
+  
+  //double w = upper_right.real() - lower_left.real();
+  //double h = upper_right.imag() - lower_left.imag();
   
   //decide how many pixels to use
   //we want the smallest disk to contain 4ish pixels, so 
   //pixel_diameter should be at most like radius/1.5 ish
-  if (max_radius / min_radius > 10) std::cout << "Badly balanced radii\n";
+  if (max_radius / min_radius > 10) {
+    grid_error = true;
+    std::cout << "radii: min: " << min_radius << "; max: " << max_radius << "\n";
+    return;
+  }
   num_pixels = int( (upper_right.real() - lower_left.real())/(min_radius/1.5) );
   
-  std::cout << "num_pixels: " << num_pixels << "\n";
+  //std::cout << "num_pixels: " << num_pixels << "\n";
+  //std::cout <<  (upper_right.real() - lower_left.real())/(min_radius/1.5) << "\n";
+  if ((upper_right.real() - lower_left.real())/(min_radius/1.5) > 1000) {
+    //std::cout << "Too many pixels!\n";
+    std::cout << "pixels..";
+    grid_error = true;
+    return;
+  }
   
   //initialize the pixels
   reset_grid(lower_left, upper_right);
@@ -94,7 +109,7 @@ void TrapGrid::reset_grid(cpx ll, cpx ur) {
 
   pixel_diameter = box_width/double(num_pixels);
   if (pixel_diameter < 1e-10) std::cout << "Grid precision [" << ll << "," << ur << "] is too low!\n";
-  std::cout << "Box width: " << box_width << " and pixel diameter: " << pixel_diameter << "\n";
+  //std::cout << "Box width: " << box_width << " and pixel diameter: " << pixel_diameter << "\n";
   for (int i=0; i<num_pixels; ++i) {
     double rp = lower_left.real() + (double(i)+0.5)*pixel_diameter;
     for (int j=0; j<num_pixels; ++j) {
@@ -1164,8 +1179,8 @@ void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
       int x = int( ((*b)[i].center.real()-lower_left.real())/real_pixel_width );
       int y = int( ((*b)[i].center.imag()-lower_left.imag())/real_pixel_width );
       double draw_radius = (*b)[i].radius / real_pixel_width;
-      std::cout << "Drawing disk of radius " << (*b)[i].radius << " at " << (*b)[i].center << "\n";
-      std::cout << "In the drawing, at " << Point2d<int>(x,y) << " radius: " << draw_radius << "\n";
+      //std::cout << "Drawing disk of radius " << (*b)[i].radius << " at " << (*b)[i].center << "\n";
+      //std::cout << "In the drawing, at " << Point2d<int>(x,y) << " radius: " << draw_radius << "\n";
       X2.draw_disk(Point2d<int>(x,y), draw_radius, bc);
     }
   }

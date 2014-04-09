@@ -75,7 +75,7 @@ void ifs::draw_limit_set(){
 	T.str("");		
 	p.y=p.y-20;
 	if (draw_trap_mode) {
-		if (find_trap()) {
+		if (find_trap(0)) {
 			T << "trap found (toggle trap mode with [t])";
 			draw_trap();
 		} else {
@@ -202,10 +202,20 @@ void ifs::draw_mandelbrot_set(){
 	T << "toggle disconnection depth with [f]";
 	X.draw_text(p,T,0x000000);
 	T.str("");
+	p.y-=20;
+	if (draw_trap_mode) {
+	  T << "Trap mode enabled (toggle with [t])\n";
+	} else {
+	  T << "Trap mode disabled (toggle with [t])\n";
+	}
+	X.draw_text(p,T,0x000000);	
+	T.str("");
 	p.y=p.y-20;
 	T << "quit with [q]";
 	X.draw_text(p,T,0x000000);
 	T.str("");	
+	
+	int gcol = X.get_rgb_color(0,1,0);
 	
 	for(i=0; i<drawing_width; i=i+mesh){
 		for(j=0; j<drawing_width; j=j+mesh){
@@ -215,16 +225,23 @@ void ifs::draw_mandelbrot_set(){
 			y=2.0*wind*double(j)/double(drawing_width);
 			
 			z=center-wind-(wind*I)+x+(y*I);
+			az = abs(z);
 			if(sync==1){
 				w=z;	// diagonal slice; could define other slices (eg w=constant,w=conj(z))
+				aw=az;
 			} else if(sync==2){
 				w=conj(z);
+				aw=az;
 			};
 			if(abs(z)>1.0){	// could truncate this to sqrt(1/2) actually
 				X.draw_box(q,mesh,0x000000);
 			} else { // if(abs(z)>0.5){
 				if(circ_connected()){
-					X.draw_box(q,mesh,0x000001*exit_depth);
+				  if (draw_trap_mode && find_trap(0)) {
+				    X.draw_box(q,mesh,gcol);
+				  } else {
+					  X.draw_box(q,mesh,0x000001*exit_depth);
+					}
 				} else if (disconnection_depth) {
 					X.draw_box(q,mesh,0x010000*exit_depth);
 				}

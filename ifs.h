@@ -91,7 +91,7 @@ class ifs{
 		int trap_depth;           //maximal depth to look for traps
 		//Trap current_trap;        //the last trap we created
 		
-		bool find_trap();
+		bool find_trap(int verbose=0);
 		void draw_trap();	
 		
 		

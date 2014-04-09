@@ -138,13 +138,11 @@ void ifs::user_interface() {
                     disconnection_depth = !disconnection_depth;
                     draw();
                     break;
-                } else if(XLookupKeysym(&report.xkey, 0) == XK_t){ // toggle color_ifs
+                } else if(XLookupKeysym(&report.xkey, 0) == XK_t){ 
                     draw_trap_mode = !draw_trap_mode;
-		    if (mode == 0) {
-                        draw();
-		    }
+                    draw();
                     break;
-		} else if (XLookupKeysym(&report.xkey, 0) == XK_x) { //toggle chunky ifs
+		            } else if (XLookupKeysym(&report.xkey, 0) == XK_x) { //toggle chunky ifs
                     chunky_ifs = !chunky_ifs;
                     if (mode == 0) draw();
                     break;

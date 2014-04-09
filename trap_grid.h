@@ -34,6 +34,7 @@ struct TrapGrid {
   cpx upper_right; //the upper right corner of the upper right pixel
   double pixel_diameter; //the height/width of a pixel
   double box_width; //the real width/height of the grid (upper_right.real() - lower_left.real())
+  bool grid_error; //was there some weird error in creating the grid?
   
   //the pixel grid grid[i][j] is the ith pixel in the x direction (horizontal), and 
   //the jth in the y direction.  grid[0][0] is the lower left pixel
