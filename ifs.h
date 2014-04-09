@@ -52,9 +52,11 @@ class ifs{
 		Ball act_on_right(int index, const Ball& b);
 		void compute_next_ball_depth(std::vector<Ball>& balls, int current_depth);
 		void compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth);
-    void refine_balls_into_box(std::vector<Ball>& balls, const cpx& ll, const cpx& ur);
-    bool is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur);
-		double minimal_enclosing_radius();
+                void box_containing_balls(const std::vector<Ball>& balls, cpx& ll, cpx& ur);
+                void refine_balls_into_box(std::vector<Ball>& balls, const cpx& ll, const cpx& ur);
+                bool is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur);
+                void find_close_images_with_distinct_first_letters(cpx p, int length, int& u, int& v);
+		bool minimal_enclosing_radius(double& r);
 		
 		
 		//IFS drawing
@@ -93,6 +95,10 @@ class ifs{
 		int trap_depth;           //maximal depth to look for traps
 		//Trap current_trap;        //the last trap we created
 		
+		bool find_trap_given_balls(const std::vector<Ball>& initial_balls, 
+                                           int max_refinements,
+                                           int max_pixels,
+                                           int verbose);
 		bool find_trap(int verbose=0);
 		void draw_trap();	
 		

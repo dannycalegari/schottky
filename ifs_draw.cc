@@ -98,7 +98,9 @@ void ifs::draw_limit_set(){
 	p.y=p.y-20;
 	T << "chunky IFS (toggle with [x]): ";
 	if (chunky_ifs) {
-		T << "on (radius: " << minimal_enclosing_radius() << ")";
+                double r;
+                (void)minimal_enclosing_radius(r);
+		T << "on (radius: " << r << ")";
 	} else {
 		T << "off";
 	}
@@ -123,7 +125,8 @@ void ifs::draw_limit_set(){
 	T.str("");	
 	if(color_ifs){
 		if (chunky_ifs) {
-			double r = minimal_enclosing_radius();
+			double r;
+                        (void)minimal_enclosing_radius(r);
 			//cout << "Chunky radius: " << chunky_radius << "\n";
 			draw_color_chunky_dots(depth, seed, 0x000000, r);
 		} else {
@@ -215,7 +218,7 @@ void ifs::draw_mandelbrot_set(){
 	X.draw_text(p,T,0x000000);
 	T.str("");	
 	
-	int rcol = X.get_rgb_color(0,1,0);
+	int rcol = X.get_rgb_color(1,0,0);
 	
 	for(i=0; i<drawing_width; i=i+mesh){
 		for(j=0; j<drawing_width; j=j+mesh){

@@ -10,97 +10,18 @@
  * TrapGrid functions
  ****************************************************************************/
 
-
-
-//initialize the grid by finding the min/max of x,y coordinates
-//and then filling in the balls
-TrapGrid::TrapGrid(const std::vector<Ball>& balls, 
-                   int max_num_pixels,
-                   double rad_mul) {
-  grid_error = false;
-  lower_left = cpx(100,100);
-  upper_right = cpx(-100,-100);
-  int nb = (int)balls.size();
-  double min_radius = 1000;
-  double max_radius = -1;
-  //compute the max/min
-  for (int i=0; i<nb; ++i) {
-    double r = rad_mul*balls[i].radius;
-    if (r < min_radius) min_radius = r;
-    else if (r > max_radius) max_radius = r;
-    cpx rad_vec = cpx(r, r);
-    cpx temp_ll = balls[i].center - rad_vec;
-    cpx temp_ur = balls[i].center + rad_vec;
-    if (temp_ll.real() < lower_left.real()) {
-      lower_left = cpx(temp_ll.real(), lower_left.imag());
-    }
-    if (temp_ll.imag() < lower_left.imag()) {
-      lower_left = cpx(lower_left.real(), temp_ll.imag());
-    }
-    if (temp_ur.real() > upper_right.real()) {
-      upper_right = cpx(temp_ur.real(), upper_right.imag());
-    }
-    if (temp_ur.imag() > upper_right.imag()) {
-      upper_right = cpx(upper_right.imag(), temp_ur.imag());
-    }
-  }
-  //make it a square so we don't go insane?
-  double putative_width = upper_right.real() - lower_left.real();
-  double putative_height = upper_right.imag() - lower_left.imag();
-  //std::cout << "Putative ll, ur: " << lower_left << ", " << upper_right << "\n";
-  //std::cout << "Putative width and height: " << putative_width << ", " << putative_height << "\n";
-  if (putative_width > putative_height) { //the width is larger -- use it
-    double height_adjustment = (putative_width-putative_height)/2.0;
-    //std::cout << "Height adjustment: " << height_adjustment << "\n";
-    upper_right = cpx(upper_right.real(), upper_right.imag() + height_adjustment);
-    lower_left = cpx(lower_left.real(), lower_left.imag() - height_adjustment);
-  } else { //the height is larger -- use it
-    double width_adjustment = (putative_height-putative_width)/2.0;
-    //std::cout << "Width adjustment: " << width_adjustment << "\n";
-    upper_right = cpx(upper_right.real() + width_adjustment, upper_right.imag());
-    lower_left = cpx(lower_left.real() - width_adjustment, lower_left.imag());
-  }
-  //std::cout << "Grid will run " << lower_left << " -- " << upper_right << "\n";
-  
-  //double w = upper_right.real() - lower_left.real();
-  //double h = upper_right.imag() - lower_left.imag();
-  
-  //decide how many pixels to use
-  //we want the smallest disk to contain 4ish pixels, so 
-  //pixel_diameter should be at most like radius/1.5 ish
-  if (max_radius / min_radius > 10) {
-    grid_error = true;
-    std::cout << "radii: min: " << min_radius << "; max: " << max_radius << "\n";
-    return;
-  }
-  num_pixels = int( (upper_right.real() - lower_left.real())/(min_radius/1.5) );
-  if (num_pixels > max_num_pixels) {
-    num_pixels = max_num_pixels;
-  }
-  
-  //std::cout << "num_pixels: " << num_pixels << "\n";
-  //std::cout <<  (upper_right.real() - lower_left.real())/(min_radius/1.5) << "\n";
-  if ((upper_right.real() - lower_left.real())/(min_radius/1.5) > 1000) {
-    //std::cout << "Too many pixels!\n";
-    std::cout << "pixels..";
-    grid_error = true;
-    return;
-  }
-  
-  //initialize the pixels
-  reset_grid(lower_left, upper_right);
-  
-  //fill in the pixels
-  fill_pixels(balls, rad_mul);
-  
+//blank TG
+TrapGrid::TrapGrid() {
 }
+
 
 //set the lower left and upper right, decide how many pixels to have,
 //clear all the pixels, set their centers, clear all the connected components
-void TrapGrid::reset_grid(cpx ll, cpx ur) {
+void TrapGrid::reset_grid(cpx ll, cpx ur, int np) {
   lower_left = ll;
   upper_right = ur;
   box_width = ur.real() - ll.real();
+  num_pixels = np;
 
   //build the blank grid
   grid = std::vector<std::vector<GridPixel> >(num_pixels, std::vector<GridPixel>(num_pixels));
@@ -129,10 +50,10 @@ void TrapGrid::reset_grid(cpx ll, cpx ur) {
 
 //fill the pixels for a given ball
 //this just naively checks everything in a square
-void TrapGrid::fill_pixels(const std::vector<Ball>& balls, double rad_mul) {
+void TrapGrid::fill_pixels(const std::vector<Ball>& balls) {
   int nb = (int)balls.size();
   for (int bi=0; bi<nb; ++bi) {
-    double r = balls[bi].radius * rad_mul;
+    double r = balls[bi].radius;
     const cpx c = balls[bi].center;
     //std::cout << "Filling pixels for ball at " << c << ", " << r << "\n";
     int ll_touching_i, ll_touching_j;

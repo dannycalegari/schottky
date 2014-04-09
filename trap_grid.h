@@ -61,15 +61,9 @@ struct TrapGrid {
   std::vector<std::vector<Point3d<int> > > intersection_boundaries;
 
   
-  
-  TrapGrid() {
-    num_pixels = 0;
-    grid.resize(0);
-  }
-  
-  TrapGrid(const std::vector<Ball>& balls, int max_num_pixels, double rad_mul);
-  void reset_grid(cpx ll, cpx ur);
-  void fill_pixels(const std::vector<Ball>& balls, double rad_mul); 
+  TrapGrid();
+  void reset_grid(cpx ll, cpx ur, int np);
+  void fill_pixels(const std::vector<Ball>& balls); 
   void pixel_indices(int& i, int&j, const cpx& u); //find the pixel with the given point
   cpx pixel_center(int i, int j);  //return the point which is the center of the pixel
   cpx pixel_center(const cpx& u);  //return the point which is the center of pixel containing the given point

@@ -7,58 +7,54 @@ struct Trap {
 };
 
 
-bool ifs::find_trap(int verbose) {
-
-  //first we need to rule out some silly stuff
-  if (abs(z) > 0.999 || abs(w) > 0.999) return false;
 
 
-  //find the radius of the smallest closed ball about 1/2 which 
-  //is mapped inside itself under both f and g
-  double min_initial_radius = minimal_enclosing_radius();
-  
-  
-  //starting depth will always be 10?
-  int current_depth = depth; //10;
-  int depth_limit = 18;
-  std::vector<Ball> balls;
-  compute_balls(balls, Ball(0.5, 0.5, min_initial_radius), current_depth);
-  
-  //std::cout << "Computed " << balls.size() << " balls\n";
-  //for (int i=0; i<(int)balls.size(); ++i) {
-  //  std::cout << i << ": " << balls[i] << "\n";
-  //}
 
-  //now we need to effectively increase the radius of the 
-  //*previous* step until the balls of the *current* step 
-  //form a connected set for both f and g
-  //we'll start by multiplying the radius by 1.1 (it's probably pretty small)
-  double more_dramatic_action = (az < aw ? az : aw);
-  double min_prev_rad = pow( more_dramatic_action, current_depth-1 ) * min_initial_radius;
-  double prev_rad_mul = 1.1;
+bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls, 
+                                int max_refinements,
+                                int max_pixels,
+                                int verbose) {
   
-  //epsilon is the amount we *know* the disks contain an epsilon nbhd of L
-  //the smallest absolute increase will be on the smallest ball
-  double epsilon = min_prev_rad*(prev_rad_mul-1.0);
   
-  //now fill out the grid using this prev_rad_mul
-  //grid size is always a max of 512?
-  TrapGrid TG(balls, 512, prev_rad_mul);
-
-  if (TG.grid_error) {
-    std::cout << "grid error ";
-    std::cout << "z=" << z << "; w=" << w << "min_initial_radius=" << min_initial_radius << "\n";
-    return false;
-  }
-
-  //std::cout << "Trying to find trap...";
+  int current_refinements = 0;
+  cpx ll, ur;
   
-  //the grid is initialized
+  //copy the balls
+  std::vector<Ball> balls = initial_balls;  
+  
+  //these record the trap
+  bool found_all_balls;
+  std::vector<Ball> good_balls(4);
+  
+  
   while (true) {
   
-    //these record the trap
-    bool found_all_balls = true;
-    std::vector<Ball> good_balls(4);
+    found_all_balls = false;
+    
+    //find the ball extents
+    box_containing_balls(balls, ll, ur);  
+    
+    if (verbose>0) std::cout << "New box: " << ll << " " << ur << "\n";
+    
+    //find the average radius
+    double av_radius = 0;
+    for (int i=0; i<(int)balls.size(); ++i) {
+      av_radius += balls[i].radius;
+    }
+    av_radius /= (double)balls.size();
+    
+    //initialize the trap
+    TrapGrid TG;
+    
+    //the trap will cover all the balls, and it will have as many pixels 
+    //as it needs so that the average ball contains about 4 pixels
+    double desired_pixel_radius = av_radius/1.5;
+    int np = int( ((ur.real() - ll.real())/desired_pixel_radius) + 1);
+    if (np > max_pixels) np = max_pixels;
+    TG.reset_grid(ll, ur, np);
+    
+    //fill the trap grid
+    TG.fill_pixels(balls); 
   
     //show what it looks like
     if (verbose>0) TG.show(NULL, NULL);
@@ -170,13 +166,15 @@ bool ifs::find_trap(int verbose) {
   ZOOM_OR_REFINE:
     
     //maybe we have to give up
-    if (balls[0].word_len >= depth_limit) {
+    if (current_refinements >= max_refinements) {
       if (verbose>0) std::cout << "Exceeded depth limit\n";
       break;
     } else if (TG.intersection_components.size() == 0) {
       if (verbose>0) std::cout << "No intersection to refine!\n";
       break;
     }
+    //otherwise, we're going for it
+    ++current_refinements;
   
     int biggest_component=-1;
     int biggest_component_size = 0;
@@ -213,14 +211,54 @@ bool ifs::find_trap(int verbose) {
     //this box
     refine_balls_into_box(balls, new_ll, new_ur);
     
-    //reset the box
-    TG.reset_grid(new_ll, new_ur);
-    TG.fill_pixels(balls, prev_rad_mul);
+    //when we loop around, these are the new balls
     
   }//<- end of trap searching
   
-  if (verbose>0) std::cout << "Couldn't find trap\n";
-  return  false;
+  return found_all_balls;
+  
+}
+
+
+
+
+
+
+
+
+bool ifs::find_trap(int verbose) {
+
+  //find the radius of the smallest closed ball about 1/2 which 
+  //is mapped inside itself under both f and g
+  double min_initial_radius;
+  if (!minimal_enclosing_radius(min_initial_radius)) {
+    //std::cout << "initial radius is infinite\n";
+    return false;
+  }
+  
+  //find actions u and v which start with z and w such that 
+  //u(1/2) and v(1/2) are very close relative to how big the balls are
+  int initial_depth = 3;
+  int u,v;
+  find_close_images_with_distinct_first_letters(0.5, initial_depth, u,v);
+  
+  
+  
+  
+  //starting depth will always be 10?
+  int current_depth = depth; 
+  std::vector<Ball> balls;
+  compute_balls(balls, Ball(0.5, 0.5, min_initial_radius*1.5), current_depth);
+  
+  //std::cout << "Computed " << balls.size() << " balls " << balls[0] << "\n";
+  
+  //trap finding parameters:
+  int max_refinements = 1;
+  int max_pixels = 512;
+  
+  bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, verbose);
+  
+  return got_trap;
 
 }
 

@@ -178,6 +178,40 @@ bool ifs::is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur) {
 }
 
 
+//return the lower left and upper right of a box (square) containing
+//all the balls
+void ifs::box_containing_balls(const std::vector<Ball>& balls, 
+                               cpx& ll, 
+                               cpx& ur) {
+  ll = cpx(balls[0].center.real() - balls[0].radius, balls[0].center.imag() - balls[0].radius);
+  ur = cpx(balls[0].center.real() + balls[0].radius, balls[0].center.imag() + balls[0].radius);
+  for (int i=1; i<(int)balls.size(); ++i) {
+    const cpx c = balls[i].center;
+    const double r = balls[i].radius;
+    if (c.real() + r > ur.real()) {
+      ur = cpx(c.real()+r, ur.imag());
+    }
+    if (c.imag() + r > ur.imag()) {
+      ur = cpx(ur.real(), c.imag() + r);
+    }
+    if (c.real() - r < ll.real()) {
+      ll = cpx(c.real()-r, ll.imag());
+    }
+    if (c.imag() -r < ll.imag()) {
+      ll = cpx(ll.real(), c.imag()-r);
+    }
+  }
+  //std::cout << ll << " " << ur << "\n";
+  double pwr = (ur.real() - ll.real())/2.0;
+  double phr = (ur.imag() - ll.imag())/2.0;
+  cpx center(ll.real() + pwr, ll.imag() + phr);
+  double rad = (pwr > phr ? pwr : phr);
+  ll = cpx(center.real() - rad, center.imag() - rad);
+  ur = cpx(center.real() + rad, center.imag() + rad);  
+}
+
+
+
 //for all the balls, if they are outside the box, forget it
 //if not, hit them on the right with z and w, and keep any 
 //disks we touch the given box
@@ -201,15 +235,23 @@ void ifs::refine_balls_into_box(std::vector<Ball>& balls,
   }
 }
 
+//find two actions of the given length (words u and v) whose images of 
+//p are as close as possible and which begin with different letters
+void ifs::find_close_images_with_distinct_first_letters(cpx p, int length, int& u, int& v){
+  
+}
+
 
 
 //compute the minimal radius of a ball around 1/2 which contains 
 //its image under both actions
-double ifs::minimal_enclosing_radius() {
+bool ifs::minimal_enclosing_radius(double& r) {
+  if (fabs(az-1.0) < 1e-4 || fabs(aw-1.0) < 1e-4) return false;
   //initialize the chunky radius to contain the whole set
   double z_restriction = abs(0.5*z-0.5)/(1.0-az);
   double w_restriction = abs(0.5-0.5*w)/(1.0-aw);
-  return (z_restriction > w_restriction ? z_restriction : w_restriction);
+  r = (z_restriction > w_restriction ? z_restriction : w_restriction);
+  return true;
   //cout << "z: " << z << " az: " << az << " w: " << w << " aw: " << aw << "\n"; 
   //cout << "Z restriction: " << z_restriction << "\n";
   //cout << "W restriction: " << w_restriction << "\n";
