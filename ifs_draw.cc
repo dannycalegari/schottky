@@ -75,7 +75,7 @@ void ifs::draw_limit_set(){
 	T.str("");		
 	p.y=p.y-20;
 	if (draw_trap_mode) {
-		if (find_trap(0)) {
+		if (find_trap(1)) {
 			T << "trap found (toggle trap mode with [t])";
 			draw_trap();
 		} else {

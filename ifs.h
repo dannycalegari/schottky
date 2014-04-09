@@ -52,6 +52,8 @@ class ifs{
 		Ball act_on_right(int index, const Ball& b);
 		void compute_next_ball_depth(std::vector<Ball>& balls, int current_depth);
 		void compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth);
+    void refine_balls_into_box(std::vector<Ball>& balls, const cpx& ll, const cpx& ur);
+    bool is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur);
 		double minimal_enclosing_radius();
 		
 		

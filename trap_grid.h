@@ -88,6 +88,9 @@ struct TrapGrid {
   void show(std::vector<Point2d<int> >* marked_points,
             std::vector<Ball>* b);
   void show_connected_components();
+  void compute_pixel_extents(const std::vector<Point2d<int> >& L, 
+                             Point2d<int>& ll, 
+                             Point2d<int>& ur);
   void show_distance_functions();
 };
 

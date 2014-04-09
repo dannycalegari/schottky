@@ -150,6 +150,57 @@ void ifs::compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int com
   }
 }
 
+//given a ball, check if it is disjoint from the square given
+//this is lame as always with these functions
+bool ifs::is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur) {
+  cpx& bc = b.center;
+  double& r = b.radius;
+  cpx ul(ll.real(), ur.imag());
+  cpx lr(ur.real(), ll.imag());
+  if (ur.real() < bc.real() && ur.imag() < bc.imag()) { //upper right
+    return !(abs(bc-ur)<r);
+  } else if (ul.real() > bc.real() && ul.imag() < bc.imag()) {
+    return !(abs(bc-ul)<r);
+  } else if (ll.real() > bc.real() && ll.imag() > bc.imag()) {
+    return !(abs(bc-ll)<r);
+  } else if (lr.real() < bc.real() && lr.imag() > bc.imag()) {
+    return !(abs(bc-lr)<r);
+  } else if (ur.real() < bc.real() && ur.real() > bc.real() - r) {
+    return false;
+  } else if (ul.imag() < bc.imag() && ul.imag > bc.imag() -r) {
+    return false;
+  } else if (ll.real() > bc.real() && ll.real() < bc.real() + r) {
+    return false;
+  } else if (lr.imag() > bc.imag() && lr.imag() < bc.imag() + r) {
+    return false;
+  }
+  return false; //it's right over the square
+}
+
+
+//for all the balls, if they are outside the box, forget it
+//if not, hit them on the right with z and w, and keep any 
+//disks we touch the given box
+void ifs::refine_balls_into_box(std::vector<Ball>& balls, 
+                                const cpx& ll, 
+                                const cpx& ur) {
+  std::vector<Ball> bb;
+  bb.swap(balls);
+  balls.resize(0);
+  int nb = (int)bb.size();
+  for (int i=0; i<nb; ++i) {
+    if (is_ball_disjoint(bb[i], ll, ur)) continue;
+    Ball b1 = act_on_right(0,bb[i]);
+    Ball b2 = act_on_right(1,bb[i]);
+    if (!is_ball_disjoint(b1, ll, ur)) {
+      balls.push_back(b1);
+    }
+    if (!its_ball_disjoint(b2, ll, rr)) {
+      balls.push_back(b2);
+    }
+  }
+}
+
 
 
 //compute the minimal radius of a ball around 1/2 which contains 

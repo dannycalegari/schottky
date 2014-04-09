@@ -74,6 +74,9 @@ TrapGrid::TrapGrid(const std::vector<Ball>& balls,
     return;
   }
   num_pixels = int( (upper_right.real() - lower_left.real())/(min_radius/1.5) );
+  if (num_pixels > max_num_pixels) {
+    num_pixels = max_num_pixels;
+  }
   
   //std::cout << "num_pixels: " << num_pixels << "\n";
   //std::cout <<  (upper_right.real() - lower_left.real())/(min_radius/1.5) << "\n";
@@ -1025,6 +1028,29 @@ cpx TrapGrid::pixel_center(const cpx& u) {
   pixel_indices(i,j,u);
   return grid[i][j].center;
 }
+
+//return the lower left and upper right pixels 
+//of the smallest rectangle containing all the pixels in the list
+void TrapGrid::compute_pixel_extents(const std::vector<Point2d<int> >& L, 
+                                     Point2d<int>& ll, 
+                                     Point2d<int>& ur) {
+  ll = ur = L[0];
+  for (int i=0; i<(int)L.size(); ++i) {
+    if (L[i].x < ll.x) {
+      ll.x = L[i].x;
+    }
+    if (L[i].y < ll.y) {
+      ll.y = L[i].y;
+    }
+    if (L[i].x > ur.x) {
+      ur.x = L[i].x;
+    }
+    if (L[i].y > ur.y) {
+      ur.y = L[i].y;
+    }
+  }
+}
+
 
 
 void TrapGrid::show_connected_components() {

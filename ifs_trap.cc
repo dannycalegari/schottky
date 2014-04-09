@@ -20,6 +20,7 @@ bool ifs::find_trap(int verbose) {
   
   //starting depth will always be 10?
   int current_depth = depth; //10;
+  int depth_limit = 18;
   std::vector<Ball> balls;
   compute_balls(balls, Ball(0.5, 0.5, min_initial_radius), current_depth);
   
@@ -41,7 +42,7 @@ bool ifs::find_trap(int verbose) {
   double epsilon = min_prev_rad*(prev_rad_mul-1.0);
   
   //now fill out the grid using this prev_rad_mul
-  //grid size is always 512?
+  //grid size is always a max of 512?
   TrapGrid TG(balls, 512, prev_rad_mul);
 
   if (TG.grid_error) {
@@ -87,8 +88,7 @@ bool ifs::find_trap(int verbose) {
     std::vector<std::vector<Point3d<int> > > ic;
     if (!TG.find_interleaved_components(ic)) {
       if (verbose>0) std::cout << "Didn't find interleaved components\n";
-      //std::cout << "no\n";
-      return false;
+      goto ZOOM_OR_REFINE; //sorry
     }
     if (verbose>0) {
       std::cout << "Found interleaved components: ";
@@ -164,14 +164,60 @@ bool ifs::find_trap(int verbose) {
     //otherwise, we need to zoom in and stuff
     //to do this, find the largest connected component and zoom in
     //until it fills the middle third of the screen
-    //std::cout << "no\n";
-    return false;
+  ZOOM_OR_REFINE:
     
+    //maybe we have to give up
+    if (balls[0].word_len >= depth_limit) {
+      if (verbose>0) std::cout << "Exceeded depth limit\n";
+      break;
+    } else if (TG.intersection_components.size() == 0) {
+      if (verbose>0) std::cout << "No intersection to refine!\n";
+      break;
+    }
+  
+    int biggest_component=-1;
+    int biggest_component_size = 0;
+    for (int i=0; i<(int)TG.intersection_components.size(); ++i) {
+      if (biggest_component == -1 || TG.intersection_components[i].size() > biggest_component_size) {
+        biggest_component_size = TG.intersection_components[i].size();
+        biggest_component = i;
+      }
+    }
+    Point2d<int> comp_ll, comp_ur;
+    TG.compute_pixel_extents(intersection_components[biggest_component], comp_ll, comp_ur);
+    cpx comp_ll_cpx(TG.lower_left.real() + comp_ll.x*TG.pixel_diameter,
+                    TG.lower_left.imag() + comp_ll.y*TG.pixel_diameter);
+    cpx comp_ur_cpx(TG.lower_left.real() + comp_ur.x*TG.pixel_diameter,
+                    TG.lower_left.imag() + comp_ur.y*TG.pixel_diameter);
+    cpx comp_center_cpx = (comp_ll_cpx + comp_ur_cpx)/2.0;
+    if (verbose>0) {
+      std::cout << "Computed intersection component extents " << comp_ll_cpx << " " << comp_ur_cpx << "\n";
+    }
+    double putative_width = comp_ur_cpx.real() - comp_ll_cpx.real();
+    double putative_height = comp_ur_cpx.imag() - comp_ll_cpx.imag();
+    double true_radius = (putative_width > putative_height ? putative_width/2.0 
+                                                           : putative_height/2.0);
+    //the box should be 6/4 of the size of the component
+    true_radius *= 1.5;
+    cpx new_ll(comp_center_cpx.real()-true_radius, comp_center_cpx.imag()-true_radius);
+    cpx new_ur(comp_center_cpx.real()+true_radius, comp_center_cpx.imag()+true_radius);
+    
+    if (verbose>0) {
+      std::cout << "New box: " << new_ll << "-" << new_ur << "\n";
+    }
+    
+    //might as well refine the depth -- compute the balls which fit into
+    //this box
+    refine_balls_into_box(balls, new_ll, new_ur);
+    
+    //reset the box
+    TG.reset_grid(new_ll, new_ur);
+    fill_pixels(balls, prev_rad_mul);
     
   }//<- end of trap searching
   
-  //std::cout << "yes\n";
-  return  true;
+  if (verbose>0) std::cout << "Couldn't find trap\n";
+  return  false;
 
 }
 
