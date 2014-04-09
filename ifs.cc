@@ -153,8 +153,8 @@ void ifs::compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int com
 //given a ball, check if it is disjoint from the square given
 //this is lame as always with these functions
 bool ifs::is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur) {
-  cpx& bc = b.center;
-  double& r = b.radius;
+  const cpx& bc = b.center;
+  const double& r = b.radius;
   cpx ul(ll.real(), ur.imag());
   cpx lr(ur.real(), ll.imag());
   if (ur.real() < bc.real() && ur.imag() < bc.imag()) { //upper right
@@ -165,14 +165,14 @@ bool ifs::is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur) {
     return !(abs(bc-ll)<r);
   } else if (lr.real() < bc.real() && lr.imag() > bc.imag()) {
     return !(abs(bc-lr)<r);
-  } else if (ur.real() < bc.real() && ur.real() > bc.real() - r) {
-    return false;
-  } else if (ul.imag() < bc.imag() && ul.imag > bc.imag() -r) {
-    return false;
-  } else if (ll.real() > bc.real() && ll.real() < bc.real() + r) {
-    return false;
-  } else if (lr.imag() > bc.imag() && lr.imag() < bc.imag() + r) {
-    return false;
+  } else if (ur.real() < bc.real()) {
+    return !(ur.real() > bc.real() - r);
+  } else if (ul.imag() < bc.imag()) {
+    return !(ul.imag() > bc.imag() -r);
+  } else if (ll.real() > bc.real()) {
+    return !(ll.real() < bc.real() + r);
+  } else if (lr.imag() > bc.imag()) {
+    return !(lr.imag() < bc.imag() + r);
   }
   return false; //it's right over the square
 }
@@ -195,7 +195,7 @@ void ifs::refine_balls_into_box(std::vector<Ball>& balls,
     if (!is_ball_disjoint(b1, ll, ur)) {
       balls.push_back(b1);
     }
-    if (!its_ball_disjoint(b2, ll, rr)) {
+    if (!is_ball_disjoint(b2, ll, ur)) {
       balls.push_back(b2);
     }
   }

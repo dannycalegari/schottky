@@ -215,7 +215,7 @@ void ifs::draw_mandelbrot_set(){
 	X.draw_text(p,T,0x000000);
 	T.str("");	
 	
-	int gcol = X.get_rgb_color(0,1,0);
+	int rcol = X.get_rgb_color(0,1,0);
 	
 	for(i=0; i<drawing_width; i=i+mesh){
 		for(j=0; j<drawing_width; j=j+mesh){
@@ -238,7 +238,7 @@ void ifs::draw_mandelbrot_set(){
 			} else { // if(abs(z)>0.5){
 				if(circ_connected()){
 				  if (draw_trap_mode && find_trap(0)) {
-				    X.draw_box(q,mesh,gcol);
+				    X.draw_box(q,mesh,rcol);
 				  } else {
 					  X.draw_box(q,mesh,0x000001*exit_depth);
 					}

@@ -56,6 +56,10 @@ bool ifs::find_trap(int verbose) {
   //the grid is initialized
   while (true) {
   
+    //these record the trap
+    bool found_all_balls = true;
+    std::vector<Ball> good_balls(4);
+  
     //show what it looks like
     if (verbose>0) TG.show(NULL, NULL);
         
@@ -107,8 +111,7 @@ bool ifs::find_trap(int verbose) {
       if (verbose>1) TG.show_distance_functions();
     }
     
-    bool found_all_balls = true;
-    std::vector<Ball> good_balls(4);
+    //go through the interleaved components
     for (int i=0; i<(int)ic.size(); ++i) {
       if (verbose>0) std::cout << "Trying the interleaved components number " << i << "\n";
     
@@ -178,13 +181,13 @@ bool ifs::find_trap(int verbose) {
     int biggest_component=-1;
     int biggest_component_size = 0;
     for (int i=0; i<(int)TG.intersection_components.size(); ++i) {
-      if (biggest_component == -1 || TG.intersection_components[i].size() > biggest_component_size) {
+      if (biggest_component == -1 || (int)TG.intersection_components[i].size() > biggest_component_size) {
         biggest_component_size = TG.intersection_components[i].size();
         biggest_component = i;
       }
     }
     Point2d<int> comp_ll, comp_ur;
-    TG.compute_pixel_extents(intersection_components[biggest_component], comp_ll, comp_ur);
+    TG.compute_pixel_extents(TG.intersection_components[biggest_component], comp_ll, comp_ur);
     cpx comp_ll_cpx(TG.lower_left.real() + comp_ll.x*TG.pixel_diameter,
                     TG.lower_left.imag() + comp_ll.y*TG.pixel_diameter);
     cpx comp_ur_cpx(TG.lower_left.real() + comp_ur.x*TG.pixel_diameter,
@@ -212,7 +215,7 @@ bool ifs::find_trap(int verbose) {
     
     //reset the box
     TG.reset_grid(new_ll, new_ur);
-    fill_pixels(balls, prev_rad_mul);
+    TG.fill_pixels(balls, prev_rad_mul);
     
   }//<- end of trap searching
   
