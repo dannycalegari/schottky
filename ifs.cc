@@ -322,7 +322,6 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
   double best_dist = abs((stack[0].first.center + c1*stack[0].first.to_z) -
                          (stack[0].second.center + c2*stack[0].second.to_z));
   best_dist /= stack[0].first.radius;
-  int d = 1;
   while (stack.size() > 0) {
     std::pair<Ball,Ball> b = stack.back();
     stack.pop_back();
@@ -333,11 +332,12 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
     new_dist /= b.first.radius;
     if (new_dist < best_dist) {
       std::cout << "Found better pair: " << b.first << " " << b.second << " p dist: " << new_dist << "\n";
+      best_dist = new_dist;
       best_pair = b;
     }
     
     //go down the stack a little
-    if (d >= search_depth) continue;
+    if (b.first.word_len - initial_ball.word_len >= search_depth) continue;
     
     Ball zbb[2] = { act_on_right(0, b.first),
                     act_on_right(1, b.first) };
@@ -349,8 +349,7 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
         stack.push_front(std::make_pair(zbb[i>>1], wbb[i&1]));
       }
     }
-    
-    ++d;
+
   }
   zb = best_pair.first;
   wb = best_pair.second;
