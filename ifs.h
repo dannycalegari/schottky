@@ -13,12 +13,13 @@
 struct Ball {
   cpx center;
   double radius;
-  cpx crad; //the complex radius -- this points from the center directly to the right
+  cpx to_z;     //this points to where the center would go if we applied z
+  cpx to_w;     //this points to where the center would go under w
   int word;     //the z and w word we applied to get here (highest bit is most recent application)
   int word_len; //the number of significant bits
   Ball();
-  Ball(cpx c, cpx cr, double r);
-  Ball(cpx c, cpx cr, double r, int w, int wl);
+  Ball(cpx c, cpx to_z, cpx to_w, double r);
+  Ball(cpx c, cpx to_z, cpx to_w, double r, int w, int wl);
   int last_gen_index() const;
 };
 
@@ -52,10 +53,13 @@ class ifs{
 		Ball act_on_right(int index, const Ball& b);
 		void compute_next_ball_depth(std::vector<Ball>& balls, int current_depth);
 		void compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth);
-                void box_containing_balls(const std::vector<Ball>& balls, cpx& ll, cpx& ur);
-                void refine_balls_into_box(std::vector<Ball>& balls, const cpx& ll, const cpx& ur);
-                bool is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur);
-                void find_close_images_with_distinct_first_letters(cpx p, int length, int& u, int& v);
+		void compute_next_ball_depth_right(std::vector<Ball>& balls, int current_depth);
+		void compute_balls_right(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth);
+    void box_containing_balls(const std::vector<Ball>& balls, cpx& ll, cpx& ur);
+    void refine_balls_into_box(std::vector<Ball>& balls, const cpx& ll, const cpx& ur);
+    bool is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur);
+    void find_close_images_with_distinct_first_letters(const Ball& b, int length, Ball& zb, Ball& wb);
+    cpx center_of_mass(const std::vector<Ball>& balls);
 		bool minimal_enclosing_radius(double& r);
 		
 		

@@ -16,23 +16,25 @@
 //first some ball functions
 Ball::Ball() { 
   center = 0.5;
-  crad = 0.5;
+  to_z = to_w = 0;
   radius = 1.0;
   word = 0;
   word_len = 0;
 }
 
-Ball::Ball(cpx c, cpx cr, double r) {
+Ball::Ball(cpx c, cpx tz, cpx tw, double r) {
   center = c;
-  crad = cr;
+  to_z = tz;
+  to_w = tw;
   radius = r;
   word = 0;
   word_len = 0; //just a ball, no words, to start
 }
 
-Ball::Ball(cpx c, cpx cr, double r, int w, int wl) {
+Ball::Ball(cpx c, cpx tz, cpx tw, double r, int w, int wl) {
   center = c;
-  crad = cr;
+  to_z = tz;
+  to_w = tw;
   radius = r;
   word = w;
   word_len = wl; //just a ball, no words, to start
@@ -43,7 +45,7 @@ int Ball::last_gen_index() const {
 }
 
 std::ostream& operator<<(std::ostream& os, const Ball& b) {
-  return os << "Ball(" << b.center << "," << b.crad << "," << b.radius << "," << b.word << "," << b.word_len << ")";
+  return os << "Ball(" << b.center << "," << b.to_z << "," << b.to_w << "," << b.radius << "," << b.word << "," << b.word_len << ")";
 }
 
 
@@ -98,9 +100,9 @@ Ball ifs::act_on_left(int index, const Ball& b) {
   int word = b.word;
   int word_len = b.word_len;
   if (index == 0) {
-    return Ball( z*b.center, z*b.crad, az*b.radius, word, word_len+1 );
+    return Ball( z*b.center, z*b.to_z, z*b.to_w, az*b.radius, word, word_len+1 );
   } else {
-    return Ball( (w*(b.center - 1.0)) + 1.0, w*b.crad, aw*b.radius, word | (1 << word_len), word_len+1 );
+    return Ball( (w*(b.center - 1.0)) + 1.0, w*b.to_z, w*b.to_w, aw*b.radius, word | (1 << word_len), word_len+1 );
   }
 }
 
@@ -109,10 +111,9 @@ Ball ifs::act_on_right(int index, const Ball& b) {
   int word = b.word;
   int word_len = b.word_len;
   if (index == 0) {
-    //the new center should be at the end of -crad (which points to 1)
-    return Ball( b.center - b.crad, z*b.crad, az*b.radius, word<<1, word_len+1 );
+    return Ball( b.center + b.to_z, z*b.to_z, z*b.to_w, az*b.radius, word<<1, word_len+1 );
   } else {
-    return Ball( b.center + b.crad, w*b.crad, aw*b.radius, (word<<1)|1, word_len+1 );
+    return Ball( b.center + b.to_w, w*b.to_z, w*b.to_w, aw*b.radius, (word<<1)|1, word_len+1 );
   }
 }
 
@@ -149,6 +150,38 @@ void ifs::compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int com
     compute_next_ball_depth(balls, i);
   }
 }
+
+
+//these functions are the same as above, except they act on the right
+void ifs::compute_next_ball_depth_right(std::vector<Ball>& balls, int current_depth) {
+  std::vector<Ball> balls_temp;
+  balls_temp.swap(balls);
+  int L_cur = 1<<current_depth;
+  int L_new = 1<<(current_depth+1);
+  balls.resize(L_new);
+  for (int j=0; j<L_cur; ++j) {
+    //for each j, we want to append on the right both a 0 and a 1
+    //(the lowest bit position is the last function we applied)
+    Ball parent_ball = balls_temp[j];
+    balls[j] = act_on_right(0, parent_ball);
+    balls[(j | (1<<current_depth))] = act_on_right(1, parent_ball);
+  }
+}
+void ifs::compute_balls_right(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth) {
+  std::vector<Ball> balls_temp;
+  balls.resize(2);
+  balls[0] = act_on_right(0, ball_seed);
+  balls[1] = act_on_right(1, ball_seed);
+  for (int i=1; i<compute_depth; ++i) {
+    compute_next_ball_depth_right(balls, i);
+  }
+}
+
+
+
+
+
+
 
 //given a ball, check if it is disjoint from the square given
 //this is lame as always with these functions
@@ -237,10 +270,42 @@ void ifs::refine_balls_into_box(std::vector<Ball>& balls,
 
 //find two actions of the given length (words u and v) whose images of 
 //p are as close as possible and which begin with different letters
-void ifs::find_close_images_with_distinct_first_letters(cpx p, int length, int& u, int& v){
+void ifs::find_close_images_with_distinct_first_letters(const Ball& b, 
+                                                        int length, 
+                                                        Ball& zb, Ball& wb){
+  zb = act_on_left(0,b);
+  wb = act_on_left(1,b);
+  //at every stage, replace b0 and b1 with their images which are closest
+  for (int i=1; i<length; ++i) {
+    Ball zbb[2] = { act_on_right(0, zb),
+                    act_on_right(1, zb) };
+    Ball wbb[2] = { act_on_right(0, wb),
+                    act_on_right(1, wb) };
+    //need to compare all pairs b0* - b1*
+    double d[4] = { abs( zbb[0].center - wbb[0].center ),
+                    abs( zbb[0].center - wbb[1].center ),
+                    abs( zbb[1].center - wbb[0].center ),
+                    abs( zbb[1].center - wbb[1].center ) };
+    int min_i = 0;
+    for (int j=1; j<4; ++j) {
+      if (d[j] < d[min_i]) {
+        min_i = j;
+      }
+    }
+    zb = zbb[ (min_i>>1)&1 ];
+    wb = wbb[ min_i&1 ];
+  }
   
 }
 
+//find the center of mass of the balls (I guess just average for now
+cpx ifs::center_of_mass(const std::vector<Ball>& balls) {
+  cpx a = 0.0;
+  for (int i=0; i<(int)balls.size(); ++i) {
+    a += balls[i].center;
+  }
+  return a;
+}
 
 
 //compute the minimal radius of a ball around 1/2 which contains 

@@ -42,14 +42,16 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
       av_radius += balls[i].radius;
     }
     av_radius /= (double)balls.size();
+    if (verbose>0) std::cout << "Average radius: " << av_radius << "\n";
     
     //initialize the trap
     TrapGrid TG;
     
     //the trap will cover all the balls, and it will have as many pixels 
     //as it needs so that the average ball contains about 4 pixels
-    double desired_pixel_radius = av_radius/1.5;
-    int np = int( ((ur.real() - ll.real())/desired_pixel_radius) + 1);
+    double desired_pixel_diameter = av_radius/2.5;
+    int np = int( ((ur.real() - ll.real())/desired_pixel_diameter) + 1);
+    if (verbose > 0) std::cout << "Desired pixel radius: " << desired_pixel_diameter << "\nDesired pixels: " << np << "\n";
     if (np > max_pixels) np = max_pixels;
     TG.reset_grid(ll, ur, np);
     
@@ -57,7 +59,10 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
     TG.fill_pixels(balls); 
   
     //show what it looks like
-    if (verbose>0) TG.show(NULL, NULL);
+    if (verbose>0) {
+      TG.show(NULL, NULL);
+      if (verbose>1) TG.show(NULL, &balls);
+    }
         
     //find the connected components
     TG.compute_connected_components();
@@ -82,7 +87,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
         std::cout << "\n";
       }
     
-      TG.show_connected_components();
+      if (verbose>1) TG.show_connected_components();
     }
     
     std::vector<std::vector<Point3d<int> > > ic;
@@ -106,6 +111,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
       std::cout << "Found distance functions\n";
       if (verbose>1) TG.show_distance_functions();
     }
+    
     
     //go through the interleaved components
     for (int i=0; i<(int)ic.size(); ++i) {
@@ -135,7 +141,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
                               : TG.grid[p.x][p.y].closest_w_ball)];
         Ball b2 = b;
         if (verbose>0) std::cout << "Starting with ball " << b << "\n";
-        for (int k=0; k<4; ++k) {
+        for (int k=0; k<5; ++k) {
           b = act_on_right(0,b);
           b2 = act_on_right(1,b2);
         }
@@ -228,6 +234,9 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
 
 bool ifs::find_trap(int verbose) {
 
+  int uv_depth = 0;
+  int n_depth = depth;
+
   //find the radius of the smallest closed ball about 1/2 which 
   //is mapped inside itself under both f and g
   double min_initial_radius;
@@ -238,17 +247,26 @@ bool ifs::find_trap(int verbose) {
   
   //find actions u and v which start with z and w such that 
   //u(1/2) and v(1/2) are very close relative to how big the balls are
-  int initial_depth = 3;
-  int u,v;
-  find_close_images_with_distinct_first_letters(0.5, initial_depth, u,v);
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*1.1);
+  Ball zb, wb;
+  find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
   
   
+  if (verbose>0) {
+    std::cout << "Found initial balls\n";
+    std::cout << "z-ball: " << zb << "\nw-ball: " << wb << "\n";
+  }
   
+  //now act on the *right* a bunch
+  std::vector<Ball> ZB;
+  compute_balls_right(ZB, zb, n_depth);
+  std::vector<Ball> WB;
+  compute_balls_right(WB, wb, n_depth);
   
-  //starting depth will always be 10?
-  int current_depth = depth; 
-  std::vector<Ball> balls;
-  compute_balls(balls, Ball(0.5, 0.5, min_initial_radius*1.5), current_depth);
+  //now concatenate the lists and use that (we swap to avoid unnecessary work)
+  std::vector<Ball> balls(0);
+  balls.swap(ZB);
+  balls.insert(balls.end(), WB.begin(), WB.end());
   
   //std::cout << "Computed " << balls.size() << " balls " << balls[0] << "\n";
   
