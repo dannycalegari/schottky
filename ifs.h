@@ -21,6 +21,7 @@ struct Ball {
   Ball(cpx c, cpx to_z, cpx to_w, double r);
   Ball(cpx c, cpx to_z, cpx to_w, double r, int w, int wl);
   int last_gen_index() const;
+  bool is_disjoint(const Ball& b);
 };
 
 std::ostream& operator<<(std::ostream& os, const Ball& b);
@@ -59,6 +60,9 @@ class ifs{
     void refine_balls_into_box(std::vector<Ball>& balls, const cpx& ll, const cpx& ur);
     bool is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur);
     void find_close_images_with_distinct_first_letters(const Ball& b, int length, Ball& zb, Ball& wb);
+    void find_aligned_images_with_distinct_first_letters(const Ball& initial_ball, 
+                                                         cpx p1, cpx p2, int search_depth,
+                                                         Ball& zb, Ball& wb);
     cpx center_of_mass(const std::vector<Ball>& balls);
 		bool minimal_enclosing_radius(double& r);
 		

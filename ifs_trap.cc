@@ -234,7 +234,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
 
 bool ifs::find_trap(int verbose) {
 
-  int uv_depth = 0;
+  int uv_depth = 10;
   int n_depth = depth;
 
   //find the radius of the smallest closed ball about 1/2 which 
@@ -246,10 +246,28 @@ bool ifs::find_trap(int verbose) {
   }
   
   //find actions u and v which start with z and w such that 
-  //u(1/2) and v(1/2) are very close relative to how big the balls are
+  //u(1/2) and v(1/2) are well-aligned
   Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*1.1);
   Ball zb, wb;
-  find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
+  std::vector<Ball> Dn;
+  compute_balls(Dn, initial_ball, n_depth);
+  
+  //compute the center of mass of fD_{n-1} and gD_{n-1}
+  cpx z_cm = 0;
+  cpx w_cm = 0;
+  int half_offset = 1<<(n_depth-1);
+  for (int i=0; i<half_offset; ++i) {
+    z_cm += Dn[i].center;
+    w_cm += Dn[half_offset + i].center;
+  }
+  z_cm /= (double)half_offset;
+  w_cm /= (double)half_offset;
+  if (verbose>0) {
+    std::cout << "z center of mass: " << z_cm << "\nw center of mass: " << w_cm << "\n";
+  }
+  
+  find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
+  //find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
   
   
   if (verbose>0) {

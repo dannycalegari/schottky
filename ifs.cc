@@ -1,3 +1,5 @@
+#include <deque>
+
 #include "ifs.h"
 
 
@@ -42,6 +44,10 @@ Ball::Ball(cpx c, cpx tz, cpx tw, double r, int w, int wl) {
 
 int Ball::last_gen_index() const {
   return (word >> (word_len-1))&1;
+}
+
+bool Ball::is_disjoint(const Ball& b) {
+  return abs(center - b.center) > radius + b.radius;
 }
 
 std::ostream& operator<<(std::ostream& os, const Ball& b) {
@@ -297,6 +303,59 @@ void ifs::find_close_images_with_distinct_first_letters(const Ball& b,
   }
   
 }
+
+
+//find balls (i.e. words) such that the points p1 and p2 are close 
+//when acted upon.  The ball is around so that we can act on the right
+void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ball, 
+                                                          cpx p1, cpx p2, int search_depth,
+                                                          Ball& zb, Ball& wb) {
+  //figure out how to get to p1 and p2 using the vector to_z
+  //p1 = 0.5 + c1*to_z, so we can always get to the image of 
+  //p1 by doing center + c1*to_z
+  cpx c1 = (p1-initial_ball.center)/initial_ball.to_z;
+  cpx c2 = (p2-initial_ball.center)/initial_ball.to_z;
+  std::deque<std::pair<Ball, Ball> > stack(1);
+  stack[0] = std::make_pair( act_on_left(0, initial_ball), 
+                             act_on_left(1, initial_ball) );
+  std::pair<Ball,Ball> best_pair = stack[0];
+  double best_dist = abs((stack[0].first.center + c1*stack[0].first.to_z) -
+                         (stack[0].second.center + c2*stack[0].second.to_z));
+  best_dist /= stack[0].first.radius;
+  int d = 1;
+  while (stack.size() > 0) {
+    std::pair<Ball,Ball> b = stack.back();
+    stack.pop_back();
+    
+    //see whether the pair is good...
+    double new_dist = abs((b.first.center + c1*b.first.to_z) -
+                          (b.second.center + c2*b.second.to_z));
+    new_dist /= b.first.radius;
+    if (new_dist < best_dist) {
+      std::cout << "Found better pair: " << b.first << " " << b.second << " p dist: " << new_dist << "\n";
+      best_pair = b;
+    }
+    
+    //go down the stack a little
+    if (d >= search_depth) continue;
+    
+    Ball zbb[2] = { act_on_right(0, b.first),
+                    act_on_right(1, b.first) };
+    Ball wbb[2] = { act_on_right(0, b.second),
+                    act_on_right(1, b.second) };
+    
+    for (int i=0; i<4; ++i) {
+      if (!zbb[i>>1].is_disjoint(wbb[i&1])) {
+        stack.push_front(std::make_pair(zbb[i>>1], wbb[i&1]));
+      }
+    }
+    
+    ++d;
+  }
+  zb = best_pair.first;
+  wb = best_pair.second;
+}
+
 
 //find the center of mass of the balls (I guess just average for now
 cpx ifs::center_of_mass(const std::vector<Ball>& balls) {
