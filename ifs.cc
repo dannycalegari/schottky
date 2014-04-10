@@ -331,7 +331,7 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
                           (b.second.center + c2*b.second.to_z));
     new_dist /= b.first.radius;
     if (new_dist < best_dist) {
-      std::cout << "Found better pair: " << b.first << " " << b.second << " p dist: " << new_dist << "\n";
+      //std::cout << "Found better pair: " << b.first << " " << b.second << " p dist: " << new_dist << "\n";
       best_dist = new_dist;
       best_pair = b;
     }

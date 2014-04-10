@@ -795,22 +795,28 @@ void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<P
 //encounter around the boundary, go around again and see if we see it again.
 //if so, divide up the boundary into two pieces and iterate over all possibilities
 //there has to be a better way.
-bool TrapGrid::find_interleaved_components(std::vector<std::vector<Point3d<int> > >& interleaved_components) {
+//
+//the good_components list the components that this function is allowed to use
+bool TrapGrid::find_interleaved_components(std::vector<std::vector<Point3d<int> > >& interleaved_components,
+                                   const std::vector<bool>& good_components_z,
+                                   const std::vector<bool>& good_components_w) {
   interleaved_components.resize(0);
   std::vector<Point3d<int> > temp_ic(4);
   for (int b=0; b<(int)intersection_boundaries.size(); ++b) {
     std::vector<Point3d<int> >& ib = intersection_boundaries[b];
     int bL = (int)ib.size();
     for (int j0=0; j0<bL; ++j0) {
-      if (ib[j0].x != 0) continue;
+      if (ib[j0].x != 0 || !good_components_z[ib[j0].z]) continue;
       for (int j1=j0+1; j1<bL; ++j1) {
+        if (ib[j1].x != 0 || !good_components_z[ib[j1].z]) continue;
         if (ib[j0].x == ib[j1].x && 
             ib[j0].y == ib[j1].y && 
             ib[j0].z != ib[j1].z) {
           for (int k0=j0+1; k0<j1; ++k0) {
-            if (ib[k0].x != 1) continue;
+            if (ib[k0].x != 1 || !good_components_w[ib[k0].z]) continue;
             for (int k1p=0; k1p<(j0-j1+bL); ++k1p) {
               int k1 = (j1+k1p)%bL;
+              if (ib[k1].x != 1 || !good_components_w[ib[k1].z]) continue;
               if (ib[k0].x == ib[k1].x && 
                   ib[k0].y == ib[k1].y && 
                   ib[k0].z != ib[k1].z) {
@@ -819,6 +825,7 @@ bool TrapGrid::find_interleaved_components(std::vector<std::vector<Point3d<int> 
                 temp_ic[2] = ib[j1];
                 temp_ic[3] = ib[k1];
                 interleaved_components.push_back(temp_ic);
+                return true;
               }
             }
           }

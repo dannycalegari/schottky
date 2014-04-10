@@ -23,13 +23,11 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
   std::vector<Ball> balls = initial_balls;  
   
   //these record the trap
-  bool found_all_balls;
-  std::vector<Ball> good_balls(4);
+  std::vector<Ball> trap_balls(4);
   
   
   while (true) {
   
-    found_all_balls = false;
     
     //find the ball extents
     box_containing_balls(balls, ll, ur);  
@@ -90,8 +88,85 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
       if (verbose>1) TG.show_connected_components();
     }
     
+    //find the distance functions -- might as well do this now
+    TG.compute_distances();
+    if (verbose>0) {
+      std::cout << "Found distance functions\n";
+      if (verbose>1) TG.show_distance_functions();
+    }
+    
+    //now figure out which components are good -- into which ones can we fit 
+    //a ball?
+    std::vector<bool> good_components[2];
+    std::vector<Ball> good_balls[2];
+    good_components[0].resize(TG.z_cut_by_w_components.size());
+    good_balls[0].resize(TG.z_cut_by_w_components.size());
+    good_components[1].resize(TG.w_cut_by_z_components.size());
+    good_balls[1].resize(TG.w_cut_by_z_components.size());
+    for (int i=0; i<(int)TG.z_cut_by_w_components.size(); ++i) {
+      Point2d<int> p = TG.farthest_from_other_component(0, i);
+      if (TG.grid[p.x][p.y].w_distance == 0) {
+        good_components[0][i] = false;
+        continue;
+      }
+      Ball b = balls[TG.grid[p.x][p.y].closest_z_ball];
+      Ball b2 = b;
+      for (int k=0; k<3; ++k) {
+        b = act_on_right(0,b);
+        b2 = act_on_right(1,b2);
+      }
+      if (TG.disjoint_from_z_or_w(b, 1)) {
+        good_balls[0][i] = b;
+        good_components[0][i] = true;
+      } else if (TG.disjoint_from_z_or_w(b2, 1)) {
+        good_balls[0][i] = b2;
+        good_components[0][i] = true;
+      } else {
+        good_components[0][i] = false;
+      }
+    }
+    for (int i=0; i<(int)TG.w_cut_by_z_components.size(); ++i) {
+      Point2d<int> p = TG.farthest_from_other_component(1, i);
+      if (TG.grid[p.x][p.y].z_distance == 0) {
+        good_components[1][i] = false;
+        continue;
+      }
+      Ball b = balls[TG.grid[p.x][p.y].closest_w_ball];
+      Ball b2 = b;
+      for (int k=0; k<3; ++k) {
+        b = act_on_right(0,b);
+        b2 = act_on_right(1,b2);
+      }
+      if (TG.disjoint_from_z_or_w(b, 0)) {
+        good_balls[1][i] = b;
+        good_components[1][i] = true;
+      } else if (TG.disjoint_from_z_or_w(b2, 0)) {
+        good_balls[1][i] = b2;
+        good_components[1][i] = true;
+      } else {
+        good_components[1][i] = false;
+      }
+    } 
+    
+    if (verbose>0) {
+      std::cout << "Found good components:\n";
+      for (int i=0; i<(int)good_components[0].size(); ++i) {
+        if (good_components[0][i]) {
+          std::cout << "(0," << i << ") ";
+        }
+      }
+      std::cout << "\n";
+      for (int i=0; i<(int)good_components[1].size(); ++i) {
+        if (good_components[1][i]) {
+          std::cout << "(1," << i << ") ";
+        }
+      }
+      std::cout << "\n";
+    }
+    //now let's find interleaved components
+    //if we find interleaved good components, we're done
     std::vector<std::vector<Point3d<int> > > ic;
-    if (!TG.find_interleaved_components(ic)) {
+    if (!TG.find_interleaved_components(ic, good_components[0], good_components[1])) {
       if (verbose>0) std::cout << "Didn't find interleaved components\n";
       goto ZOOM_OR_REFINE; //sorry
     }
@@ -105,62 +180,14 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
       }
     }
     
-    TG.compute_distances();
-    
-    if (verbose>0) {
-      std::cout << "Found distance functions\n";
-      if (verbose>1) TG.show_distance_functions();
-    }
-    
-    
-    //go through the interleaved components
-    for (int i=0; i<(int)ic.size(); ++i) {
-      if (verbose>0) std::cout << "Trying the interleaved components number " << i << "\n";
-    
-      std::vector<Point2d<int> > farthest_points(4);
-      for (int j=0; j<4; ++j) {
-        farthest_points[j] = TG.farthest_from_other_component(ic[i][j].x, ic[i][j].z);
-        if (verbose>0) std::cout << "Farthest point in " << ic[i][j] << " is " << farthest_points[j] << "\n";
-      }
-    
+    if (ic.size() > 0) {
       if (verbose>0) {
-        TG.show(&farthest_points, NULL);
-      }
-
-      found_all_balls = true;
-      for (int j=0; j<4; ++j) {      
-        Point2d<int>& p = farthest_points[j];
-        int zw = ic[i][j].x;
-        //if the pixel is touching a ball, it can't be good
-        if ((zw == 0 ? TG.grid[p.x][p.y].w_distance == 0
-                    : TG.grid[p.x][p.y].z_distance == 0)) {
-          found_all_balls = false;
-          break;
-        }
-        Ball b = balls[(zw==0 ? TG.grid[p.x][p.y].closest_z_ball
-                              : TG.grid[p.x][p.y].closest_w_ball)];
-        Ball b2 = b;
-        if (verbose>0) std::cout << "Starting with ball " << b << "\n";
-        for (int k=0; k<5; ++k) {
-          b = act_on_right(0,b);
-          b2 = act_on_right(1,b2);
-        }
-        if (verbose>0) std::cout << "Refined to balls:\n" << b << "\n" << b2 << "\n";
-        if (TG.disjoint_from_z_or_w(b, 1-zw)) {
-          good_balls[j] = b;
-        } else if (TG.disjoint_from_z_or_w(b2, 1-zw)) {
-          good_balls[j] = b2;
-        } else {
-          found_all_balls = false;
-          break;
-        }
-      }
-      if (found_all_balls) break; //we're done already
-    }
-    if (found_all_balls) {
-      if (verbose>0) {
+        trap_balls[0] = good_balls[ic[0][0].x][ic[0][0].z];
+        trap_balls[1] = good_balls[ic[0][1].x][ic[0][1].z];
+        trap_balls[2] = good_balls[ic[0][2].x][ic[0][2].z];
+        trap_balls[3] = good_balls[ic[0][3].x][ic[0][3].z];
         std::cout << "Found four disjoint balls!\n";
-        TG.show(NULL, &good_balls);
+        TG.show(NULL, &trap_balls);
       }
       //std::cout << "yes!\n";
       return true;
@@ -221,7 +248,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
     
   }//<- end of trap searching
   
-  return found_all_balls;
+  return false;
   
 }
 
