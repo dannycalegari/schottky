@@ -266,7 +266,8 @@ bool ifs::find_trap(int verbose) {
     std::cout << "z center of mass: " << z_cm << "\nw center of mass: " << w_cm << "\n";
   }
   
-  find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
+  //find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
+  find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, uv_depth, zb, wb);
   //find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
   
   
