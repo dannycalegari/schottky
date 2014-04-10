@@ -28,6 +28,8 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
   
   while (true) {
   
+    //if there are no balls, give up
+    if (balls.size() == 0) return false;
     
     //find the ball extents
     box_containing_balls(balls, ll, ur);  
@@ -276,6 +278,8 @@ bool ifs::find_trap(int verbose) {
   //u(1/2) and v(1/2) are well-aligned
   Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*1.1);
   Ball zb, wb;
+  
+  /*
   std::vector<Ball> Dn;
   compute_balls(Dn, initial_ball, n_depth);
   
@@ -292,8 +296,10 @@ bool ifs::find_trap(int verbose) {
   if (verbose>0) {
     std::cout << "z center of mass: " << z_cm << "\nw center of mass: " << w_cm << "\n";
   }
+  */
   
   //find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
+  if (abs(z) > 0.98*(1/sqrt(2))) return false;
   find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, uv_depth, zb, wb);
   //find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
   
