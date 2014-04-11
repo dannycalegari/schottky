@@ -82,7 +82,8 @@ struct TrapGrid {
   Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp);
   bool disjoint_from_z_or_w(const Ball& b, int z_or_w);
   void show(std::vector<Point2d<int> >* marked_points,
-            std::vector<Ball>* b);
+            std::vector<Ball>* b,
+            cpx* box_ll, cpx* box_ur);
   void show_connected_components();
   void compute_pixel_extents(const std::vector<Point2d<int> >& L, 
                              Point2d<int>& ll, 

@@ -1066,7 +1066,9 @@ void TrapGrid::show_connected_components() {
 
 
 void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
-                    std::vector<Ball>* b) {
+                    std::vector<Ball>* b, 
+                    cpx* box_ll,
+                    cpx* box_ur) {
   int pixel_group_width = -1;
   int num_drawing_pixels = -1;
   if (num_pixels < 512) {
@@ -1148,6 +1150,15 @@ void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
         X2.draw_point((*marked_points)[i],  bc);
       }
     }
+  }
+  if (box_ll != NULL && box_ur != NULL) {
+    int rcol = X2.get_rgb_color(1,0,0);
+    double real_pixel_width = box_width/num_drawing_pixels;
+    int llx = int( (box_ll->real()-lower_left.real())/real_pixel_width );
+    int lly = int( (box_ll->imag()-lower_left.imag())/real_pixel_width );
+    int w = int( (box_ur->real() - box_ll->real())/real_pixel_width );
+    int h = int( (box_ur->imag() - box_ll->imag())/real_pixel_width );
+    X2.draw_rectangle(llx, lly, w, h, rcol);
   }
   (void)X2.wait_for_key();
 }

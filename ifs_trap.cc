@@ -60,8 +60,8 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
   
     //show what it looks like
     if (verbose>0) {
-      TG.show(NULL, NULL);
-      if (verbose>1) TG.show(NULL, &balls);
+      TG.show(NULL, NULL, NULL, NULL);
+      if (verbose>1) TG.show(NULL, &balls, NULL, NULL);
     }
         
     //find the connected components
@@ -189,7 +189,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
         trap_balls[2] = good_balls[ic[0][2].x][ic[0][2].z];
         trap_balls[3] = good_balls[ic[0][3].x][ic[0][3].z];
         std::cout << "Found four disjoint balls!\n";
-        TG.show(NULL, &trap_balls);
+        TG.show(NULL, &trap_balls, NULL, NULL);
       }
       //std::cout << "yes!\n";
       return true;
@@ -240,6 +240,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
     
     if (verbose>0) {
       std::cout << "New box: " << new_ll << "-" << new_ur << "\n";
+      TG.show(NULL,NULL,&new_ll, &new_ur);
     }
     
     //might as well refine the depth -- compute the balls which fit into
@@ -276,7 +277,7 @@ bool ifs::find_trap(int verbose) {
   
   //find actions u and v which start with z and w such that 
   //u(1/2) and v(1/2) are well-aligned
-  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*1.1);
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*1.5);
   Ball zb, wb;
   
   /*
@@ -323,8 +324,8 @@ bool ifs::find_trap(int verbose) {
   //std::cout << "Computed " << balls.size() << " balls " << balls[0] << "\n";
   
   //trap finding parameters:
-  int max_refinements = 1;
-  int max_pixels = 512;
+  int max_refinements = 30;
+  int max_pixels = 800;
   
   bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, verbose);
   
