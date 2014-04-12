@@ -336,6 +336,16 @@ bool ifs::find_trap(int verbose) {
 
 
 
+void ifs::find_traps_along_loop(std::vector<cpx>& loop, 
+                                bool draw_it, 
+                                int verbose) {
+  if (verbose>0) {
+    std::cout << "Finding traps along the loop:\n";
+    for (int i=0; i<(int)loop.size(); ++i) {
+      std::cout << i << ": " << loop[i] << "\n";
+    }
+  }
+}
 
 
 void ifs::draw_trap() {

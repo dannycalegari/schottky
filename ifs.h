@@ -108,6 +108,9 @@ class ifs{
                                            int max_pixels,
                                            int verbose);
 		bool find_trap(int verbose=0);
+		void find_traps_along_loop(std::vector<cpx>& loop, 
+		                           bool draw_it, 
+		                           int verbose);
 		void draw_trap();	
 		
 		
@@ -116,11 +119,13 @@ class ifs{
 		int drawing_width;
 		int drawing_radius; //drawing_width/2
 		
-		Point2d<int> cpx_to_point(cpx w);
+		Point2d<int> cpx_to_point(cpx w); //this is for ifs mode
 		int cpx_to_radius(cpx w);
-		cpx point_to_cpx(const Point2d<int>& p);
+		cpx point_to_cpx(const Point2d<int>& p);  //this is for mandlebrot mode
+		Point2d<int> cpx_to_point_mandlebrot(cpx w); //this is for mandlebrot mode
 		void draw();
 		void user_interface();
+		void input_loop(std::vector<cpx>& loop);
 };
 
 #endif

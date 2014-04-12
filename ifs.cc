@@ -408,13 +408,56 @@ int ifs::cpx_to_radius(cpx w) {
   return r;
 }
 
-
+//this produces a point in [-1,1]x[-1,1] depending 
+//on where in the window it is
 cpx ifs::point_to_cpx(const Point2d<int>& p) {
   cpx w;
   w = cpx( double(p.x-drawing_radius)/drawing_radius,
-	   double(p.y-drawing_radius)/drawing_radius );
+	         double(p.y-drawing_radius)/drawing_radius );
   return w;
-};
+}
+
+Point2d<int> ifs::cpx_to_point_mandlebrot(cpx w) {
+  cpx one_scaled = ((w-center)/wind); //this is a number in [-1,1]x[-1,1]
+  return Point2d<int>( int( one_scaled.real()*drawing_radius + drawing_radius ),
+                       int( one_scaled.imag()*drawing_radius + drawing_radius ));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

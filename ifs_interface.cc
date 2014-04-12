@@ -146,6 +146,14 @@ void ifs::user_interface() {
                     chunky_ifs = !chunky_ifs;
                     if (mode == 0) draw();
                     break;
+                } else if (XLookupKeysym(&report.xkey, 0) == XK_o) { //start drawing a loop
+                    if (mode == 1) { //only do it in mandlebrot mode
+                      //get a loop
+                      std::vector<cpx> loop(0);
+                      input_loop(loop);
+                      find_traps_along_loop(loop, true, 1);
+                      break;
+                    }
                 }
 
             default:
@@ -153,3 +161,106 @@ void ifs::user_interface() {
         }
     }
 }
+
+
+
+//in mandlebrot mode, read in a sequence of points
+void ifs::input_loop(std::vector<cpx>& loop) {
+  bool done_drawing = false;
+  Point2d<int> p;
+  int wcol = X.get_rgb_color(1,1,1);
+  std::stringstream T;
+  Point2d<int> pp;
+  
+  p.x = drawing_width + 15;
+  p.y = drawing_width/2 + 50;
+  T.str("");
+  T << "*click to draw trap loop*";
+  X.draw_text(p, T, 0);
+  p.y-=20;
+  T.str("");
+  T << "[o] to close the loop and finish";
+  X.draw_text(p, T, 0);
+  
+  while (!done_drawing) {
+	  XEvent report;
+	  X.get_next_event(report);
+	  if (report.type == MotionNotify) {
+	    p = X.mouse_location();
+      cpx mz = point_to_cpx(p);
+      mz=(mz*wind)+center;
+      p.x=drawing_width + 15;
+      p.y=drawing_width/2;
+      T.str("");
+      T << "mouse location " << mz;
+      pp=p;
+      pp.y=pp.y-30;
+      X.draw_filled_rectangle(pp, 300, 40, 0xFFFFFF);
+      X.draw_text(p, T, 0x000000);
+    
+    } else if (report.type == ButtonPress) {
+      p = X.mouse_location();
+      cpx mz = point_to_cpx(p);
+      mz = (mz*wind)+center;   //now mz is the real complex number
+      X.draw_dot(p, wcol);
+      if (loop.size() > 0) { 
+        X.draw_line(cpx_to_point_mandlebrot(loop.back()), p, wcol);
+      }
+      loop.push_back(mz);
+    
+    } else if (report.type == KeyPress && 
+               XLookupKeysym(&report.xkey, 0) == XK_o) {
+      X.draw_line(cpx_to_point_mandlebrot(loop.back()), 
+                  cpx_to_point_mandlebrot(loop.front()), wcol);
+      done_drawing= true;
+    }
+  }
+  
+  p.x = drawing_width + 15;
+  p.y = drawing_width/2 + 20;
+  X.draw_filled_rectangle(p, 300, 50, wcol);
+	    
+	
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

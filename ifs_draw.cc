@@ -207,11 +207,15 @@ void ifs::draw_mandelbrot_set(){
 	T.str("");
 	p.y-=20;
 	if (draw_trap_mode) {
-	  T << "Trap mode enabled (toggle with [t])\n";
+	  T << "Trap mode enabled (toggle with [t])";
 	} else {
-	  T << "Trap mode disabled (toggle with [t])\n";
+	  T << "Trap mode disabled (toggle with [t])";
 	}
 	X.draw_text(p,T,0x000000);	
+	T.str("");
+	p.y-=20;
+	T << "Draw trap loop with [o]";
+	X.draw_text(p,T,0);
 	T.str("");
 	p.y=p.y-20;
 	T << "quit with [q]";
