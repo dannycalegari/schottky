@@ -332,7 +332,7 @@ bool ifs::find_trap(double* epsilon, int verbose) {
   
   bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, verbose);
   
-  *epsilon = pow(az, uv_depth + n_depth);
+  if (epsilon != NULL) *epsilon = pow(az, uv_depth + n_depth);
   
   return got_trap;
 
@@ -355,13 +355,16 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
   //this is a list of the balls along each segment of the path
   std::vector<std::vector<std::pair<cpx,double> > > trap_list(loop.size());
   
+  int tv = (verbose > 0 ? verbose -1 : 0);
+  
   //get the traps at the vertices
   for (int i=0; i<nL; ++i) {
     trap_list[i].resize(1);
     z = loop[i]; az = abs(z);
     w = z; aw = az;
     double epsilon;
-    if (!find_trap(&epsilon, verbose)) {
+    if (!find_trap(&epsilon, tv)) {
+      if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
       return false;
     }
     trap_list[i][0] = std::make_pair(z, epsilon);
@@ -393,7 +396,8 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
       //run it
       trap_list[i].resize(trap_list[i].size()+1);
       trap_list[i].back().first = z;
-      if (!find_trap(&trap_list[i].back().second,verbose)) {
+      if (!find_trap(&trap_list[i].back().second, tv)) {
+        if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
         return false;
       }
       //display it
@@ -407,6 +411,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
       }
     }
   }
+  if (verbose>0) std::cout << "Loop certified!\n";
   return true;
     
   
