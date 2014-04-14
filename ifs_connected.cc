@@ -52,9 +52,13 @@ bool ifs::circles_intersect(cpx c1, cpx a1, cpx c2, cpx a2, double R, int d){
 	};
 };
 
-bool ifs::circ_connected(){ 	// circle algorithm to test for connectedness
+bool ifs::circ_connected(double r){ 	// circle algorithm to test for connectedness
 	double R;
-	R=max(1.0/(2.0*(1.0-abs(z))),1.0/(2.0*(1.0-abs(w))));
+	if (r<0) {
+	  R=max(1.0/(2.0*(1.0-abs(z))),1.0/(2.0*(1.0-abs(w))));
+	} else {
+	  R = r;
+	}
 	
 //	draw_circle(cpx_to_point(0.5),cpx_to_radius(R),0xFF0000);
 

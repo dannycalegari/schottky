@@ -95,7 +95,7 @@ class ifs{
 		int exit_depth;        // size of tree to detect connectedness
 		
 		bool circles_intersect(cpx c1, cpx a1, cpx c2, cpx a2, double R, int d); // recursive test; do circles intersect?
-		bool circ_connected();                                                  // circle algorithm to test for connectedness
+		bool circ_connected(double r=-1);                                        // circle algorithm to test for connectedness
 		
 		
 		//trap construction
@@ -107,8 +107,8 @@ class ifs{
                                            int max_refinements,
                                            int max_pixels,
                                            int verbose);
-		bool find_trap(int verbose=0);
-		void find_traps_along_loop(std::vector<cpx>& loop, 
+		bool find_trap(double* epsilon, int verbose=0);
+		bool find_traps_along_loop(const std::vector<cpx>& loop, 
 		                           bool draw_it, 
 		                           int verbose);
 		void draw_trap();	

@@ -262,7 +262,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
 
 
 
-bool ifs::find_trap(int verbose) {
+bool ifs::find_trap(double* epsilon, int verbose) {
 
   int uv_depth = 10;
   int n_depth = depth;
@@ -275,9 +275,12 @@ bool ifs::find_trap(int verbose) {
     return false;
   }
   
+  //make sure it's connected at the minimal radius
+  if (!circ_connected(min_initial_radius)) return false;
+  
   //find actions u and v which start with z and w such that 
   //u(1/2) and v(1/2) are well-aligned
-  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*1.5);
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*2);
   Ball zb, wb;
   
   /*
@@ -324,10 +327,12 @@ bool ifs::find_trap(int verbose) {
   //std::cout << "Computed " << balls.size() << " balls " << balls[0] << "\n";
   
   //trap finding parameters:
-  int max_refinements = 30;
+  int max_refinements = 0;
   int max_pixels = 800;
   
   bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, verbose);
+  
+  *epsilon = pow(az, uv_depth + n_depth);
   
   return got_trap;
 
@@ -336,21 +341,103 @@ bool ifs::find_trap(int verbose) {
 
 
 
-void ifs::find_traps_along_loop(std::vector<cpx>& loop, 
+bool ifs::find_traps_along_loop(const std::vector<cpx>& loop, 
                                 bool draw_it, 
                                 int verbose) {
+  int nL = loop.size();
   if (verbose>0) {
     std::cout << "Finding traps along the loop:\n";
-    for (int i=0; i<(int)loop.size(); ++i) {
+    for (int i=0; i<nL; ++i) {
       std::cout << i << ": " << loop[i] << "\n";
     }
   }
+  if (verbose>0) std::cout << "Finding traps along the vertices:\n";
+  //this is a list of the balls along each segment of the path
+  std::vector<std::vector<std::pair<cpx,double> > > trap_list(loop.size());
+  
+  //get the traps at the vertices
+  for (int i=0; i<nL; ++i) {
+    trap_list[i].resize(1);
+    z = loop[i]; az = abs(z);
+    w = z; aw = az;
+    double epsilon;
+    if (!find_trap(&epsilon, verbose)) {
+      return false;
+    }
+    trap_list[i][0] = std::make_pair(z, epsilon);
+    if (verbose>0) std::cout << i << ": " << trap_list[i][0].first << ", " << trap_list[i][0].second << "\n";
+  }
+  
+  //for each interval, go along it, placing the center of the 
+  //next trap at exactly the edge of the previous one
+  int rcol = X.get_rgb_color(1,0,0);
+  double pixel_radius = double(drawing_radius)/wind;
+  for (int i=0; i<nL; ++i) {
+    //vector of length 1 pointing along the path
+    cpx d = trap_list[(i+1)%nL][0].first - trap_list[i][0].first;
+    d = d / abs(d);
+    while (true) {
+      std::pair<cpx,double> last_trap = trap_list[i].back();
+      //detect if we are done
+      double d_to_end = abs(trap_list[(i+1)%nL][0].first - last_trap.first);
+      if (d_to_end < last_trap.second ||
+          d_to_end < trap_list[(i+1)%nL][0].second) {
+        if (verbose>0) std::cout << "Done this edge\n";
+        break;
+      }
+      //otherwise, go to the end of our current ball
+      cpx new_z = last_trap.first + last_trap.second*d;
+      //set it
+      z = new_z; az = abs(z);
+      w = z; aw = az;
+      //run it
+      trap_list[i].resize(trap_list[i].size()+1);
+      trap_list[i].back().first = z;
+      if (!find_trap(&trap_list[i].back().second,verbose)) {
+        return false;
+      }
+      //display it
+      if (draw_it) {
+        Point2d<int> p = cpx_to_point_mandlebrot(z);
+        double r = trap_list[i].back().second / pixel_radius;
+        X.draw_disk(p,r,rcol);
+      }
+      if (verbose>0) {
+        std::cout << "Found new trap " << trap_list[i].back().first << ", " << trap_list[i].back().second << "\n";
+      }
+    }
+  }
+  return true;
+    
+  
 }
 
 
 void ifs::draw_trap() {
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
