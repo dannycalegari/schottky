@@ -61,8 +61,10 @@ bool ifs::circ_connected(double r){ 	// circle algorithm to test for connectedne
 	}
 	
 //	draw_circle(cpx_to_point(0.5),cpx_to_radius(R),0xFF0000);
-
+        std::cout << "Checking connectedness with radius " << R << "\n";
 	exit_depth=0;	// initialize exit_depth
-	return(circles_intersect(0,z,1,w,R,depth));
+	bool ans = circles_intersect(0,z,1,w,R,depth);
+        std::cout << "Got " << ans << "\n";
+	return ans;
 };
 

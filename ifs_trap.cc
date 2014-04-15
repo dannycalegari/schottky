@@ -264,7 +264,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
 
 bool ifs::find_trap(double* epsilon, int verbose) {
 
-  int uv_depth = 10;
+  int uv_depth = 2*depth;
   int n_depth = depth;
 
   //find the radius of the smallest closed ball about 1/2 which 
@@ -274,9 +274,15 @@ bool ifs::find_trap(double* epsilon, int verbose) {
     //std::cout << "initial radius is infinite\n";
     return false;
   }
-  
+  min_initial_radius += 0.1;
   //make sure it's connected at the minimal radius
-  if (!circ_connected(min_initial_radius)) return false;
+  if (verbose>0) std::cout << "Checking connectedness with minimal initial radius of " << min_initial_radius << "\n";
+  if (!circ_connected(min_initial_radius)) {
+    if (verbose>0) {
+      std::cout << "Not even connected\n";
+    }
+    return false;
+  }
   
   //find actions u and v which start with z and w such that 
   //u(1/2) and v(1/2) are well-aligned
