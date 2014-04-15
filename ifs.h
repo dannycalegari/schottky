@@ -62,7 +62,8 @@ class ifs{
     void find_close_images_with_distinct_first_letters(const Ball& b, int length, Ball& zb, Ball& wb);
     void find_aligned_images_with_distinct_first_letters(const Ball& initial_ball, 
                                                          cpx p1, cpx p2, int search_depth,
-                                                         Ball& zb, Ball& wb);
+                                                         Ball& zb, Ball& wb,
+                                                         double ratio_goal);
     cpx center_of_mass(const std::vector<Ball>& balls);
 		bool minimal_enclosing_radius(double& r);
 		
@@ -94,7 +95,9 @@ class ifs{
 		int depth;             // depth to recurse to draw or detect connectedness
 		int exit_depth;        // size of tree to detect connectedness
 		
-		bool circles_intersect(cpx c1, cpx a1, cpx c2, cpx a2, double R, int d); // recursive test; do circles intersect?
+		bool old_circles_intersect(cpx c1, cpx a1, cpx c2, cpx a2, double R, int d); // recursive test; do circles intersect?
+                bool circles_intersect(cpx center_1, cpx z_img_1, cpx w_img_1, double R1,
+                                       cpx center_2, cpx z_img_2, cpx w_img_2, double R2, int d);
 		bool circ_connected(double r=-1);                                        // circle algorithm to test for connectedness
 		
 		

@@ -307,9 +307,10 @@ void ifs::find_close_images_with_distinct_first_letters(const Ball& b,
 
 //find balls (i.e. words) such that the points p1 and p2 are close 
 //when acted upon.  The ball is around so that we can act on the right
+//if the ratio goes below the ratio goal, we just return it
 void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ball, 
                                                           cpx p1, cpx p2, int search_depth,
-                                                          Ball& zb, Ball& wb) {
+                                                          Ball& zb, Ball& wb, double ratio_goal) {
   //figure out how to get to p1 and p2 using the vector to_z
   //p1 = 0.5 + c1*to_z, so we can always get to the image of 
   //p1 by doing center + c1*to_z
@@ -333,6 +334,11 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
     if (new_dist < best_dist) {
       //std::cout << "Found better pair: " << b.first << " " << b.second << " p dist: " << new_dist << "\n";
       std::cout << "{" << b.first.word_len << "," << new_dist << "}, ";
+      if (new_dist < ratio_goal) {
+        zb = b.first;
+        wb = b.second;
+        return;
+      }
       best_dist = new_dist;
       best_pair = b;
     }

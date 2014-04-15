@@ -262,7 +262,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
 
 
 
-bool ifs::find_trap(double* epsilon, int verbose) {
+bool ifs::find_trap(int max_uv_depth, int max_n_depth, double* epsilon, int verbose) {
 
   int uv_depth = 2*depth;
   int n_depth = depth;
@@ -274,7 +274,6 @@ bool ifs::find_trap(double* epsilon, int verbose) {
     //std::cout << "initial radius is infinite\n";
     return false;
   }
-  min_initial_radius += 0.1;
   //make sure it's connected at the minimal radius
   if (verbose>0) std::cout << "Checking connectedness with minimal initial radius of " << min_initial_radius << "\n";
   if (!circ_connected(min_initial_radius)) {
@@ -284,63 +283,56 @@ bool ifs::find_trap(double* epsilon, int verbose) {
     return false;
   }
   
-  //find actions u and v which start with z and w such that 
-  //u(1/2) and v(1/2) are well-aligned
-  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*2);
-  Ball zb, wb;
+  while (true) {
   
-  /*
-  std::vector<Ball> Dn;
-  compute_balls(Dn, initial_ball, n_depth);
-  
-  //compute the center of mass of fD_{n-1} and gD_{n-1}
-  cpx z_cm = 0;
-  cpx w_cm = 0;
-  int half_offset = 1<<(n_depth-1);
-  for (int i=0; i<half_offset; ++i) {
-    z_cm += Dn[i].center;
-    w_cm += Dn[half_offset + i].center;
+    //find actions u and v which start with z and w such that 
+    //u(1/2) and v(1/2) are well-aligned
+    Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*2);
+    Ball zb, wb;
+    
+    //find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
+    if (abs(z) > (1.0/sqrt(2))) {
+      if (verbose>0) {
+        std::cout << "|z| is larger than 1/sqrt(2), so we're done\n";
+      }
+      return true;
+    }
+    find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, uv_depth, zb, wb, 0.05);
+    //find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
+    
+    
+    if (verbose>0) {
+      std::cout << "Found initial balls\n";
+      std::cout << "z-ball: " << zb << "\nw-ball: " << wb << "\n";
+    }
+    
+    //now act on the *right* a bunch
+    std::vector<Ball> ZB;
+    compute_balls_right(ZB, zb, n_depth);
+    std::vector<Ball> WB;
+    compute_balls_right(WB, wb, n_depth);
+    
+    //now concatenate the lists and use that (we swap to avoid unnecessary work)
+    std::vector<Ball> balls(0);
+    balls.swap(ZB);
+    balls.insert(balls.end(), WB.begin(), WB.end());
+    
+    //std::cout << "Computed " << balls.size() << " balls " << balls[0] << "\n";
+    
+    //trap finding parameters:
+    int max_refinements = 0;
+    int max_pixels = 800;
+    
+    bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, verbose);
+    
+    if (got_trap) {
+      if (epsilon != NULL) *epsilon = pow(az, uv_depth + n_depth);
+      return true;
+    }
+    
   }
-  z_cm /= (double)half_offset;
-  w_cm /= (double)half_offset;
-  if (verbose>0) {
-    std::cout << "z center of mass: " << z_cm << "\nw center of mass: " << w_cm << "\n";
-  }
-  */
   
-  //find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
-  if (abs(z) > (1.0/sqrt(2))) return true;
-  find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, uv_depth, zb, wb);
-  //find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
-  
-  
-  if (verbose>0) {
-    std::cout << "Found initial balls\n";
-    std::cout << "z-ball: " << zb << "\nw-ball: " << wb << "\n";
-  }
-  
-  //now act on the *right* a bunch
-  std::vector<Ball> ZB;
-  compute_balls_right(ZB, zb, n_depth);
-  std::vector<Ball> WB;
-  compute_balls_right(WB, wb, n_depth);
-  
-  //now concatenate the lists and use that (we swap to avoid unnecessary work)
-  std::vector<Ball> balls(0);
-  balls.swap(ZB);
-  balls.insert(balls.end(), WB.begin(), WB.end());
-  
-  //std::cout << "Computed " << balls.size() << " balls " << balls[0] << "\n";
-  
-  //trap finding parameters:
-  int max_refinements = 0;
-  int max_pixels = 800;
-  
-  bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, verbose);
-  
-  if (epsilon != NULL) *epsilon = pow(az, uv_depth + n_depth);
-  
-  return got_trap;
+  return false;
 
 }
 
