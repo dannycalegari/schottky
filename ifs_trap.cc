@@ -303,7 +303,7 @@ bool ifs::find_trap(double* epsilon, int verbose) {
   */
   
   //find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
-  if (abs(z) > 0.98*(1/sqrt(2))) return false;
+  if (abs(z) > (1.0/sqrt(2))) return true;
   find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, uv_depth, zb, wb);
   //find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
   
