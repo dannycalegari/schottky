@@ -76,8 +76,9 @@ struct TrapGrid {
   void compute_intersection_boundaries();
   void pursue_intersection_boundary(int i, int j, int ind, std::vector<Point3d<int> >& bd);
   bool find_interleaved_components(std::vector<std::vector<Point3d<int> > >& interleaved_components,
-                                   const std::vector<bool>& good_components_z,
-                                   const std::vector<bool>& good_components_w);
+                                   const std::vector<int>& good_components_z,
+                                   const std::vector<int>& good_components_w,
+                                   bool far_trap_points);
   void compute_distances();
   Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp);
   bool disjoint_from_z_or_w(const Ball& b, int z_or_w);

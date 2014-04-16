@@ -797,26 +797,55 @@ void TrapGrid::pursue_intersection_boundary(int i, int j, int ind, std::vector<P
 //there has to be a better way.
 //
 //the good_components list the components that this function is allowed to use
+//they are -1 if not good or the L1 distance if good, so the best would be 
+//the 4-tuple that has the largest minimum distance
 bool TrapGrid::find_interleaved_components(std::vector<std::vector<Point3d<int> > >& interleaved_components,
-                                   const std::vector<bool>& good_components_z,
-                                   const std::vector<bool>& good_components_w) {
+                                   const std::vector<int>& good_components_z,
+                                   const std::vector<int>& good_components_w,
+                                   bool far_trap_points) {
   interleaved_components.resize(0);
   std::vector<Point3d<int> > temp_ic(4);
+  int farthest_z_comp = -1;
+  int farthest_w_comp = -1;
+  if (far_trap_points) { //figure out how far the farthest trap points are
+    for (int i=0; i<(int)good_components_z.size(); ++i) {
+      if (good_components_z[i] > farthest_z_comp) {
+        farthest_z_comp = good_components_z[i];
+      }
+    }
+    for (int i=0; i<(int)good_components_w.size(); ++i) {
+      if (good_components_w[i] > farthest_w_comp) {
+        farthest_w_comp = good_components_w[i];
+      }
+    }
+  }
+  //if (far_trap_points) {
+  //  std::cout << "Find far points; farthest z comp is " << farthest_z_comp << 
+  //               " and farthest w comp is " << farthest_w_comp << "\n";
+  //}
   for (int b=0; b<(int)intersection_boundaries.size(); ++b) {
     std::vector<Point3d<int> >& ib = intersection_boundaries[b];
     int bL = (int)ib.size();
     for (int j0=0; j0<bL; ++j0) {
-      if (ib[j0].x != 0 || !good_components_z[ib[j0].z]) continue;
+      if (ib[j0].x != 0 || 
+          good_components_z[ib[j0].z]==-1 ||
+          (far_trap_points && good_components_z[ib[j0].z] < farthest_z_comp-2)) continue;
       for (int j1=j0+1; j1<bL; ++j1) {
-        if (ib[j1].x != 0 || !good_components_z[ib[j1].z]) continue;
+        if (ib[j1].x != 0 || 
+            good_components_z[ib[j1].z]==-1 ||
+            (far_trap_points && good_components_z[ib[j1].z] < farthest_z_comp-2)) continue;
         if (ib[j0].x == ib[j1].x && 
             ib[j0].y == ib[j1].y && 
             ib[j0].z != ib[j1].z) {
           for (int k0=j0+1; k0<j1; ++k0) {
-            if (ib[k0].x != 1 || !good_components_w[ib[k0].z]) continue;
+            if (ib[k0].x != 1 || 
+                good_components_w[ib[k0].z]==-1 ||
+                (far_trap_points && good_components_w[ib[k0].z] < farthest_w_comp-2)) continue;
             for (int k1p=0; k1p<(j0-j1+bL); ++k1p) {
               int k1 = (j1+k1p)%bL;
-              if (ib[k1].x != 1 || !good_components_w[ib[k1].z]) continue;
+              if (ib[k1].x != 1 || 
+                  good_components_w[ib[k1].z]==-1 ||
+                  (far_trap_points && good_components_w[ib[k1].z] < farthest_w_comp-2)) continue;
               if (ib[k0].x == ib[k1].x && 
                   ib[k0].y == ib[k1].y && 
                   ib[k0].z != ib[k1].z) {
