@@ -390,7 +390,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
   //for each interval, go along it, placing the center of the 
   //next trap at exactly the edge of the previous one
   int rcol = X.get_rgb_color(1,0,0);
-  double pixel_width = wind/double(drawing_width);
+  double pixel_width = (2*wind)/double(drawing_width);
   if (verbose>0) std::cout << "Pixel width: " << pixel_width << "\n";
   for (int i=0; i<nL; ++i) {
     //vector of length 1 pointing along the path
@@ -423,6 +423,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
         double r = trap_list[i].back().second / pixel_width;
         if (r<2) r = 2;
         X.draw_disk(p,r,rcol);
+        X.flush();
       }
       if (verbose>0) {
         std::cout << "Found new trap " << trap_list[i].back().first << ", " << trap_list[i].back().second << "\n";
