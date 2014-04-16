@@ -63,7 +63,7 @@ class ifs{
     void find_aligned_images_with_distinct_first_letters(const Ball& initial_ball, 
                                                          cpx p1, cpx p2, int search_depth,
                                                          Ball& zb, Ball& wb,
-                                                         double ratio_goal);
+                                                         double ratio_goal, double ratio_lower_limit);
     cpx center_of_mass(const std::vector<Ball>& balls);
 		bool minimal_enclosing_radius(double& r);
 		
@@ -110,7 +110,7 @@ class ifs{
                                            int max_refinements,
                                            int max_pixels,
                                            int verbose);
-		bool find_trap(double* epsilon, int verbose=0);
+		bool find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double* epsilon, int verbose=0);
 		bool find_traps_along_loop(const std::vector<cpx>& loop, 
 		                           bool draw_it, 
 		                           int verbose);

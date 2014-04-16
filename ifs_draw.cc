@@ -75,7 +75,7 @@ void ifs::draw_limit_set(){
 	T.str("");		
 	p.y=p.y-20;
 	if (draw_trap_mode) {
-		if (find_trap(NULL, 1)) {
+		if (find_trap(int((3.0/2.0)*depth), depth, 512, NULL, 2)) {
 			T << "trap found (toggle trap mode with [t])";
 			draw_trap();
 		} else {
@@ -244,7 +244,7 @@ void ifs::draw_mandelbrot_set(){
 				X.draw_box(q,mesh,0x000000);
 			} else { // if(abs(z)>0.5){
 				if(circ_connected()){
-				  if (draw_trap_mode && find_trap(NULL, 0)) {
+				  if (draw_trap_mode && find_trap(int((3.0/2.0)*depth), depth, 512, NULL, 0)) {
 				    X.draw_box(q,mesh,rcol);
 				  } else {
 					  X.draw_box(q,mesh,0x000001*exit_depth);

@@ -262,10 +262,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
 
 
 
-bool ifs::find_trap(int max_uv_depth, int max_n_depth, double* epsilon, int verbose) {
-
-  int uv_depth = 2*depth;
-  int n_depth = depth;
+bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double* epsilon, int verbose) {
 
   //find the radius of the smallest closed ball about 1/2 which 
   //is mapped inside itself under both f and g
@@ -283,51 +280,65 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, double* epsilon, int verb
     return false;
   }
   
+  
+  double ratio_goal = 0.05;
+  double ratio_lower_limit = 0.01;
+  double current_ratio = 4;
+  int current_n_depth = 10; //I guess always start here?
+  int current_uv_depth = -1;
+  
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*2);
+  Ball zb, wb;
+  
   while (true) {
   
     //find actions u and v which start with z and w such that 
-    //u(1/2) and v(1/2) are well-aligned
-    Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*2);
-    Ball zb, wb;
-    
     //find_aligned_images_with_distinct_first_letters(initial_ball, z_cm, w_cm, uv_depth, zb, wb);
     if (abs(z) > (1.0/sqrt(2))) {
       if (verbose>0) {
         std::cout << "|z| is larger than 1/sqrt(2), so we're done\n";
       }
+      if (epsilon != NULL) *epsilon = 0.005;
       return true;
     }
-    find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, uv_depth, zb, wb, 0.05);
-    //find_close_images_with_distinct_first_letters(initial_ball, uv_depth, zb, wb);
-    
+    if (current_ratio > ratio_goal) {
+      find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, max_uv_depth, zb, wb, ratio_goal, ratio_lower_limit);
+    }
+    current_ratio = abs(zb.center-wb.center)/zb.radius;
+    current_uv_depth = zb.word_len;
     
     if (verbose>0) {
       std::cout << "Found initial balls\n";
       std::cout << "z-ball: " << zb << "\nw-ball: " << wb << "\n";
+      std::cout << "Ratio: " << current_ratio << "\n";
     }
     
     //now act on the *right* a bunch
     std::vector<Ball> ZB;
-    compute_balls_right(ZB, zb, n_depth);
+    compute_balls_right(ZB, zb, current_n_depth);
     std::vector<Ball> WB;
-    compute_balls_right(WB, wb, n_depth);
+    compute_balls_right(WB, wb, current_n_depth);
     
     //now concatenate the lists and use that (we swap to avoid unnecessary work)
     std::vector<Ball> balls(0);
     balls.swap(ZB);
     balls.insert(balls.end(), WB.begin(), WB.end());
     
-    //std::cout << "Computed " << balls.size() << " balls " << balls[0] << "\n";
+    //I think we're not going to refine
+    int max_refinements = 0; //
     
-    //trap finding parameters:
-    int max_refinements = 0;
-    int max_pixels = 800;
-    
-    bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, verbose);
+    bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, (verbose>0 ? verbose-1 : verbose));
     
     if (got_trap) {
-      if (epsilon != NULL) *epsilon = pow(az, uv_depth + n_depth);
+      if (epsilon != NULL) *epsilon = 0.0005; //pow(az, current_uv_depth + current_n_depth);
       return true;
+    }
+    //if we didn't get it, think about what to do
+    if (current_n_depth < max_n_depth) {
+      current_n_depth += (current_n_depth < max_n_depth-1 ? 3 : 1);
+      if (verbose>0) std::cout << "Increasing depth to " << current_n_depth << "\n";
+    } else {
+      return false;
     }
     
   }
@@ -342,6 +353,13 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, double* epsilon, int verb
 bool ifs::find_traps_along_loop(const std::vector<cpx>& loop, 
                                 bool draw_it, 
                                 int verbose) {
+  
+  //trap parameters
+  int max_pixels = 1024;
+  int max_uv_depth = 18;
+  int max_n_depth = 20;
+  
+  
   int nL = loop.size();
   if (verbose>0) {
     std::cout << "Finding traps along the loop:\n";
@@ -353,7 +371,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
   //this is a list of the balls along each segment of the path
   std::vector<std::vector<std::pair<cpx,double> > > trap_list(loop.size());
   
-  int tv = (verbose > 0 ? verbose -1 : 0);
+  //int tv = (verbose > 0 ? verbose -1 : 0);
   
   //get the traps at the vertices
   for (int i=0; i<nL; ++i) {
@@ -361,7 +379,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
     z = loop[i]; az = abs(z);
     w = z; aw = az;
     double epsilon;
-    if (!find_trap(&epsilon, tv)) {
+    if (!find_trap(max_uv_depth, max_n_depth, max_pixels, &epsilon, verbose)) {
       if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
       return false;
     }
@@ -372,7 +390,8 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
   //for each interval, go along it, placing the center of the 
   //next trap at exactly the edge of the previous one
   int rcol = X.get_rgb_color(1,0,0);
-  double pixel_radius = double(drawing_radius)/wind;
+  double pixel_width = wind/double(drawing_width);
+  if (verbose>0) std::cout << "Pixel width: " << pixel_width << "\n";
   for (int i=0; i<nL; ++i) {
     //vector of length 1 pointing along the path
     cpx d = trap_list[(i+1)%nL][0].first - trap_list[i][0].first;
@@ -394,14 +413,15 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
       //run it
       trap_list[i].resize(trap_list[i].size()+1);
       trap_list[i].back().first = z;
-      if (!find_trap(&trap_list[i].back().second, tv)) {
+      if (!find_trap(max_uv_depth, max_n_depth, max_pixels, &trap_list[i].back().second, verbose)) {
         if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
         return false;
       }
       //display it
       if (draw_it) {
         Point2d<int> p = cpx_to_point_mandlebrot(z);
-        double r = trap_list[i].back().second / pixel_radius;
+        double r = trap_list[i].back().second / pixel_width;
+        if (r<2) r = 2;
         X.draw_disk(p,r,rcol);
       }
       if (verbose>0) {
