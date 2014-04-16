@@ -13,6 +13,7 @@ struct Trap {
 bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls, 
                                 int max_refinements,
                                 int max_pixels,
+                                double* minimum_trap_distance,
                                 int verbose) {
   
   
@@ -113,7 +114,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
       }
       Ball b = balls[TG.grid[p.x][p.y].closest_z_ball];
       Ball b2 = b;
-      for (int k=0; k<3; ++k) {
+      for (int k=0; k<5; ++k) {
         b = act_on_right(0,b);
         b2 = act_on_right(1,b2);
       }
@@ -135,7 +136,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
       }
       Ball b = balls[TG.grid[p.x][p.y].closest_w_ball];
       Ball b2 = b;
-      for (int k=0; k<3; ++k) {
+      for (int k=0; k<5; ++k) {
         b = act_on_right(0,b);
         b2 = act_on_right(1,b2);
       }
@@ -191,7 +192,24 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
         std::cout << "Found four disjoint balls!\n";
         TG.show(NULL, &trap_balls, NULL, NULL);
       }
-      //std::cout << "yes!\n";
+      //find the minimum trap distance
+      //this will take some time, but I guess it's worth it?
+      *minimum_trap_distance = 100;
+      for (int i=0; i<4; ++i) {
+        cpx ci = trap_balls[i].center;
+        double ri = trap_balls[i].radius;
+        for (int j=0; j<(int)balls.size(); ++j) {
+          //if the last gen index is *equal* to the component index, 
+          //then we don't want to compare -- we want to compare to the other comp
+          if (balls[j].last_gen_index() == ic[0][i].x) continue;
+          double bd = abs(ci - balls[j].center)-ri;
+          if (bd < *minimum_trap_distance) {
+            //std::cout << "Trap ball at " << ci << " new closest ball at " << balls[j].center << "\n";
+            *minimum_trap_distance = bd;
+          }
+        }
+      }
+          
       return true;
     }
     
@@ -327,7 +345,14 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double* e
     //I think we're not going to refine
     int max_refinements = 0; //
     
-    bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, (verbose>0 ? verbose-1 : verbose));
+    //this returns the minimum distance between the trap
+    //points and the other *centers*
+    double min_trap_dist;
+    
+    bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, &min_trap_dist, (verbose>0 ? verbose-1 : verbose));
+    if (verbose>0) {
+      std::cout << "Got trap at " << z << " with min trap dist " << min_trap_dist << "\n";
+    }
     
     if (got_trap) {
       if (epsilon != NULL) *epsilon = 0.0005; //pow(az, current_uv_depth + current_n_depth);

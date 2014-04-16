@@ -109,6 +109,7 @@ class ifs{
 		bool find_trap_given_balls(const std::vector<Ball>& initial_balls, 
                                            int max_refinements,
                                            int max_pixels,
+                                           double* minimum_trap_distance,
                                            int verbose);
 		bool find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double* epsilon, int verbose=0);
 		bool find_traps_along_loop(const std::vector<cpx>& loop, 
