@@ -139,6 +139,7 @@ void ifs::draw_limit_set(){
 	X.draw_dot(cpx_to_point(1.0-w),0x00FF00);	// 1-w
 	X.draw_dot(cpx_to_point(0.0),0xBDB76B);	// 0
 	X.draw_dot(cpx_to_point(1.0),0xBDB76B);	// 1
+        X.draw_dot(cpx_to_point(0.5),0xBDB76B); // 1
 };
 
 void ifs::zoom(const Point2d<int>& p){
@@ -206,6 +207,10 @@ void ifs::draw_mandelbrot_set(){
 	X.draw_text(p,T,0x000000);
 	T.str("");
 	p.y-=20;
+        T << "toggle contains 1/2 with [p]";
+        X.draw_text(p,T,0);
+        T.str("");
+        p.y-=20;     
 	if (draw_trap_mode) {
 	  T << "Trap mode enabled (toggle with [t])";
 	} else {
@@ -223,6 +228,7 @@ void ifs::draw_mandelbrot_set(){
 	T.str("");	
 	
 	int rcol = X.get_rgb_color(1,0,0);
+        int gcol = X.get_rgb_color(0,1,0);
 	
 	for(i=0; i<drawing_width; i=i+mesh){
 		for(j=0; j<drawing_width; j=j+mesh){
@@ -244,11 +250,16 @@ void ifs::draw_mandelbrot_set(){
 				X.draw_box(q,mesh,0x000000);
 			} else { // if(abs(z)>0.5){
 				if(circ_connected()){
+                                  int temp_e_depth = exit_depth;
 				  if (draw_trap_mode && find_trap(int((3.0/2.0)*depth), depth, 512, NULL, 0)) {
-				    X.draw_box(q,mesh,rcol);
+                                          X.draw_box(q,mesh,rcol);
 				  } else {
-					  X.draw_box(q,mesh,0x000001*exit_depth);
-					}
+                                    if (draw_contains_half && contains_point(0.5, depth)) {
+                                      X.draw_box(q, mesh, gcol*exit_depth);
+                                    } else {
+                                      X.draw_box(q,mesh,0x000001*temp_e_depth);
+                                    }
+                                  }
 				} else if (disconnection_depth) {
 					X.draw_box(q,mesh,0x010000*exit_depth);
 				}

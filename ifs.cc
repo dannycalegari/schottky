@@ -75,6 +75,7 @@ void ifs::initialize(cpx a, cpx b, int width, int mode){
 	color_ifs=true;
 	chunky_ifs=false;
 	disconnection_depth=false;
+        draw_contains_half = false;
 	draw_trap_mode = false;
 	step=0.01;	// size of adjustments to z and w
 	seed=0.0;	// initial seed point for IFS

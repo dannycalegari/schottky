@@ -138,6 +138,10 @@ void ifs::user_interface() {
                     disconnection_depth = !disconnection_depth;
                     draw();
                     break;
+                } else if (XLookupKeysym(&report.xkey, 0) == XK_p) { //toggle drawing 1/2
+                    draw_contains_half = !draw_contains_half;
+                    draw();
+                    break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_t){ 
                     draw_trap_mode = !draw_trap_mode;
                     draw();

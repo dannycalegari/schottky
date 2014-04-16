@@ -86,6 +86,7 @@ class ifs{
 		int mesh;              // size of mesh in mandelbrot mode in pixels
 		int mode;              // draw mode: 0 for limit set, 1 for mandelbrot set
 		bool disconnection_depth; // whether to draw the depth for disconnected sets
+		bool draw_contains_half; //whether to color the points that contain 1/2
 		
 		void zoom(const Point2d<int>& p);
 		void draw_mandelbrot_set();
@@ -99,6 +100,8 @@ class ifs{
                 bool circles_intersect(cpx center_1, cpx z_img_1, cpx w_img_1, double R1,
                                        cpx center_2, cpx z_img_2, cpx w_img_2, double R2, int d);
 		bool circ_connected(double r=-1);                                        // circle algorithm to test for connectedness
+                bool contains_point(cpx pt, double r=-1);
+                bool contains_point_recurse(const cpx& pt, const Ball& b, int d);
 		
 		
 		//trap construction

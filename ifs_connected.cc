@@ -119,3 +119,44 @@ bool ifs::circ_connected(double r){ 	// circle algorithm to test for connectedne
 	return ans;
 }
 
+
+
+
+
+
+
+bool ifs::contains_point_recurse(const cpx& pt, const Ball& b, int d) {
+  if (abs(pt - b.center) > b.radius) {
+    return false;
+  }
+  if (d <= 0) return true;
+  Ball bz = act_on_right(0, b);
+  Ball bw = act_on_right(1, b);
+  ++exit_depth;
+  return (contains_point_recurse(pt, bz, d-1) || contains_point_recurse(pt, bw, d-1));
+}
+  
+
+
+
+
+
+bool ifs::contains_point(cpx pt, double r) {
+  double R;
+  if (r<0) {
+    R=max( abs(z-1.0)/(2.0*(1.0-az)), abs(w-1.0)/(2.0*(1.0-aw)) );
+  } else {
+    R = r;
+  }
+  exit_depth = 0;
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,R);
+  bool ans = contains_point_recurse(pt, initial_ball, depth);
+  return ans;
+}
+
+
+
+
+
+
+
