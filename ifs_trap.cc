@@ -407,7 +407,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
   
   //trap parameters
   int max_pixels = 1024;
-  int max_uv_depth = 18;
+  int max_uv_depth = 25;
   int max_n_depth = 20;
   
   
