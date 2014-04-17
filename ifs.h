@@ -115,7 +115,7 @@ class ifs{
                                            bool far_trap_points,
                                            double* minimum_trap_distance,
                                            int verbose);
-		bool find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_trap_points, double* epsilon, int verbose=0);
+		bool find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_trap_points, double Cz, double* epsilon, int verbose=0);
 		bool find_traps_along_loop(const std::vector<cpx>& loop, 
 		                           bool draw_it, 
 		                           int verbose);
