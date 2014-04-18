@@ -1166,6 +1166,7 @@ void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
       double draw_radius = (*b)[i].radius / real_pixel_width;
       //std::cout << "Drawing disk of radius " << (*b)[i].radius << " at " << (*b)[i].center << "\n";
       //std::cout << "In the drawing, at " << Point2d<int>(x,y) << " radius: " << draw_radius << "\n";
+      if (draw_radius<2) draw_radius=2;
       X2.draw_disk(Point2d<int>(x,y), draw_radius, bc);
     }
   }
