@@ -1,4 +1,6 @@
 #include <deque>
+#include <list>
+#include <cmath>
 
 #include "graphics.h"
 
@@ -268,12 +270,11 @@ void TrapGrid::compute_boundary(std::vector<Point3d<int> >& b) {
   int i = start_pixel.x;
   int j = start_pixel.y;
   if (grid[i][j].z_ball_status > 0 && grid[i][j].w_ball_status > 0) {
-      b.push_back(Point3d<int>(i,j,0));
-    } else if (grid[i][j].z_ball_status > 0) {
-      b.push_back(Point3d<int>(i,j, grid[i][j].w_distance));
-    } else {
-      b.push_back(Point3d<int>(i,j, -grid[i][j].z_distance));
-    }
+    b.push_back(Point3d<int>(i,j,0));
+  } else if (grid[i][j].z_ball_status > 0) {
+    b.push_back(Point3d<int>(i,j, grid[i][j].w_distance));
+  } else {
+    b.push_back(Point3d<int>(i,j, -grid[i][j].z_distance));
   }
   do {
     i = current_pixel.x;
@@ -302,10 +303,140 @@ void TrapGrid::compute_boundary(std::vector<Point3d<int> >& b) {
     
     
 
+bool TrapGrid::prune_boundary(const ifs& IFS, 
+                              const std::vector<Ball>& balls, 
+                              std::vector<Point3d<int> >& boundary,
+                              Ball trap_balls[]) {
+  //find a place where a different boundary starts
+  if (boundary.size() == 0) return false;
+  int first_gen_s = (boundary[0].z > 0 ? 1 : (boundary[0].z < 0 ? -1 : 0));
+  int i=0;
+  for (i=1; i<(int)boundary.size(); ++i) {
+    int s = (boundary[i].z > 0 ? 1 : (boundary[i].z < 0 ? -1 : 0));
+    if (s != first_gen_s) break;
+  }
+  if (i==(int)boundary.size()) return false;
+  
+  //so boundary[i:] + boundary[:i] begins on a junction
+  std::vector<Point3d<int> > bd(boundary.begin() + i, boundary.end());
+  bd.insert(bd.end(), boundary.begin(), boundary.begin()+i);
+  
+  //this list records the balls and stuff
+  typedef std::pair<Point3d<int>, Ball> PB;
+  std::list<PB> pruned_boundary(0);
+  std::list<PB>::iterator it;
+  std::list<PB>::iterator it2;
+  
+  //for each run, try to find a good disk
+  std::vector<bool> good_pixel(bd.size(), true);
+  i=0;
+  while (i < (int)bd.size()) {
+    if (bd[i].z == 0) { good_pixel[i] = false; continue; }//it'll get rid of it
+    int run_begin = i;
+    int run_s = (bd[i].z > 0 ? 1 : -1);
+    int run_end = run_begin+1;
+    while (run_end < (int)bd.size() && (bd[run_end].z > 0 ? 1 : -1) == run_s) 
+      ++run_end;
+    while (true) {
+      //find the one farthest
+      int max_dist_p = -1;
+      int max_dist = -1;
+      for (int j=run_begin; j<run_end; ++j) {
+        if (!good_pixel[j]) continue;
+        if (abs(bd[j].z) > max_dist) {
+          max_dist_p = j;
+          max_dist = abs(bd[j].z);
+        }
+      }
+      if (max_dist_p == -1) break;
+      //try to put a ball inside it
+      Ball temp_ball;
+      int ii = bd[max_dist_p].x; int jj = bd[max_dist_p].y;
+      if (put_ball_inside_pixel(IFS, 
+                                balls[grid[ii][jj].closest_z_ball], 
+                                Point2d<int>(ii,jj), 
+                                temp_ball)) {
+        pruned_boundary.push_back( std::make_pair( bd[max_dist_p], temp_ball ) );
+        break;
+      }
+      good_pixel[max_dist_p] = false; //didn't find a ball
+    }
+    i = run_end;
+  }
+  
+  //now we have the boundary list, but we want to iteratively 
+  //get rid of things that are redundant or small
+  while (true) {
+    it = pruned_boundary.begin();
+    it2 = pruned_boundary.end();
+    //rotate so it's correct again
+    while ((it->first.z > 0 ? 1 : -1) == (it2->first.z ? 1 : -1)) {
+      pruned_boundary.insert(it, pruned_boundary.back());
+      pruned_boundary.pop_back();
+      --it;
+      it2 = pruned_boundary.end();
+    }
+    
+    //first get rid of anything which is next to something similar
+    //(prefer the one that is farther away)
+    while (it != pruned_boundary.end()) {
+      it2 = it; ++it2;
+      if (it2 == pruned_boundary.end()) break;
+      if ((it->first.z > 0 ? 1 : -1) != (it2->first.z > 0 ? 1 : -1)) {
+        ++it; 
+        continue;
+      }
+      int ait = abs(it->first.z);
+      int ait2 = abs(it2->first.z);
+      if (ait >= ait2) {
+        (void)pruned_boundary.erase(it2);
+      } else  {
+        it = pruned_boundary.erase(it);
+        if (it != pruned_boundary.begin()) --it;
+      }
+    }
+    
+    //if there's <= 4 things, we're almost done
+    if ((int)pruned_boundary.size() <= 4) break;
+    
+    //otherwise, find the smallest (closest), and take it away
+    it = pruned_boundary.begin();
+    int min_dist = 100;
+    while (it != pruned_boundary.end()) {
+      if (abs(it->first.z) < min_dist) {
+        min_dist = abs(it->first.z);
+        it2 = it;
+      }
+      ++it;
+    }
+    pruned_boundary.erase(it2);
+  }
+  
+  if ((int)pruned_boundary.size() < 4) return false;
+  //make these the trap balls and return true
+  it = pruned_boundary.begin();
+  for (i=0; i<4; ++i) {
+    trap_balls[i] =it->second;
+    ++it;
+  }
+  
+  //copy back to the boundary
+  boundary.resize(0);
+  it = pruned_boundary.begin();
+  for (i=0; i<4; ++i) {
+    boundary.push_back(it->first);
+    ++it;
+  }
+  return true;   
+}
 
 
-
-
+bool TrapGrid::put_ball_inside_pixel(const ifs& IFS, 
+                                     const Ball& initial_ball, 
+                                     const Point2d<int>& p, 
+                                     Ball& b) {
+  return true;
+}
 
 
 
@@ -1230,6 +1361,20 @@ void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
       }
     }
   }
+  if (boundary != NULL) {
+    int bcol = X2.get_rgb_color(0.2,0.2,1);
+    int gcol = X2.get_rgb_color(0.2,1,0.2);
+    int rcol = X2.get_rgb_color(1,0.2,0.2);
+    for (int i=0; i<(int)boundary->size(); ++i) {
+      p.x = (*boundary)[i].x;
+      p.y = (*boundary)[i].y;
+      if (pixel_group_width>1) {
+        X2.draw_box(p,pixel_group_width, ((*boundary)[i].z > 0 ? bcol : ((*boundary)[i].z < 0 ? gcol : rcol)));
+      } else {
+        X2.draw_point(p,((*boundary)[i].z > 0 ? bcol : ((*boundary)[i].z < 0 ? gcol : rcol)));
+      }
+    }
+  }   
   int bc = X2.get_rgb_color(0,0,0);
   if (b != NULL) {
     //now draw the balls

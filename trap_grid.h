@@ -92,6 +92,14 @@ struct TrapGrid {
                              Point2d<int>& ll, 
                              Point2d<int>& ur);
   void show_distance_functions();
+  bool prune_boundary(const ifs& IFS, 
+                      const std::vector<Ball>& balls, 
+                      std::vector<Point3d<int> >& boundary,
+                      Ball trap_balls[]);
+  bool put_ball_inside_pixel(const ifs& IFS, 
+                             const Ball& initial_ball, 
+                             const Point2d<int>& p, 
+                             Ball& b);
 };
 
 

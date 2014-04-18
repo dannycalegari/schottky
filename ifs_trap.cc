@@ -62,8 +62,8 @@ bool ifs::find_trap_given_balls_old(const std::vector<Ball>& initial_balls,
   
     //show what it looks like
     if (verbose>0) {
-      TG.show(NULL, NULL, NULL, NULL);
-      if (verbose>1) TG.show(NULL, &balls, NULL, NULL);
+      TG.show(NULL, NULL, NULL, NULL, NULL);
+      if (verbose>1) TG.show(NULL, NULL, &balls, NULL, NULL);
     }
         
     //find the connected components
@@ -201,7 +201,7 @@ bool ifs::find_trap_given_balls_old(const std::vector<Ball>& initial_balls,
       trap_balls[3] = good_balls[ic[0][3].x][ic[0][3].z];
       if (verbose>0) {
         std::cout << "Found four disjoint balls!\n";
-        TG.show(NULL, &trap_balls, NULL, NULL);
+        TG.show(NULL, NULL, &trap_balls, NULL, NULL);
       }
       //find the minimum trap distance
       //this will take some time, but I guess it's worth it?
@@ -271,7 +271,7 @@ bool ifs::find_trap_given_balls_old(const std::vector<Ball>& initial_balls,
     
     if (verbose>0) {
       std::cout << "New box: " << new_ll << "-" << new_ur << "\n";
-      TG.show(NULL,NULL,&new_ll, &new_ur);
+      TG.show(NULL,NULL,NULL,&new_ll, &new_ur);
     }
     
     //might as well refine the depth -- compute the balls which fit into
@@ -308,6 +308,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& balls,
   if (balls.size() == 0) return false;
   
   //find the ball extents
+  cpx ll, ur;
   box_containing_balls(balls, ll, ur);  
   if (verbose>0) std::cout << "Grid: " << ll << " " << ur << "\n";
   
@@ -340,6 +341,20 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& balls,
   //the boundary is a list of 3 tuples (i,j), (distance from w if z, -distance from z if w, and 0 if intersection)
   std::vector<Point3d<int> > boundary(0);
   TG.compute_boundary(boundary);
+  
+  if (verbose>0) {
+    std::cout << "Boundary: ";
+    for (int i=0; i<(int)boundary.size(); ++i) {
+      std::cout << boundary[i] << " ";
+    }
+    std::cout << "\n";
+    TG.show(NULL, &boundary, NULL, NULL, NULL);
+  }
+  
+  //prune the boundary and find trap balls
+  Ball trap_balls[4];
+  TG.prune_boundary(*this, balls, boundary, trap_balls);
+  
 } 
 
 
@@ -419,7 +434,7 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_
     //points and the other *centers*
     double min_trap_dist;
     
-    bool got_trap = find_trap_given_balls(balls, max_refinements, max_pixels, far_trap_points, &min_trap_dist, (verbose>0 ? verbose-1 : verbose));
+    bool got_trap = find_trap_given_balls(balls, max_pixels, &min_trap_dist, (verbose>0 ? verbose-1 : verbose));
     if (verbose>0) {
       if (got_trap) {
         std::cout << "Got trap at " << z << " with min trap dist " << min_trap_dist << "\n";
