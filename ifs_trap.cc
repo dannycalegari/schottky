@@ -356,15 +356,17 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_
     //std::cout << "initial radius is infinite\n";
     return false;
   }
-  //make sure it's connected at the minimal radius
+  //make sure it's connected at the minimal possible radius
   if (verbose>0) std::cout << "Checking connectedness with minimal initial radius of " << min_initial_radius << "\n";
+  int old_depth = depth;
+  depth = max_uv_depth+max_n_depth+2;
   if (!circ_connected(min_initial_radius)) {
     if (verbose>0) {
       std::cout << "Not even connected\n";
     }
     return false;
   }
-  
+  depth = old_depth;
   
   double ratio_goal = 0.05;
   double ratio_lower_limit = 0.01;
@@ -477,6 +479,16 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
   std::vector<std::vector<std::pair<cpx,double> > > trap_list(loop.size());
   
   //int tv = (verbose > 0 ? verbose -1 : 0);
+  double Cz = 0;
+  for (int i=0; i<(int)loop.size(); ++i) {
+    if (1.0/(1.0-abs(loop[i])) > Cz) {
+      Cz = 1.0/(1.0-abs(loop[i]));
+    }
+  }
+  if (verbose>0) {
+    std::cout << "Found Cz = " << Cz << "\n";
+  }
+  
   
   //get the traps at the vertices
   for (int i=0; i<nL; ++i) {
@@ -535,7 +547,12 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
       }
     }
   }
-  if (verbose>0) std::cout << "Loop certified!\n";
+  if (verbose>0) {
+    std::cout << "Loop certified:\n";
+    for (int i=0; i<nL; ++i) {
+      std::cout << i << ": " << loop[i] << "\n";
+    }
+  }
   return true;
     
   
