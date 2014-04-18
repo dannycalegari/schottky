@@ -79,10 +79,12 @@ struct TrapGrid {
                                    const std::vector<int>& good_components_z,
                                    const std::vector<int>& good_components_w,
                                    bool far_trap_points);
+  void compute_boundary(std::vector<Point3d<int> >& b);
   void compute_distances();
   Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp);
   bool disjoint_from_z_or_w(const Ball& b, int z_or_w);
   void show(std::vector<Point2d<int> >* marked_points,
+            std::vector<Point3d<int> >* boundary_points,
             std::vector<Ball>* b,
             cpx* box_ll, cpx* box_ur);
   void show_connected_components();

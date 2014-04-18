@@ -171,6 +171,150 @@ void TrapGrid::fill_pixels(const std::vector<Ball>& balls) {
 }
 
 
+//populate the z_distance and w_distance on the pixels
+//here it is distance to a pixel which is just touched by w or z
+//this sets the appropriate pixels to have distance 0 and then
+//does a breadth-first search (it's important that it's breadth-first)
+void TrapGrid::compute_distances() {
+  std::deque<Point2d<int> > z_stack(0);
+  std::deque<Point2d<int> > w_stack(0);
+  //clear the distances
+  for (int i=0; i<num_pixels; ++i) {
+    for (int j=0; j<num_pixels; ++j) {
+      grid[i][j].z_distance = grid[i][j].w_distance = -1;
+    }
+  }
+  //initialize the ones of length 0
+  for (int i=0; i<num_pixels; ++i) {
+    for (int j=0; j<num_pixels; ++j) {
+      if (grid[i][j].z_ball_status > 0) {
+        grid[i][j].z_distance = 0;
+        z_stack.push_front(Point2d<int>(i,j));
+      }
+      if (grid[i][j].w_ball_status > 0) {
+        grid[i][j].w_distance = 0;
+        w_stack.push_front(Point2d<int>(i,j));
+      }
+    }
+  }
+  //now do the stacks; if we encounter anything new, set its length
+  //to be 1+ours and push it on the stack
+  while (z_stack.size() > 0) {
+    Point2d<int> p = z_stack.back();
+    z_stack.pop_back();
+    if (p.y > 0 && grid[p.x][p.y-1].z_distance == -1) {
+      grid[p.x][p.y-1].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x, p.y-1));
+    }
+    if (p.x < num_pixels-1 && grid[p.x+1][p.y].z_distance == -1) {
+      grid[p.x+1][p.y].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x+1, p.y));
+    }
+    if (p.y < num_pixels-1 && grid[p.x][p.y+1].z_distance == -1) {
+      grid[p.x][p.y+1].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x, p.y+1));
+    }
+    if (p.x > 0 && grid[p.x-1][p.y].z_distance == -1) {
+      grid[p.x-1][p.y].z_distance = grid[p.x][p.y].z_distance + 1;
+      z_stack.push_front(Point2d<int>(p.x-1, p.y));
+    }
+  }
+  while (w_stack.size() > 0) {
+    Point2d<int> p = w_stack.back();
+    w_stack.pop_back();
+    if (p.y > 0 && grid[p.x][p.y-1].w_distance == -1) {
+      grid[p.x][p.y-1].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x, p.y-1));
+    }
+    if (p.x < num_pixels-1 && grid[p.x+1][p.y].w_distance == -1) {
+      grid[p.x+1][p.y].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x+1, p.y));
+    }
+    if (p.y < num_pixels-1 && grid[p.x][p.y+1].w_distance == -1) {
+      grid[p.x][p.y+1].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x, p.y+1));
+    }
+    if (p.x > 0 && grid[p.x-1][p.y].w_distance == -1) {
+      grid[p.x-1][p.y].w_distance = grid[p.x][p.y].w_distance + 1;
+      w_stack.push_front(Point2d<int>(p.x-1, p.y));
+    }
+  }
+        
+    
+}
+
+
+
+void TrapGrid::compute_boundary(std::vector<Point3d<int> >& b) {
+  b.resize(0);
+  Point2d<int> start_pixel;
+  int start_direction = 0;
+  Point2d<int> current_pixel;
+  int current_direction = 0;    //we come from the bottom; 0,1,2,3 goes ccw around starting at the bottom
+  int offset_i[4] = {0,1,0,-1}; // this is the offset to i in a given direction
+  int offset_j[4] = {-1,0,1,0}; // this is the offset to j
+  //find some place to start
+  for (int i=0; i<num_pixels; ++i) {
+    for (int j=0; j<num_pixels; ++j) {
+      if (grid[i][j].z_ball_status > 0 || grid[i][j].w_ball_status > 0) {
+        start_pixel = current_pixel = Point2d<int>(i,j);
+        goto DOUBLEBREAK;
+      }
+    }
+  }
+  return;      //if we didn't find any pixels, there is no boundary
+  DOUBLEBREAK: //sorry
+  //push the first one on to the boundary
+  int i = start_pixel.x;
+  int j = start_pixel.y;
+  if (grid[i][j].z_ball_status > 0 && grid[i][j].w_ball_status > 0) {
+      b.push_back(Point3d<int>(i,j,0));
+    } else if (grid[i][j].z_ball_status > 0) {
+      b.push_back(Point3d<int>(i,j, grid[i][j].w_distance));
+    } else {
+      b.push_back(Point3d<int>(i,j, -grid[i][j].z_distance));
+    }
+  }
+  do {
+    i = current_pixel.x;
+    j = current_pixel.y;
+    int ii = offset_i[current_direction];
+    int jj = offset_j[current_direction];
+    //find the next pixel
+    if (ii < 0 || ii >= num_pixels || jj < 0 || jj >= num_pixels) continue;
+    if (grid[ii][jj].z_ball_status == 0 && grid[ii][jj].w_ball_status == 0) {
+      current_direction = (current_direction + 1)%4;
+      continue;
+    }
+    //push the next pixel on to the boundary
+    if (grid[ii][jj].z_ball_status > 0 && grid[ii][jj].w_ball_status > 0) {
+      b.push_back(Point3d<int>(ii,jj,0));
+    } else if (grid[ii][jj].z_ball_status > 0) {
+      b.push_back(Point3d<int>(ii,jj, grid[ii][jj].w_distance));
+    } else {
+      b.push_back(Point3d<int>(ii,jj, -grid[ii][jj].z_distance));
+    }
+    //and move to it
+    current_pixel.x = ii; current_pixel.y = jj;
+    current_direction = (current_direction + 3)%4;  //-1 mod 4
+  } while (current_pixel != start_pixel || current_direction != start_direction);
+}
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //decide if the ball b is disjoint from z or w pixels
 //unfortunately, this seems like it needs to be just as complicated 
@@ -866,77 +1010,7 @@ bool TrapGrid::find_interleaved_components(std::vector<std::vector<Point3d<int> 
 }
 
 
-//populate the z_distance and w_distance on the pixels
-//here it is distance to a pixel which is just touched by w or z
-//this sets the appropriate pixels to have distance 0 and then
-//does a breadth-first search (it's important that it's breadth-first)
-void TrapGrid::compute_distances() {
-  std::deque<Point2d<int> > z_stack(0);
-  std::deque<Point2d<int> > w_stack(0);
-  //clear the distances
-  for (int i=0; i<num_pixels; ++i) {
-    for (int j=0; j<num_pixels; ++j) {
-      grid[i][j].z_distance = grid[i][j].w_distance = -1;
-    }
-  }
-  //initialize the ones of length 0
-  for (int i=0; i<num_pixels; ++i) {
-    for (int j=0; j<num_pixels; ++j) {
-      if (grid[i][j].z_ball_status > 0) {
-        grid[i][j].z_distance = 0;
-        z_stack.push_front(Point2d<int>(i,j));
-      }
-      if (grid[i][j].w_ball_status > 0) {
-        grid[i][j].w_distance = 0;
-        w_stack.push_front(Point2d<int>(i,j));
-      }
-    }
-  }
-  //now do the stacks; if we encounter anything new, set its length
-  //to be 1+ours and push it on the stack
-  while (z_stack.size() > 0) {
-    Point2d<int> p = z_stack.back();
-    z_stack.pop_back();
-    if (p.y > 0 && grid[p.x][p.y-1].z_distance == -1) {
-      grid[p.x][p.y-1].z_distance = grid[p.x][p.y].z_distance + 1;
-      z_stack.push_front(Point2d<int>(p.x, p.y-1));
-    }
-    if (p.x < num_pixels-1 && grid[p.x+1][p.y].z_distance == -1) {
-      grid[p.x+1][p.y].z_distance = grid[p.x][p.y].z_distance + 1;
-      z_stack.push_front(Point2d<int>(p.x+1, p.y));
-    }
-    if (p.y < num_pixels-1 && grid[p.x][p.y+1].z_distance == -1) {
-      grid[p.x][p.y+1].z_distance = grid[p.x][p.y].z_distance + 1;
-      z_stack.push_front(Point2d<int>(p.x, p.y+1));
-    }
-    if (p.x > 0 && grid[p.x-1][p.y].z_distance == -1) {
-      grid[p.x-1][p.y].z_distance = grid[p.x][p.y].z_distance + 1;
-      z_stack.push_front(Point2d<int>(p.x-1, p.y));
-    }
-  }
-  while (w_stack.size() > 0) {
-    Point2d<int> p = w_stack.back();
-    w_stack.pop_back();
-    if (p.y > 0 && grid[p.x][p.y-1].w_distance == -1) {
-      grid[p.x][p.y-1].w_distance = grid[p.x][p.y].w_distance + 1;
-      w_stack.push_front(Point2d<int>(p.x, p.y-1));
-    }
-    if (p.x < num_pixels-1 && grid[p.x+1][p.y].w_distance == -1) {
-      grid[p.x+1][p.y].w_distance = grid[p.x][p.y].w_distance + 1;
-      w_stack.push_front(Point2d<int>(p.x+1, p.y));
-    }
-    if (p.y < num_pixels-1 && grid[p.x][p.y+1].w_distance == -1) {
-      grid[p.x][p.y+1].w_distance = grid[p.x][p.y].w_distance + 1;
-      w_stack.push_front(Point2d<int>(p.x, p.y+1));
-    }
-    if (p.x > 0 && grid[p.x-1][p.y].w_distance == -1) {
-      grid[p.x-1][p.y].w_distance = grid[p.x][p.y].w_distance + 1;
-      w_stack.push_front(Point2d<int>(p.x-1, p.y));
-    }
-  }
-        
-    
-}
+
 
 //compute_distances must have already been called.  This finds 
 //the point in a z_cut_by_w component (or vice versa) which 
@@ -1095,6 +1169,7 @@ void TrapGrid::show_connected_components() {
 
 
 void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
+                    std::vector<Point3d<int> >* boundary,
                     std::vector<Ball>* b, 
                     cpx* box_ll,
                     cpx* box_ur) {

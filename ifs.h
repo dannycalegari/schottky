@@ -109,7 +109,7 @@ class ifs{
 		int trap_depth;           //maximal depth to look for traps
 		//Trap current_trap;        //the last trap we created
 		
-		bool find_trap_given_balls(const std::vector<Ball>& initial_balls, 
+		bool find_trap_given_balls_old(const std::vector<Ball>& initial_balls, 
                                            int max_refinements,
                                            int max_pixels,
                                            bool far_trap_points,

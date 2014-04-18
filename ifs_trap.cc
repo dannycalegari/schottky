@@ -10,7 +10,7 @@ struct Trap {
 
 
 
-bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls, 
+bool ifs::find_trap_given_balls_old(const std::vector<Ball>& initial_balls, 
                                 int max_refinements,
                                 int max_pixels,
                                 bool far_trap_points,
@@ -287,6 +287,60 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& initial_balls,
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+bool ifs::find_trap_given_balls(const std::vector<Ball>& balls,
+                                int max_pixels,
+                                double* min_trap_distance,
+                                int verbose) {
+  //if there are no balls, give up
+  if (balls.size() == 0) return false;
+  
+  //find the ball extents
+  box_containing_balls(balls, ll, ur);  
+  if (verbose>0) std::cout << "Grid: " << ll << " " << ur << "\n";
+  
+  //find the average radius
+  double av_radius = 0;
+  for (int i=0; i<(int)balls.size(); ++i) {
+    av_radius += balls[i].radius;
+  }
+  av_radius /= (double)balls.size();
+  if (verbose>0) std::cout << "Average radius: " << av_radius << "\n";
+  
+  //initialize the trap
+  TrapGrid TG;
+  
+  //the trap will cover all the balls, and it will have as many pixels 
+  //as it needs so that each ball contains a reasonable number of pixels
+  double desired_pixel_diameter = av_radius/3.0;
+  int np = int( ((ur.real() - ll.real())/desired_pixel_diameter) + 1);
+  if (verbose > 0) std::cout << "Desired pixel diameter: " << desired_pixel_diameter << "\nDesired pixels: " << np << "\n";
+  if (np > max_pixels) np = max_pixels;
+  TG.reset_grid(ll, ur, np);
+  
+  //fill the trap grid
+  TG.fill_pixels(balls); 
+  
+  //find the distance functions
+  TG.compute_distances();
+  
+  //compute the boundary
+  //the boundary is a list of 3 tuples (i,j), (distance from w if z, -distance from z if w, and 0 if intersection)
+  std::vector<Point3d<int> > boundary(0);
+  TG.compute_boundary(boundary);
+} 
 
 
 
