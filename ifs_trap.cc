@@ -325,7 +325,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& balls,
   
   //the trap will cover all the balls, and it will have as many pixels 
   //as it needs so that each ball contains a reasonable number of pixels
-  double desired_pixel_diameter = av_radius/3.0;
+  double desired_pixel_diameter = av_radius/2.5;
   int np = int( ((ur.real() - ll.real())/desired_pixel_diameter) + 1);
   if (verbose > 0) std::cout << "Desired pixel diameter: " << desired_pixel_diameter << "\nDesired pixels: " << np << "\n";
   if (np > max_pixels) np = max_pixels;
@@ -342,6 +342,11 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& balls,
   std::vector<Point3d<int> > boundary(0);
   TG.compute_boundary(boundary);
   
+  //compute the good pixels (anything on the boundary is good, 
+  //and anything completely contained inside only one of z or w is good 
+  TG.compute_good_pixels(boundary);
+  
+  
   if (verbose>0) {
     std::cout << "Boundary: ";
     for (int i=0; i<(int)boundary.size(); ++i) {
@@ -352,9 +357,40 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& balls,
   }
   
   //prune the boundary and find trap balls
-  Ball trap_balls[4];
-  TG.prune_boundary(*this, balls, boundary, trap_balls);
+  std::vector<Ball> trap_balls(4);
+  if (!TG.prune_boundary(*this, balls, boundary, trap_balls)) {
+    if (verbose>0) {
+      std::cout << "No interleaved components\n";
+    }
+    return false;
+  }
+  if (verbose>0) {
+    std::cout << "Found interleaved components and trap balls:\n";
+    for (int i=0; i<4; ++i) {
+      std::cout << boundary[i] << " " << trap_balls[i] << "\n";
+    }
+    TG.show(NULL,NULL,&trap_balls,NULL,NULL);
+  }
   
+  //find how far the balls are from the other component
+  //(but only if we care)
+  if (min_trap_distance == NULL) return true;
+  *min_trap_distance = 10000;
+  for (int i=0; i<4; ++i) {
+    cpx ci = trap_balls[i].center;
+    double ri = trap_balls[i].radius;
+    int other_gen = 1 - trap_balls[i].last_gen_index();
+    for (int j=0; j<(int)balls.size(); ++j) {
+      if (balls[j].last_gen_index() != other_gen) continue;
+      double d = abs(ci - balls[j].center) - ri;
+      if (d < *min_trap_distance) {
+        //std::cout << "New minimum distance of " << d << " between balls " << trap_balls[i] << " and " << balls[j] << "\n";
+        *min_trap_distance = d;
+      }
+    }
+  }
+  if (verbose>0) std::cout << "Found minimum trap distance of " << *min_trap_distance << "\n";
+  return true;
 } 
 
 
@@ -427,9 +463,6 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_
     balls.swap(ZB);
     balls.insert(balls.end(), WB.begin(), WB.end());
     
-    //I think we're not going to refine
-    int max_refinements = 0; //
-    
     //this returns the minimum distance between the trap
     //points and the other *centers*
     double min_trap_dist;
@@ -446,7 +479,7 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_
     if (got_trap) {
       double ball_radius = balls[0].radius;
       double dr = min_trap_dist; //this is the largest radius we could have at this point, which we define as dr
-      double r = pow(az, current_n_depth + current_uv_depth);
+      double r = pow(az, current_n_depth + current_uv_depth)*min_initial_radius;
       double d = dr/r;
       double e = (1.0/Cz)*0.25*r*(d-p);
       if (verbose>0) {

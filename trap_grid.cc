@@ -1,6 +1,7 @@
 #include <deque>
 #include <list>
 #include <cmath>
+#include <cstdlib>
 
 #include "graphics.h"
 
@@ -46,6 +47,7 @@ void TrapGrid::reset_grid(cpx ll, cpx ur, int np) {
       grid[i][j].w_ball_status = 0;
       grid[i][j].closest_w_ball = -1;
       grid[i][j].w_ball_distance = -1;
+      grid[i][j].good_pixel = -1;
     }
   }
 }
@@ -279,12 +281,12 @@ void TrapGrid::compute_boundary(std::vector<Point3d<int> >& b) {
   do {
     i = current_pixel.x;
     j = current_pixel.y;
-    int ii = offset_i[current_direction];
-    int jj = offset_j[current_direction];
+    int ii = i + offset_i[current_direction];
+    int jj = j + offset_j[current_direction];
     //find the next pixel
-    if (ii < 0 || ii >= num_pixels || jj < 0 || jj >= num_pixels) continue;
-    if (grid[ii][jj].z_ball_status == 0 && grid[ii][jj].w_ball_status == 0) {
-      current_direction = (current_direction + 1)%4;
+    if (ii < 0 || ii >= num_pixels || jj < 0 || jj >= num_pixels ||
+        (grid[ii][jj].z_ball_status == 0 && grid[ii][jj].w_ball_status == 0)) {
+      current_direction = (current_direction+1)%4;
       continue;
     }
     //push the next pixel on to the boundary
@@ -301,12 +303,20 @@ void TrapGrid::compute_boundary(std::vector<Point3d<int> >& b) {
   } while (current_pixel != start_pixel || current_direction != start_direction);
 }
     
+
+    
+    
+    
+int sgn(int x) {
+  return (x > 0 ? 1 : (x < 0 ? -1 : 0));
+}
+    
     
 
 bool TrapGrid::prune_boundary(const ifs& IFS, 
                               const std::vector<Ball>& balls, 
                               std::vector<Point3d<int> >& boundary,
-                              Ball trap_balls[]) {
+                              std::vector<Ball>& trap_balls) {
   //find a place where a different boundary starts
   if (boundary.size() == 0) return false;
   int first_gen_s = (boundary[0].z > 0 ? 1 : (boundary[0].z < 0 ? -1 : 0));
@@ -331,11 +341,15 @@ bool TrapGrid::prune_boundary(const ifs& IFS,
   std::vector<bool> good_pixel(bd.size(), true);
   i=0;
   while (i < (int)bd.size()) {
-    if (bd[i].z == 0) { good_pixel[i] = false; continue; }//it'll get rid of it
+    if (bd[i].z == 0) {  //get rid of intersections
+      good_pixel[i] = false; 
+      ++i;
+      continue;
+    }
     int run_begin = i;
-    int run_s = (bd[i].z > 0 ? 1 : -1);
+    int run_s = sgn(bd[i].z);
     int run_end = run_begin+1;
-    while (run_end < (int)bd.size() && (bd[run_end].z > 0 ? 1 : -1) == run_s) 
+    while (run_end < (int)bd.size() && sgn(bd[run_end].z) == run_s) 
       ++run_end;
     while (true) {
       //find the one farthest
@@ -352,10 +366,12 @@ bool TrapGrid::prune_boundary(const ifs& IFS,
       //try to put a ball inside it
       Ball temp_ball;
       int ii = bd[max_dist_p].x; int jj = bd[max_dist_p].y;
-      if (put_ball_inside_pixel(IFS, 
-                                balls[grid[ii][jj].closest_z_ball], 
-                                Point2d<int>(ii,jj), 
-                                temp_ball)) {
+      Ball to_put_inside = (bd[max_dist_p].z > 0 ? balls[grid[ii][jj].closest_z_ball] 
+                                                 : balls[grid[ii][jj].closest_w_ball]);
+      if (put_ball_inside_good_pixel(IFS, 
+                                     to_put_inside, 
+                                     (bd[max_dist_p].z > 0 ? 0 : 1), 
+                                     temp_ball)) {
         pruned_boundary.push_back( std::make_pair( bd[max_dist_p], temp_ball ) );
         break;
       }
@@ -364,21 +380,52 @@ bool TrapGrid::prune_boundary(const ifs& IFS,
     i = run_end;
   }
   
+  //std::cout << "Found good boundary: \n";
+  //it = pruned_boundary.begin();
+  //while (it != pruned_boundary.end()) {
+  //  std::cout << it->first << " " << it->second << "\n";
+  //  ++it;
+  //}
+  
+  //make sure the boundary list has more than one component in it
+  bool saw_1 = false;
+  bool saw_0 = false;
+  it = pruned_boundary.begin();
+  while (it != pruned_boundary.end()) {
+    if (sgn(it->first.z) == 1) {
+      saw_0 = true;
+    } else {
+      saw_1 = true;
+    }
+    if (saw_0 && saw_1) break;
+    ++it;
+  }
+  if (!saw_0 || !saw_1) {
+    return false;
+  }
+  
   //now we have the boundary list, but we want to iteratively 
   //get rid of things that are redundant or small
   while (true) {
-    it = pruned_boundary.begin();
-    it2 = pruned_boundary.end();
-    //rotate so it's correct again
-    while ((it->first.z > 0 ? 1 : -1) == (it2->first.z ? 1 : -1)) {
-      pruned_boundary.insert(it, pruned_boundary.back());
-      pruned_boundary.pop_back();
-      --it;
-      it2 = pruned_boundary.end();
-    }
     
-    //first get rid of anything which is next to something similar
+    //first rotate so it the boundary is on a division
+    while ( sgn(pruned_boundary.front().first.z) == 
+            sgn(pruned_boundary.back().first.z) ) {
+      pruned_boundary.insert(pruned_boundary.end(), pruned_boundary.front());
+      (void)pruned_boundary.erase(pruned_boundary.begin());
+    }
+
+    //std::cout << "Rotated: \n";
+    //it = pruned_boundary.begin();
+    //while (it != pruned_boundary.end()) {
+    //  std::cout << it->first << " " << it->second << "\n";
+    //  ++it;
+    //}
+    
+    
+    //now get rid of anything which is next to something similar
     //(prefer the one that is farther away)
+    it = pruned_boundary.begin();
     while (it != pruned_boundary.end()) {
       it2 = it; ++it2;
       if (it2 == pruned_boundary.end()) break;
@@ -386,29 +433,38 @@ bool TrapGrid::prune_boundary(const ifs& IFS,
         ++it; 
         continue;
       }
-      int ait = abs(it->first.z);
-      int ait2 = abs(it2->first.z);
-      if (ait >= ait2) {
+      int dis = abs(it->first.z);
+      int dis2 = abs(it2->first.z);
+      if (dis >= dis2) {
         (void)pruned_boundary.erase(it2);
-      } else  {
+      } else {
         it = pruned_boundary.erase(it);
         if (it != pruned_boundary.begin()) --it;
       }
     }
     
+    //std::cout << "Got rid of similar stuff:\n";
+    //it = pruned_boundary.begin();
+    //while (it != pruned_boundary.end()) {
+    //  std::cout << it->first << " " << it->second << "\n";
+    //  ++it;
+    //}
+    
+    
     //if there's <= 4 things, we're almost done
     if ((int)pruned_boundary.size() <= 4) break;
     
-    //otherwise, find the smallest (closest), and take it away
+    //otherwise, find the smallest (closest to other balls), and take it away
     it = pruned_boundary.begin();
-    int min_dist = 100;
+    int min_dist = -1;
     while (it != pruned_boundary.end()) {
-      if (abs(it->first.z) < min_dist) {
+      if (min_dist<0 || abs(it->first.z) < min_dist) {
         min_dist = abs(it->first.z);
         it2 = it;
       }
       ++it;
     }
+    //std::cout << "Removing smallest entry " << it2->first << "\n";
     pruned_boundary.erase(it2);
   }
   
@@ -416,7 +472,7 @@ bool TrapGrid::prune_boundary(const ifs& IFS,
   //make these the trap balls and return true
   it = pruned_boundary.begin();
   for (i=0; i<4; ++i) {
-    trap_balls[i] =it->second;
+    trap_balls[i] = it->second;
     ++it;
   }
   
@@ -431,12 +487,140 @@ bool TrapGrid::prune_boundary(const ifs& IFS,
 }
 
 
-bool TrapGrid::put_ball_inside_pixel(const ifs& IFS, 
-                                     const Ball& initial_ball, 
-                                     const Point2d<int>& p, 
-                                     Ball& b) {
-  return true;
+//put a ball inside a pixel which is in the component z_or_w
+//it figures out the ball radius and must be contained in a pixel which is 
+//at least ball radius many away from the other component
+bool TrapGrid::put_ball_inside_good_pixel(const ifs& IFS, 
+                                          const Ball& initial_ball, 
+                                          int z_or_w, 
+                                          Ball& b) {
+  std::vector<Ball> bs(1,initial_ball);
+  Ball temp_ball;
+  Point2d<int> p;
+  while ((int)bs.size() > 0) {
+    temp_ball = bs.back();
+    bs.pop_back();
+    //where is the ball centered?
+    pixel_indices(p.x,p.y,temp_ball.center);
+    //is this a good pixel?
+    if ( z_or_w != grid[p.x][p.y].good_pixel ) {
+      continue;
+    }
+    if (ball_contained_in_pixel(temp_ball, p)) {
+      b = temp_ball;
+      return true;
+    }
+    //if it's not contained in it, but it is good, subdivide
+    bs.push_back(IFS.act_on_right(0, temp_ball));
+    bs.push_back(IFS.act_on_right(1, temp_ball));
+  }
+  return false;
 }
+
+bool TrapGrid::ball_touches_pixel(const Ball& b, const Point2d<int>& p) {
+  cpx bc = b.center;
+  double bx = bc.real();
+  double by = bc.imag();
+  double br = b.radius;
+  cpx pc = pixel_center(p.x,p.y);
+  double px = pc.real();
+  double py = pc.imag();
+  double pr = pixel_diameter/2.0;
+  if (bx > px+pr && by > py+pr) { //upper right
+    return abs(bc - cpx(px+pr,py+pr)) < br;
+  
+  } else if (bx < px-pr && by > py+pr) { //upper left
+    return abs(bc - cpx(px-pr,py+pr)) < br;
+  
+  } else if (bx < px-pr && by < py-pr) { //lower left
+    return abs(bc - cpx(px-pr, py-pr)) < br; 
+    
+  } else if (bx > px+pr && by < py-pr) { //lower right
+    return abs(bc - cpx(px+pr, py-pr)) < br;
+    
+  } else if (bx > px+pr) { //middle right
+    return bx-br < px+pr; 
+    
+  } else if (by > py+pr) { //middle top
+    return by-br < py+pr; 
+    
+  } else if (bx < px-pr) { //middle left
+    return bx+br > px-pr;
+    
+  } else if (by < py-pr) { //middle bottom
+    return by+br > py-pr;
+    
+  }
+  return true; //the ball's center is in the pixel
+}
+
+bool TrapGrid::ball_contained_in_pixel(const Ball& b, const Point2d<int>& p) {
+  cpx pc = pixel_center(p.x, p.y);
+  double pr = pixel_diameter/2.0;
+  cpx bc = b.center;
+  double br = b.radius;
+  return (bc.real() + br < pc.real() + pr) && 
+         (bc.real() - br > pc.real() - pr) &&
+         (bc.imag() + br < pc.imag() + pr) &&
+         (bc.imag() - br > pc.imag() - pr);
+}
+
+
+//anything on the boundary is good, and anything completely contained in only 
+//one component is good
+void TrapGrid::compute_good_pixels(const std::vector<Point3d<int> >& boundary) {
+  std::vector<Point2d<int> > stack(0);
+  //add in the boundary
+  for (int i=0; i<(int)boundary.size(); ++i) {
+    if (boundary[i].z != 0) {
+      grid[boundary[i].x][boundary[i].y].good_pixel = (boundary[i].z > 0 ? 0 : 1);
+      stack.push_back(Point2d<int>(boundary[i].x, boundary[i].y));
+    }
+  }
+  //now propogate
+  int i_offset[4] = {0,1,0,-1};
+  int j_offset[4] = {-1,0,1,0};
+  while ((int)stack.size() > 0) {
+    Point2d<int> current = stack.back();
+    stack.pop_back();
+    for (int i=0; i<4; ++i) {
+      int ii = current.x + i_offset[i];
+      if (ii<0 || ii>=num_pixels) continue;
+      int jj = current.y + j_offset[i];
+      if (jj<0 || jj>=num_pixels) continue;
+      if (grid[ii][jj].good_pixel != -1) continue;
+      
+      int current_goodness = grid[current.x][current.y].good_pixel;
+      if ( current_goodness==0 && 
+           grid[ii][jj].z_ball_status == 2 && 
+           grid[ii][jj].w_ball_status == 0 ) {
+        grid[ii][jj].good_pixel = 0;
+        stack.push_back(Point2d<int>(ii,jj)); 
+      
+      } else if (current_goodness==1 && 
+                 grid[ii][jj].z_ball_status==0 &&
+                 grid[ii][jj].w_ball_status==2) {
+        grid[ii][jj].good_pixel = 1;
+        stack.push_back(Point2d<int>(ii,jj));
+      }
+    }
+  }
+}
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1316,13 +1500,13 @@ void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
   XGraphics X2(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
   Point2d<int> p;
   int zt = X2.get_rgb_color(0,0,0.5);
-  int zc = X2.get_rgb_color(0,0,1);
+  int zc = X2.get_rgb_color(0,0,0.8);
   int wt = X2.get_rgb_color(0,0.5,0);
-  int wc = X2.get_rgb_color(0,1,0);
+  int wc = X2.get_rgb_color(0,0.8,0);
   int ztwt = X2.get_rgb_color(0.5,0,0);
   int ztwc = X2.get_rgb_color(0.5,0,0);
   int zcwt = X2.get_rgb_color(0.5,0,0);
-  int zcwc = X2.get_rgb_color(1,0,0);
+  int zcwc = X2.get_rgb_color(0.8,0,0);
   int whi = X2.get_rgb_color(1,1,1);
   for (int i=0; i<num_pixels; ++i) {
     p.x = pixel_group_width*i;
@@ -1362,12 +1546,12 @@ void TrapGrid::show(std::vector<Point2d<int> >* marked_points,
     }
   }
   if (boundary != NULL) {
-    int bcol = X2.get_rgb_color(0.2,0.2,1);
-    int gcol = X2.get_rgb_color(0.2,1,0.2);
-    int rcol = X2.get_rgb_color(1,0.2,0.2);
+    int bcol = X2.get_rgb_color(0,0,1);
+    int gcol = X2.get_rgb_color(0,1,0);
+    int rcol = X2.get_rgb_color(1,0,0);
     for (int i=0; i<(int)boundary->size(); ++i) {
-      p.x = (*boundary)[i].x;
-      p.y = (*boundary)[i].y;
+      p.x = (*boundary)[i].x * pixel_group_width;
+      p.y = (*boundary)[i].y * pixel_group_width;
       if (pixel_group_width>1) {
         X2.draw_box(p,pixel_group_width, ((*boundary)[i].z > 0 ? bcol : ((*boundary)[i].z < 0 ? gcol : rcol)));
       } else {

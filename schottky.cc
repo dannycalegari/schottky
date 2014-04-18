@@ -29,6 +29,8 @@ int main(int argc, char *argv[]) {
 	  w = atoi(argv[1]);
 	}
 	
+	//std::cout << sizeof(long long int) <<"\n";
+	
 	std::cout << "enter 'i' for IFS or 'm' for mandelbrot:";
 	std::cin >> c;
 	mode = (c=='i' ? 0 : 1);

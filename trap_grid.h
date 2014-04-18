@@ -22,11 +22,17 @@ struct GridPixel {
   int w_comp, w_cut_by_z_comp;
   int i_comp;
   
+  //is the pixel good?
+  int good_pixel;
+  
   //this is the L1 distance between this pixel and the z/w set
   int z_distance;
   int w_distance;
 };
-  
+ 
+//returns 1 if positive, -1 if negative, 0 if 0
+int sgn(int x);
+
   
 struct TrapGrid {
   int num_pixels; //the number of pixels on a side(it's a square)
@@ -81,6 +87,7 @@ struct TrapGrid {
                                    bool far_trap_points);
   void compute_boundary(std::vector<Point3d<int> >& b);
   void compute_distances();
+  void compute_good_pixels(const std::vector<Point3d<int> >& boundary);
   Point2d<int> farthest_from_other_component(int z_or_w, int cut_comp);
   bool disjoint_from_z_or_w(const Ball& b, int z_or_w);
   void show(std::vector<Point2d<int> >* marked_points,
@@ -95,11 +102,13 @@ struct TrapGrid {
   bool prune_boundary(const ifs& IFS, 
                       const std::vector<Ball>& balls, 
                       std::vector<Point3d<int> >& boundary,
-                      Ball trap_balls[]);
-  bool put_ball_inside_pixel(const ifs& IFS, 
-                             const Ball& initial_ball, 
-                             const Point2d<int>& p, 
-                             Ball& b);
+                      std::vector<Ball>& trap_balls);
+bool put_ball_inside_good_pixel(const ifs& IFS, 
+                                const Ball& initial_ball, 
+                                int z_or_w, 
+                                Ball& b);
+  bool ball_touches_pixel(const Ball& b, const Point2d<int>& p);
+  bool ball_contained_in_pixel(const Ball& b, const Point2d<int>& p);
 };
 
 

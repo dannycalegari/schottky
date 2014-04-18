@@ -20,7 +20,7 @@ Ball::Ball() {
   center = 0.5;
   to_z = to_w = 0;
   radius = 1.0;
-  word = 0;
+  word = std::bitset<64>(0);
   word_len = 0;
 }
 
@@ -29,11 +29,11 @@ Ball::Ball(cpx c, cpx tz, cpx tw, double r) {
   to_z = tz;
   to_w = tw;
   radius = r;
-  word = 0;
+  word = std::bitset<64>(0);
   word_len = 0; //just a ball, no words, to start
 }
 
-Ball::Ball(cpx c, cpx tz, cpx tw, double r, int w, int wl) {
+Ball::Ball(cpx c, cpx tz, cpx tw, double r, const std::bitset<64>& w, int wl) {
   center = c;
   to_z = tz;
   to_w = tw;
@@ -43,7 +43,7 @@ Ball::Ball(cpx c, cpx tz, cpx tw, double r, int w, int wl) {
 }
 
 int Ball::last_gen_index() const {
-  return (word >> (word_len-1))&1;
+  return int(word[word_len-1]);
 }
 
 bool Ball::is_disjoint(const Ball& b) {
@@ -103,24 +103,22 @@ void ifs::reinitialize(cpx a, cpx b) {
 
 
 //compute the image ball
-Ball ifs::act_on_left(int index, const Ball& b) {
-  int word = b.word;
-  int word_len = b.word_len;
+Ball ifs::act_on_left(int index, const Ball& b) const {
   if (index == 0) {
-    return Ball( z*b.center, z*b.to_z, z*b.to_w, az*b.radius, word, word_len+1 );
+    return Ball( z*b.center, z*b.to_z, z*b.to_w, az*b.radius, b.word, b.word_len+1 );
   } else {
-    return Ball( (w*(b.center - 1.0)) + 1.0, w*b.to_z, w*b.to_w, aw*b.radius, word | (1 << word_len), word_len+1 );
+    std::bitset<64> temp(0);
+    temp[b.word_len] = 1;
+    return Ball( (w*(b.center - 1.0)) + 1.0, w*b.to_z, w*b.to_w, aw*b.radius, b.word | temp, b.word_len+1 );
   }
 }
 
 
-Ball ifs::act_on_right(int index, const Ball& b) {
-  int word = b.word;
-  int word_len = b.word_len;
+Ball ifs::act_on_right(int index, const Ball& b) const {
   if (index == 0) {
-    return Ball( b.center + b.to_z, z*b.to_z, z*b.to_w, az*b.radius, word<<1, word_len+1 );
+    return Ball( b.center + b.to_z, z*b.to_z, z*b.to_w, az*b.radius, b.word<<1, b.word_len+1 );
   } else {
-    return Ball( b.center + b.to_w, w*b.to_z, w*b.to_w, aw*b.radius, (word<<1)|1, word_len+1 );
+    return Ball( b.center + b.to_w, w*b.to_z, w*b.to_w, aw*b.radius, (b.word<<1)| std::bitset<64>(1), b.word_len+1 );
   }
 }
 
@@ -175,7 +173,6 @@ void ifs::compute_next_ball_depth_right(std::vector<Ball>& balls, int current_de
   }
 }
 void ifs::compute_balls_right(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth) {
-  std::vector<Ball> balls_temp;
   balls.resize(2);
   balls[0] = act_on_right(0, ball_seed);
   balls[1] = act_on_right(1, ball_seed);

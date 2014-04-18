@@ -2,6 +2,7 @@
 #define __IFS__
 
 #include <ostream>
+#include <bitset>
 
 #include "graphics.h"
 #include "cpx.h"
@@ -15,11 +16,11 @@ struct Ball {
   double radius;
   cpx to_z;     //this points to where the center would go if we applied z
   cpx to_w;     //this points to where the center would go under w
-  int word;     //the z and w word we applied to get here (highest bit is most recent application)
+  std::bitset<64> word;     //the z and w word we applied to get here (highest bit is most recent application)
   int word_len; //the number of significant bits
   Ball();
   Ball(cpx c, cpx to_z, cpx to_w, double r);
-  Ball(cpx c, cpx to_z, cpx to_w, double r, int w, int wl);
+  Ball(cpx c, cpx to_z, cpx to_w, double r, const std::bitset<64>& w, int wl);
   int last_gen_index() const;
   bool is_disjoint(const Ball& b);
 };
@@ -50,8 +51,8 @@ class ifs{
 		//general computation
 		
 		cpx iterate(int index, cpx u);
-		Ball act_on_left(int index, const Ball& b);
-		Ball act_on_right(int index, const Ball& b);
+		Ball act_on_left(int index, const Ball& b) const;
+		Ball act_on_right(int index, const Ball& b) const;
 		void compute_next_ball_depth(std::vector<Ball>& balls, int current_depth);
 		void compute_balls(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth);
 		void compute_next_ball_depth_right(std::vector<Ball>& balls, int current_depth);

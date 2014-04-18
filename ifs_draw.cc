@@ -253,6 +253,7 @@ void ifs::draw_mandelbrot_set(){
                                   int temp_e_depth = exit_depth;
 				  if (draw_trap_mode && find_trap(int((3.0/2.0)*depth), depth, 512, false, 3.42, NULL, 0)) {
                                           X.draw_box(q,mesh,rcol);
+                                          X.flush();
 				  } else {
                                     if (draw_contains_half && contains_point(0.5, depth)) {
                                       X.draw_box(q, mesh, gcol*exit_depth);
