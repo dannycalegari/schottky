@@ -410,7 +410,7 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz
   //make sure it's connected at the minimal possible radius
   if (verbose>0) std::cout << "Checking connectedness with minimal initial radius of " << min_initial_radius << "\n";
   int old_depth = depth;
-  depth = max_uv_depth+max_n_depth+2;
+  depth = max_uv_depth+max_n_depth+2;  //this ensures there are points within pr-r = 2r-r = r
   if (!circ_connected(min_initial_radius)) {
     if (verbose>0) {
       std::cout << "Not even connected\n";
@@ -423,11 +423,12 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz
   double ratio_goal = 0.05;
   double ratio_lower_limit = 0.01;
   double current_ratio = 4;
+  double d = 6.0;
   double p = 2.0;
   int current_n_depth = 10; //I guess always start here?
   int current_uv_depth = -1;
   
-  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*p);
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_initial_radius*d);
   Ball zb, wb;
   
   while (true) {
@@ -470,7 +471,7 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz
     //points and the other *centers*
     double min_trap_dist;
     
-    bool got_trap = find_trap_given_balls(balls, max_pixels, &min_trap_dist, (verbose>0 ? verbose-1 : verbose));
+    bool got_trap = find_trap_given_balls(balls, max_pixels, NULL, (verbose>0 ? verbose-1 : verbose));
     if (verbose>0) {
       if (got_trap) {
         std::cout << "Got trap at " << z << " with min trap dist " << min_trap_dist << "\n";
@@ -480,10 +481,9 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz
     }
     
     if (got_trap) {
+      
       double ball_radius = balls[0].radius;
-      double dr = min_trap_dist; //this is the largest radius we could have at this point, which we define as dr
       double r = pow(az, current_n_depth + current_uv_depth)*min_initial_radius;
-      double d = dr/r;
       double e = (1.0/Cz)*0.25*r*(d-p);
       if (verbose>0) {
         std::cout << "ball radius: " << ball_radius << " r = " << r << " d = " << d << " p= " << p << " epsilon = " << e << "\n";
@@ -495,6 +495,9 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz
     if (current_n_depth < max_n_depth) {
       current_n_depth += (current_n_depth < max_n_depth-1 ? 3 : 1);
       if (verbose>0) std::cout << "Increasing depth to " << current_n_depth << "\n";
+    } else if (current_ratio < ratio_goal && current_ratio > 2*ratio_lower_limit) {
+      ratio_goal = (ratio_goal + ratio_lower_limit)/2.0;
+      if (verbose>0) std::cout << "Decreasing ratio to " << ratio_goal << "\n";
     } else {
       return false;
     }
@@ -540,6 +543,9 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
     std::cout << "Found Cz = " << Cz << "\n";
   }
   
+  //get graphics stuff
+  int rcol = X.get_rgb_color(1,0,0);
+  double pixel_width = (2*wind)/double(drawing_width);
   
   //get the traps at the vertices
   for (int i=0; i<nL; ++i) {
@@ -547,18 +553,23 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
     z = loop[i]; az = abs(z);
     w = z; aw = az;
     double epsilon;
-    if (!find_trap(max_uv_depth, max_n_depth, max_pixels, 3.42, &epsilon, verbose)) {
+    if (!find_trap(max_uv_depth, max_n_depth, max_pixels, Cz, &epsilon, verbose)) {
       if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
       return false;
     }
     trap_list[i][0] = std::make_pair(z, epsilon);
+    if (draw_it) {
+      Point2d<int> p = cpx_to_point_mandlebrot(z);
+      double r = trap_list[i][0].second / pixel_width;
+      if (r<2) r = 2;
+      X.draw_disk(p,r,rcol);
+      X.flush();
+    }
     if (verbose>0) std::cout << i << ": " << trap_list[i][0].first << ", " << trap_list[i][0].second << "\n";
   }
   
   //for each interval, go along it, placing the center of the 
   //next trap at exactly the edge of the previous one
-  int rcol = X.get_rgb_color(1,0,0);
-  double pixel_width = (2*wind)/double(drawing_width);
   if (verbose>0) std::cout << "Pixel width: " << pixel_width << "\n";
   for (int i=0; i<nL; ++i) {
     //vector of length 1 pointing along the path
@@ -581,7 +592,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
       //run it
       trap_list[i].resize(trap_list[i].size()+1);
       trap_list[i].back().first = z;
-      if (!find_trap(max_uv_depth, max_n_depth, max_pixels, 3.42, &trap_list[i].back().second, verbose)) {
+      if (!find_trap(max_uv_depth, max_n_depth, max_pixels, Cz, &trap_list[i].back().second, verbose)) {
         if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
         return false;
       }
