@@ -398,7 +398,7 @@ bool ifs::find_trap_given_balls(const std::vector<Ball>& balls,
 
 
 
-bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_trap_points, double Cz, double* epsilon, int verbose) {
+bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz, double* epsilon, int verbose) {
 
   //find the radius of the smallest closed ball about 1/2 which 
   //is mapped inside itself under both f and g
@@ -415,6 +415,7 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_
     if (verbose>0) {
       std::cout << "Not even connected\n";
     }
+    depth = old_depth;
     return false;
   }
   depth = old_depth;
@@ -441,6 +442,8 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, bool far_
       return true;
     }
     if (current_ratio > ratio_goal) {
+      if (verbose>0) std::cout << "current ratio: " << current_ratio << " trying to get below " << ratio_goal << "\n";
+      std::cout.flush();
       find_aligned_images_with_distinct_first_letters(initial_ball, 0, 0, max_uv_depth, zb, wb, ratio_goal, ratio_lower_limit);
     }
     current_ratio = abs(zb.center-wb.center)/zb.radius;
@@ -544,7 +547,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
     z = loop[i]; az = abs(z);
     w = z; aw = az;
     double epsilon;
-    if (!find_trap(max_uv_depth, max_n_depth, max_pixels, true, 3.42, &epsilon, verbose)) {
+    if (!find_trap(max_uv_depth, max_n_depth, max_pixels, 3.42, &epsilon, verbose)) {
       if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
       return false;
     }
@@ -578,7 +581,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
       //run it
       trap_list[i].resize(trap_list[i].size()+1);
       trap_list[i].back().first = z;
-      if (!find_trap(max_uv_depth, max_n_depth, max_pixels, true, 3.42, &trap_list[i].back().second, verbose)) {
+      if (!find_trap(max_uv_depth, max_n_depth, max_pixels, 3.42, &trap_list[i].back().second, verbose)) {
         if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
         return false;
       }
