@@ -75,7 +75,7 @@ void ifs::draw_limit_set(){
 	T.str("");		
 	p.y=p.y-20;
 	if (draw_trap_mode) {
-		if (find_trap(int((3.0/2.0)*depth), depth, 512, 3.42, NULL, 2)) {
+		if (find_trap(int((3.0/2.0)*depth), depth, 512, 3.42, NULL,NULL, 2)) {
 			T << "trap found (toggle trap mode with [t])";
 			draw_trap();
 		} else {
@@ -250,10 +250,13 @@ void ifs::draw_mandelbrot_set(){
 				X.draw_box(q,mesh,0x000000);
 			} else { // if(abs(z)>0.5){
 				if(circ_connected()){
-                                  int temp_e_depth = exit_depth;
-				  if (draw_trap_mode && find_trap(int((3.0/2.0)*depth), depth, 512, 3.42, NULL, 0)) {
-                                          X.draw_box(q,mesh,rcol);
-                                          X.flush();
+          int temp_e_depth = exit_depth;
+          double difficulty;
+				  if (draw_trap_mode && find_trap(int((3.0/2.0)*depth), depth, 512, 3.42, NULL, &difficulty, 0)) {
+				    double gamount = difficulty/100.0;
+				    int c = X.get_rgb_color(1.0,gamount,0.0);
+            X.draw_box(q,mesh,c);
+            X.flush();
 				  } else {
                                     if (draw_contains_half && contains_point(0.5, depth)) {
                                       X.draw_box(q, mesh, gcol*exit_depth);
