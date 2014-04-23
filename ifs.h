@@ -108,7 +108,8 @@ class ifs{
                                                          double ratio_goal, double ratio_lower_limit);
     cpx center_of_mass(const std::vector<Ball>& balls);
 		bool minimal_enclosing_radius(double& r);
-		
+		double when_ray_hits_ball(cpx p, cpx v, const Ball& b);
+		double when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls);
 		
 		//IFS drawing
 		bool color_ifs;        // draw fL and gL in different colors

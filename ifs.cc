@@ -130,6 +130,16 @@ Ball ifs::act_on_right(int index, const Ball& b) const {
 
 
 
+double ifs::when_ray_hits_ball(cpx p, cpx v, const Ball& b) {
+  return 0;
+}
+
+
+double ifs::when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls) {
+  return 0;
+}
+
+
 //take a list of balls and compute one more level of depth 
 //(on the left)
 void ifs::compute_next_ball_depth(std::vector<Ball>& balls, int current_depth) {

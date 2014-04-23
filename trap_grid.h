@@ -29,7 +29,8 @@ struct GridPixel {
   int z_distance;
   int w_distance;
 };
- 
+
+
 //returns 1 if positive, -1 if negative, 0 if 0
 int sgn(int x);
 
@@ -110,6 +111,35 @@ bool put_ball_inside_good_pixel(const ifs& IFS,
   bool ball_touches_pixel(const Ball& b, const Point2d<int>& p);
   bool ball_contained_in_pixel(const Ball& b, const Point2d<int>& p);
 };
+
+
+
+struct BasicPixel {
+  cpx center;
+  int ball_status; //0=not touched, 1=touched, 2=contained
+  int closest_ball;
+};
+
+struct BasicGrid {
+  int num_pixels; //the number of pixels on a side(it's a square)
+  cpx lower_left;  //the lower left corner of the lower left pixel
+  cpx upper_right; //the upper right corner of the upper right pixel
+  double pixel_diameter; //the height/width of a pixel
+  double box_width; //the real width/height of the grid (upper_right.real() - lower_left.real())
+
+  std::vector<std::vector<BasicPixel> > grid;
+  
+  BasicGrid();
+  void reset_grid(cpx ll, cpx ur, int np);
+  void fill_pixels(const std::vector<Ball>& balls); 
+  void pixel_indices(int& i, int&j, const cpx& u); //find the pixel with the given point
+  cpx pixel_center(int i, int j);
+  cpx pixel_center(const cpx& u);
+  bool ball_touches_pixel(const Ball& b, const Point2d<int>& p);
+  bool ball_contained_in_pixel(const Ball& b, const Point2d<int>& p);
+};
+
+
 
 
 #endif

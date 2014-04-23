@@ -1659,6 +1659,110 @@ void TrapGrid::show_distance_functions() {
 
 
 
+/***************************************************************************/
+BasicGrid::BasicGrid() {
+  num_pixels = 0;
+}
+
+void BasicGrid::reset_grid(cpx ll, cpx ur, int np) {
+  lower_left = ll;
+  upper_right = ur;
+  box_width = ur.real() - ll.real();
+  num_pixels = np;
+
+  //build the blank grid
+  grid = std::vector<std::vector<BasicPixel> >(num_pixels, std::vector<BasicPixel>(num_pixels));
+
+  pixel_diameter = box_width/double(num_pixels);
+  if (pixel_diameter < 1e-10) std::cout << "Grid precision [" << ll << "," << ur << "] is too low!\n";
+  //std::cout << "Box width: " << box_width << " and pixel diameter: " << pixel_diameter << "\n";
+  for (int i=0; i<num_pixels; ++i) {
+    double rp = lower_left.real() + (double(i)+0.5)*pixel_diameter;
+    for (int j=0; j<num_pixels; ++j) {
+      grid[i][j].center = cpx(rp, lower_left.imag() + (double(j)+0.5)*pixel_diameter);
+      grid[i][j].ball_status = 0;
+      grid[i][j].closest_ball=-1;
+    }
+  }
+}
+
+//return the point which is the center of the pixel
+cpx BasicGrid::pixel_center(int i, int j) {
+  return grid[i][j].center;
+}
+
+//return the point which is the center of pixel containing the given point
+cpx BasicGrid::pixel_center(const cpx& u) {
+  int i,j;
+  pixel_indices(i,j,u);
+  return grid[i][j].center;
+}
+
+void BasicGrid::pixel_indices(int& i, int&j, const cpx& u) {
+  double h_dist = u.real() - lower_left.real();
+  double v_dist = u.imag() - lower_left.imag();
+  i = int(h_dist/pixel_diameter);
+  j = int(v_dist/pixel_diameter);
+}
+
+bool BasicGrid::ball_touches_pixel(const Ball& b, const Point2d<int>& p) {
+  cpx bc = b.center;
+  double bx = bc.real();
+  double by = bc.imag();
+  double br = b.radius;
+  cpx pc = pixel_center(p.x,p.y);
+  double px = pc.real();
+  double py = pc.imag();
+  double pr = pixel_diameter/2.0;
+  if (bx > px+pr && by > py+pr) { //upper right
+    return abs(bc - cpx(px+pr,py+pr)) < br;
+  
+  } else if (bx < px-pr && by > py+pr) { //upper left
+    return abs(bc - cpx(px-pr,py+pr)) < br;
+  
+  } else if (bx < px-pr && by < py-pr) { //lower left
+    return abs(bc - cpx(px-pr, py-pr)) < br; 
+    
+  } else if (bx > px+pr && by < py-pr) { //lower right
+    return abs(bc - cpx(px+pr, py-pr)) < br;
+    
+  } else if (bx > px+pr) { //middle right
+    return bx-br < px+pr; 
+    
+  } else if (by > py+pr) { //middle top
+    return by-br < py+pr; 
+    
+  } else if (bx < px-pr) { //middle left
+    return bx+br > px-pr;
+    
+  } else if (by < py-pr) { //middle bottom
+    return by+br > py-pr;
+    
+  }
+  return true; //the ball's center is in the pixel
+}
+
+bool BasicGrid::ball_contained_in_pixel(const Ball& b, const Point2d<int>& p) {
+  cpx pc = pixel_center(p.x, p.y);
+  double pr = pixel_diameter/2.0;
+  cpx bc = b.center;
+  double br = b.radius;
+  return (bc.real() + br < pc.real() + pr) && 
+         (bc.real() - br > pc.real() - pr) &&
+         (bc.imag() + br < pc.imag() + pr) &&
+         (bc.imag() - br > pc.imag() - pr);
+}
+
+
+
+
+void BasicGrid::fill_pixels(const std::vector<Ball>& balls) {
+  for (int i=0; i<(int)balls.size(); ++i) {
+    
+  }
+}
+
+
 
 
 
