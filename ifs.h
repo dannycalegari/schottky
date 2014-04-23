@@ -7,6 +7,41 @@
 #include "graphics.h"
 #include "cpx.h"
 
+
+/*************************************************************************
+ * convex hull computational geometry stuff
+ * ***********************************************************************/
+//this does dot product as if they were vectors
+double cpx_dot(cpx a, cpx b);
+
+//return a complex number b such that {b,a} is an oriented basis for R^2
+cpx perp_to(cpx a);
+
+//the halfspace is all x such that v.(x-p) <= 0 
+struct halfspace {
+  cpx v;
+  cpx p;
+  halfspace() {v = p = 0.0;}
+  halfspace(cpx V, cpx P) {
+    v = V;
+    p = P;
+  }
+  bool contains(cpx x) {
+    return cpx_dot(v, x-p) <= 0;
+  }
+  double val(cpx x) {
+    return cpx_dot(v, x-p);
+  }
+};
+
+//returns the halfspace which is on the left when walking x1->x2
+halfspace halfspace_on_left(cpx x1, cpx x2);
+
+//returns a list of indices of the points that are in the convex hull
+void convex_hull(std::vector<int>& ch, 
+                 const std::vector<cpx>& X);
+
+
 /*************************************************************************
  * A ball is a center and radius, and it knows the word that was applied
  * to the original ball to get it
@@ -27,9 +62,10 @@ struct Ball {
 
 std::ostream& operator<<(std::ostream& os, const Ball& b);
 
-//this produces a list of balls which gives the convex hull 
-//of the list of balls
-void ball_convex_hull(std::vector<Ball>& ch, const std::vector<Ball>& balls);
+void ball_convex_hull(std::vector<int>& ch,
+                      std::vector<cpx>& boundary_points,
+                      std::vector<halfspace>& H,
+                      const std::vector<Ball>& balls);
 
 
 /**************************************************************************
@@ -130,6 +166,12 @@ class ifs{
 		                           bool draw_it, 
 		                           int verbose);
 		void draw_trap();	
+		
+		//trap-like vectors
+		void trap_like_balls(std::vector<Ball>& TLB);
+		void trap_like_balls_from_balls(std::vector<Ball>& TLB, 
+                                    int max_pixels, 
+                                    const std::vector<Ball>& balls);
 		
 		
 		//Main interface and drawing functions

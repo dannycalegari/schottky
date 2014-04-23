@@ -13,7 +13,7 @@
 #include "ifs_interface.cc"    //everything about interacting
 #include "ifs_connected.cc"    //the function to detect if the IFS is connected 
 #include "ifs_trap.cc"         //functions to build a trap
-
+#include "ifs_trap_like.cc"    //functions to find trap balls via u,v words
 
 //first some ball functions
 Ball::Ball() { 
@@ -53,50 +53,6 @@ bool Ball::is_disjoint(const Ball& b) {
 std::ostream& operator<<(std::ostream& os, const Ball& b) {
   return os << "Ball(" << b.center << "," << b.to_z << "," << b.to_w << "," << b.radius << "," << b.word << "," << b.word_len << ")";
 }
-
-
-
-bool cmp_pairs(const std::pair<double, int>& a, 
-               const std::pair<double, int>& b) {
-  return a.first < b.first;
-}
-
-void ball_convex_hull(std::vector<Ball>& ch, const std::vector<Ball>& balls) {
-  ch.resize(0);
-  if (balls.size() == 0) return;
-  
-  //find the ball which extends the most downward
-  int min_y_val_ind = 0;
-  double min_y_val = balls[0].center.imag() - balls[0].radius;
-  double min_x_val = balls[0].center.real() - balls[0].radius;
-  for (int i=1; i<(int)balls.size(); ++i) {
-    double y = balls[i].center.imag() - balls[i].radius;
-    if (y < min_y_val) {
-      min_y_val_ind = i;
-      min_y_val = y;
-      min_x_val = balls[i].center.real() - balls[i].radius;
-    } else if (y == min_y_val) { //this is almost inconceivable, probably
-      double x = balls[i].center.real() - balls[i].radius;
-      if (x < min_x_val) {
-        min_y_val_ind = i;
-        min_y_val = y;
-        min_x_val = x;
-      }
-    }
-  }
-  
-  //sort the points based on the angle they make
-  std::vector<std::pair<double, int> > ball_angles(balls.size()-1);
-  for (int i=1; i<(int)balls.size(); ++i) {
-    ball_angles[i-1] = std::make_pair(0.0,0);
-  }
-}
-
-
-
-
-
-
 
 
 

@@ -546,7 +546,7 @@ bool ifs::find_traps_along_loop(const std::vector<cpx>& loop,
   }
   
   //get graphics stuff
-  int rcol = X.get_rgb_color(1,0,0);
+  //int rcol = X.get_rgb_color(1,0,0);
   double pixel_width = (2*wind)/double(drawing_width);
   double difficulty;
   

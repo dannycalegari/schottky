@@ -227,8 +227,8 @@ void ifs::draw_mandelbrot_set(){
 	X.draw_text(p,T,0x000000);
 	T.str("");	
 	
-	int rcol = X.get_rgb_color(1,0,0);
-        int gcol = X.get_rgb_color(0,1,0);
+	//int rcol = X.get_rgb_color(1,0,0);
+  int gcol = X.get_rgb_color(0,1,0);
 	
 	for(i=0; i<drawing_width; i=i+mesh){
 		for(j=0; j<drawing_width; j=j+mesh){
