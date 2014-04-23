@@ -470,7 +470,7 @@ bool ifs::find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz
     
     //this returns the minimum distance between the trap
     //points and the other *centers*
-    double min_trap_dist;
+    double min_trap_dist = -1;
     
     bool got_trap = find_trap_given_balls(balls, max_pixels, NULL, (verbose>0 ? verbose-1 : verbose));
     if (verbose>0) {

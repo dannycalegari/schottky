@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "trap_grid.h"
 
 //this does dot product as if they were vectors
@@ -15,6 +17,78 @@ cpx perp_to(cpx a) {
 halfspace halfspace_on_left(cpx x1, cpx x2) {
   return halfspace(perp_to(x2-x1), x1);
 }
+
+
+
+void show_stuff(const std::vector<cpx>* points,
+                const std::vector<cpx>* red_points,
+                const std::vector<cpx>* blue_points,
+                const std::vector<cpx>* connected_points,
+                const std::vector<cpx>* connected_points_2) {
+  cpx ll,ur;
+  std::vector<cpx> all_points;
+  if (points != NULL) {
+    all_points.insert(all_points.end(), points->begin(), points->end());
+  }
+  if (red_points != NULL) {
+    all_points.insert(all_points.end(), red_points->begin(), red_points->end());
+  }
+  if (blue_points != NULL) {
+    all_points.insert(all_points.end(), blue_points->begin(), blue_points->end());
+  }
+  box_containing_points(all_points, ll, ur);
+  double drawing_width = ur.real() - ll.real();
+  int num_drawing_pixels = 512;
+  double pixel_diameter = drawing_width / num_drawing_pixels;
+  XGraphics X2(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+  int bcol = X2.get_rgb_color(0,0,0);
+  if (points != NULL) {
+    for (int i=0; i<(int)points->size(); ++i) {
+      Point2d<int> p( ((*points)[i].real() - ll.real())/pixel_diameter, 
+                      ((*points)[i].imag() - ll.imag())/pixel_diameter );
+      X2.draw_dot( p, bcol);
+    }
+  }
+  if (red_points != NULL) {
+    int rcol = X2.get_rgb_color(1,0.2,0);
+    for (int i=0; i<(int)red_points->size(); ++i) {
+      Point2d<int> p( ((*red_points)[i].real() - ll.real())/pixel_diameter, 
+                      ((*red_points)[i].imag() - ll.imag())/pixel_diameter );
+      X2.draw_dot( p, rcol);
+    }
+  } 
+  if (blue_points != NULL) {
+    int blcol = X2.get_rgb_color(0,0.8,1);
+    for (int i=0; i<(int)blue_points->size(); ++i) {
+      Point2d<int> p( ((*blue_points)[i].real() - ll.real())/pixel_diameter, 
+                      ((*blue_points)[i].imag() - ll.imag())/pixel_diameter );
+      X2.draw_dot( p, blcol);
+    }
+  } 
+  if (connected_points != NULL) {
+    for (int i=0; i<(int)connected_points->size(); ++i) {
+      int ip1 = (i == (int)connected_points->size()-1 ? 0 : i+1);
+      Point2d<int> p1( ((*connected_points)[i].real() - ll.real())/pixel_diameter,
+                       ((*connected_points)[i].imag() - ll.imag())/pixel_diameter );
+      Point2d<int> p2( ((*connected_points)[ip1].real() - ll.real())/pixel_diameter,
+                       ((*connected_points)[ip1].imag() - ll.imag())/pixel_diameter );
+      X2.draw_line(p1, p2, bcol);
+    }
+  }  
+  if (connected_points_2 != NULL) {
+    for (int i=0; i<(int)connected_points_2->size(); ++i) {
+      int ip1 = (i == (int)connected_points_2->size()-1 ? 0 : i+1);
+      Point2d<int> p1( ((*connected_points_2)[i].real() - ll.real())/pixel_diameter,
+                       ((*connected_points_2)[i].imag() - ll.imag())/pixel_diameter );
+      Point2d<int> p2( ((*connected_points_2)[ip1].real() - ll.real())/pixel_diameter,
+                       ((*connected_points_2)[ip1].imag() - ll.imag())/pixel_diameter );
+      X2.draw_line(p1, p2, bcol);
+    }
+  }
+  X2.wait_for_key();
+}
+
+
 
 
 //this function finds the extremal x and y points and throws out any point contained 
@@ -63,8 +137,10 @@ void heuristic_convex_hull(std::vector<int>& ch, const std::vector<cpx>& X) {
   halfspace LR( perp_to(X[max_x_ind] - X[min_y_ind]), X[min_y_ind] );
   ch.resize(0);
   for (int i=0; i<(int)X.size(); ++i) {
-    if (UR.contains(X[i]) && UL.contains(X[i]) &&
-        LL.contains(X[i]) && LR.contains(X[i])) {
+    if (UR.strictly_contains(X[i]) && UL.strictly_contains(X[i]) &&
+        LL.strictly_contains(X[i]) && LR.strictly_contains(X[i])) {
+      continue;
+    } else {
       ch.push_back(i);
     }
   }
@@ -148,11 +224,32 @@ void convex_hull_recurse(std::vector<int>& ch,
     indices_2[i] = initial_indices[cut_index+i];
   }
   
+  //std::vector<cpx> rp(indices_1.size());
+  //for (int i=0; i<(int)rp.size(); ++i) {
+  //  rp[i] = X[indices_1[i]];
+  //}
+  //std::vector<cpx> bp(indices_2.size());
+  //for (int i=0; i<(int)bp.size(); ++i) {
+  //  bp[i] = X[indices_2[i]];
+  //}
+  //show_stuff(NULL, &rp, &bp, NULL, NULL);
+  
   //the sub convex hulls
   std::vector<int> ch_1;
   std::vector<int> ch_2;
   convex_hull_recurse(ch_1, indices_1, X);
   convex_hull_recurse(ch_2, indices_2, X);
+  
+  //std::vector<cpx> h_1(ch_1.size());
+  //for (int i=0; i<(int)ch_1.size(); ++i) {
+  //  h_1[i] = X[ch_1[i]];
+  //}  
+  //std::vector<cpx> h_2(ch_2.size());
+  //for (int i=0; i<(int)ch_2.size(); ++i) {
+  //  h_2[i] = X[ch_2[i]];
+  //}
+  //show_stuff(NULL, &rp, &bp, &h_1, &h_2);
+  
   
   //recombine -- there are two halfspaces to find
   //they go top_2 - > top_1 and bottom_1 -> bottom_2
@@ -160,7 +257,7 @@ void convex_hull_recurse(std::vector<int>& ch,
   int top_2;
   int bottom_1;
   int bottom_2;
-  extreme_indices(top_2, top_1, ch_2, ch_2, X);
+  extreme_indices(top_2, top_1, ch_2, ch_1, X);
   extreme_indices(bottom_1, bottom_2, ch_1, ch_2, X);
   
   //we get the convex hull by tracing out everything until the junctions, 
@@ -188,14 +285,30 @@ void convex_hull_recurse(std::vector<int>& ch,
     }
   }
   
+  //std::vector<cpx> h(ch.size());
+  //for (int i=0; i<(int)ch.size(); ++i) {
+  //  h[i] = X[ch[i]];
+  //}
+  //show_stuff(NULL, &rp, &bp, &h, NULL);
+  
 }
 
 
 void convex_hull(std::vector<int>& ch, 
                  const std::vector<cpx>& X) {
 
+  //std::cout << "Got input points: \n";
+  //show_stuff(&X, NULL, NULL, NULL, NULL);
+  
   //this sets ch to list the indices that might be in the convex hull
   heuristic_convex_hull(ch, X);
+  
+  //std::cout << "Did the heuristic: \n";
+  //std::vector<cpx> temp_X(ch.size());
+  //for (int i=0; i<(int)ch.size(); ++i) {
+  //  temp_X[i] = X[ch[i]];
+  //}
+  //show_stuff(&temp_X, NULL, NULL, NULL, NULL);
 
   //sort the points into increasing x order
   std::vector<std::pair<double, int> > x_vals(ch.size());
@@ -213,7 +326,8 @@ void convex_hull(std::vector<int>& ch,
   convex_hull_recurse(ch, initial_indices, X);
   
 }
-    
+
+
 
 //the halfspace H[i] is the halfspace between balls i and i+1 in the convex hull
 //boundary_points[2*i] and boundary_points[2*i+1] live on the ball ch[i]
@@ -253,6 +367,7 @@ void ball_convex_hull(std::vector<int>& ch,
 //then finds the largest trap ball it can stick in there
 void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB, 
                                      int num_TL_balls, 
+                                     int num_ball_trials,
                                      const std::vector<Ball>& balls,
                                      int verbose) {
   //get the convex hull of the balls
@@ -260,6 +375,7 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
   std::vector<cpx> boundary_points;
   std::vector<halfspace> H;
   ball_convex_hull(ch, boundary_points, H, balls);
+  
   
   //find the largest gaps
   std::vector<std::pair<double, int> > ch_gap_pairs(ch.size());
@@ -272,8 +388,9 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
   std::vector<int> ch_gaps(0);
   int current_gap_ind = 0;
   TLB.resize(0);
+  std::vector<Ball> TLB_untranslated(0);
   while (true) {
-    if ((int)TLB.size() >= num_TL_balls || current_gap_ind > (int)ch.size()) {
+    if ((int)TLB_untranslated.size() >= num_TL_balls || current_gap_ind > (int)ch.size()) {
       break;
     }
     int i = ch_gap_pairs[current_gap_ind].second;
@@ -281,42 +398,81 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
     cpx x2 = boundary_points[2*(i==(int)ch.size()-1 ? 0 : i+1)];
     cpx v = -perp_to(x2-x1); //p should point towards the other disks
     v = v/abs(v);
-    cpx p1 = 0.25*x1 + 0.75*x2;
-    cpx p2 = 0.5*x1 + 0.5*x2;
-    cpx p3 = 0.75*x1 + 0.25*x2;
-    double t1 = when_ray_hits_ball(p1, v, balls);
-    double t2 = when_ray_hits_ball(p2, v, balls);
-    double t3 = when_ray_hits_ball(p3, v, balls);
-    t1 /= 2.0;
-    t2 /= 2.0;
-    t3 /= 2.0;
-    double d1 = distance_from_balls(p1 + t1*v, balls);
-    double d2 = distance_from_balls(p2 + t2*v, balls);
-    double d3 = distance_from_balls(p3 + t3*v, balls);
-    cpx best_center;
-    double best_radius;
-    if (d1 > d2 && d1 > d3) {
-      best_center = p1+t1*v;
-      best_radius = d1;
-    } else if (d2 > d3) {
-      best_center = p2 + t2*v;
-      best_radius = d2;
-    } else {
-      best_center = p3 + t3*v;
-      best_radius = d3;
+    cpx best_center = 0;
+    double best_radius = -1;
+    double step = 1.0/double(num_ball_trials+1);
+    for (double j=step; j<1.0; j+=step) {
+      cpx p = j*x1 + (1-j)*x2;
+      double t = when_ray_hits_ball(p,v,balls);
+      t/=2.0;
+      double d = distance_from_balls(p+t*v,balls);
+      if (d > best_radius) {
+        best_radius = d;
+        best_center = p+t*v;
+      }
     }
-    TLB.push_back(Ball(best_center, best_radius));
+    //std::cout << "Found best ball " << best_center << " " << best_radius << "\n";
+    TLB_untranslated.push_back(Ball(best_center, best_radius));
+    TLB.push_back(Ball(best_center-x1, best_radius));
+    TLB.push_back(Ball(best_center-x2, best_radius));
+    ++current_gap_ind;
   }
   if (verbose > 0) {
     cpx ll, ur;
     box_containing_balls(balls, ll, ur);  
+    double drawing_width = ur.real() - ll.real();
     int num_drawing_pixels = 512;
+    double pixel_diameter = drawing_width / double(num_drawing_pixels);
     XGraphics X2(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+    int bcol = X2.get_rgb_color(0,0,0);
+    int blue_color = X2.get_rgb_color(0, 0.8, 1);
+    int red_color = X2.get_rgb_color(1, 0.2, 0);
     //draw the convex hull
     for (int i=0; i<(int)ch.size(); ++i) {
       int ip1 = (i==(int)ch.size()-1 ? 0 : i+1);
+      cpx p1 = boundary_points[2*i+1];
+      cpx p2 = boundary_points[2*ip1];
+      Point2d<int> p1i( (p1.real() - ll.real())/pixel_diameter, 
+                        (p1.imag() - ll.imag())/pixel_diameter );
+      Point2d<int> p2i( (p2.real() - ll.real())/pixel_diameter, 
+                        (p2.imag() - ll.imag())/pixel_diameter );
+      X2.draw_line(p1i, p2i, bcol);
+    }
+    //draw all the disks
+    for (int i=0; i<(int)balls.size(); ++i) {
+      Point2d<int> p( (balls[i].center.real() - ll.real())/pixel_diameter, 
+                      (balls[i].center.imag() - ll.imag())/pixel_diameter );
+      double r = balls[i].radius/pixel_diameter;
+      X2.draw_disk(p, r, blue_color);
+    }
+    //draw the points on the convex hull
+    for (int i=0; i<(int)boundary_points.size(); ++i) {
+      Point2d<int> p( (boundary_points[i].real() - ll.real())/pixel_diameter, 
+                      (boundary_points[i].imag() - ll.imag())/pixel_diameter );
+      X2.draw_dot(p, bcol);
+    }
+    //draw the trap like balls
+    for (int i=0; i<(int)TLB_untranslated.size(); ++i) {
+      Point2d<int> p( (TLB_untranslated[i].center.real() - ll.real())/pixel_diameter, 
+                      (TLB_untranslated[i].center.imag() - ll.imag())/pixel_diameter );
+      double r = TLB_untranslated[i].radius/pixel_diameter;
+      X2.draw_disk(p, r, red_color);
+      X2.draw_dot(p, bcol);
     }
     (void)X2.wait_for_key();
+    box_containing_balls(TLB, ll, ur);
+    drawing_width = ur.real() - ll.real();
+    num_drawing_pixels = 512;
+    pixel_diameter = drawing_width / double(num_drawing_pixels);
+    XGraphics X3(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+    for (int i=0; i<(int)TLB.size(); ++i) {
+      Point2d<int> p( (TLB[i].center.real() - ll.real())/pixel_diameter, 
+                      (TLB[i].center.imag() - ll.imag())/pixel_diameter );
+      double r = TLB[i].radius/pixel_diameter;
+      X3.draw_disk(p, r, red_color);
+      X3.draw_dot(p, bcol);
+    }
+    X3.wait_for_key();
   }
 }
     
@@ -341,13 +497,29 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB, int verbose) {
   std::vector<Ball> balls(0);
   compute_balls_right(balls, initial_ball, n_depth);
   
-  trap_like_balls_from_balls(TLB, 10, balls, verbose);
+  trap_like_balls_from_balls(TLB, 10, 3, balls, verbose);
  
   return true;
   
 }
   
-
+//for the current z value, produce a bunch of balls in 
+//parameter space which all have traps certified by trap-like vectors
+//it searches for such balls in the box defined by ll and ur
+void balls_of_traps(std::vector<Ball>& BT, cpx ll, cpx ur, int grid, int verbose) {
+  std::vector<Ball> TLB(0);
+  trap_like_balls(TLB, verbose);
+  
+  //now we need to find uv words 
+  //we'll try a grid of points
+  double hstep = (ur.real() - ll.real())/double(grid+1);
+  double vstep = (ur.imag() - ll.imag())/double(grid+1);
+  for (double x = ll.real()+step; x < ur.real(); x += hstep) {
+    for (double y = ll.imag()+step; y < ur.imag(); y += vstep) {
+    }
+  }
+  
+}
 
 
 

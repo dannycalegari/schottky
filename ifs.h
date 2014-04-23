@@ -29,6 +29,9 @@ struct halfspace {
   bool contains(cpx x) {
     return cpx_dot(v, x-p) <= 0;
   }
+  bool strictly_contains(cpx x) {
+    return cpx_dot(v, x-p) < 0;
+  }
   double val(cpx x) {
     return cpx_dot(v, x-p);
   }
@@ -68,6 +71,7 @@ void ball_convex_hull(std::vector<int>& ch,
                       std::vector<halfspace>& H,
                       const std::vector<Ball>& balls);
 
+void box_containing_points(const std::vector<cpx>& points, cpx& ll, cpx& ur);
 
 /**************************************************************************
  * data defining an IFS
@@ -173,9 +177,11 @@ class ifs{
 		//trap-like vectors
 		bool trap_like_balls(std::vector<Ball>& TLB, int verbose);
 		void trap_like_balls_from_balls(std::vector<Ball>& TLB, 
-                                    int max_pixels, 
+                                    int num_TL_balls, 
+                                    int num_ball_trials,
                                     const std::vector<Ball>& balls,
                                     int verbose);
+                bool find_trap_like_vectors;
 		
 		
 		//Main interface and drawing functions

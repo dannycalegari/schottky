@@ -91,6 +91,7 @@ void ifs::initialize(cpx a, cpx b, int width, int mode){
 	disconnection_depth=false;
         draw_contains_half = false;
 	draw_trap_mode = false;
+        find_trap_like_vectors = false;
 	step=0.01;	// size of adjustments to z and w
 	seed=0.0;	// initial seed point for IFS
 	center=0.0;	// in mandelbrot mode; center of screen, size of window, and mesh of accuracy
@@ -153,10 +154,10 @@ double ifs::when_ray_hits_ball(cpx p, cpx v, const Ball& b) {
   double r = b.radius;
   double t = cpx_dot(c-p, v) / cpx_dot(v,v);
   cpx x = p + t*v;
-  double a = abs(c-x);
-  if (a > r) return 1e12;
-  double b = sqrt(r*r-a*a);
-  return t - b/abs(v);
+  double a1 = abs(c-x);
+  if (a1 > r) return 1e12;
+  double a2 = sqrt(r*r-a1*a1);
+  return t - a2/abs(v);
 }
 
 
@@ -293,6 +294,36 @@ void ifs::box_containing_balls(const std::vector<Ball>& balls,
   ll = cpx(center.real() - rad, center.imag() - rad);
   ur = cpx(center.real() + rad, center.imag() + rad);  
 }
+
+
+void box_containing_points(const std::vector<cpx>& points, cpx& ll, cpx& ur) {
+  ll = cpx(points[0].real(), points[0].imag());
+  ur = cpx(points[0].real(), points[0].imag());
+  for (int i=1; i<(int)points.size(); ++i) {
+    const cpx c = points[i];
+    if (c.real() > ur.real()) {
+      ur = cpx(c.real(), ur.imag());
+    }
+    if (c.imag() > ur.imag()) {
+      ur = cpx(ur.real(), c.imag());
+    }
+    if (c.real() < ll.real()) {
+      ll = cpx(c.real(), ll.imag());
+    }
+    if (c.imag() < ll.imag()) {
+      ll = cpx(ll.real(), c.imag());
+    }
+  }
+  //std::cout << ll << " " << ur << "\n";
+  double pwr = (ur.real() - ll.real())/2.0;
+  double phr = (ur.imag() - ll.imag())/2.0;
+  cpx center(ll.real() + pwr, ll.imag() + phr);
+  double rad = (pwr > phr ? pwr : phr);
+  ll = cpx(center.real() - rad, center.imag() - rad);
+  ur = cpx(center.real() + rad, center.imag() + rad);  
+}
+
+
 
 
 

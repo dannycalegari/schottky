@@ -146,8 +146,12 @@ void ifs::user_interface() {
                     draw_trap_mode = !draw_trap_mode;
                     draw();
                     break;
-		            } else if (XLookupKeysym(&report.xkey, 0) == XK_x) { //toggle chunky ifs
+		} else if (XLookupKeysym(&report.xkey, 0) == XK_x) { //toggle chunky ifs
                     chunky_ifs = !chunky_ifs;
+                    if (mode == 0) draw();
+                    break;
+                } else if (XLookupKeysym(&report.xkey, 0) == XK_r) { //toggle trap-like vectors
+                    find_trap_like_vectors = !find_trap_like_vectors;
                     if (mode == 0) draw();
                     break;
                 } else if (XLookupKeysym(&report.xkey, 0) == XK_o) { //start drawing a loop

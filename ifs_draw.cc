@@ -74,7 +74,7 @@ void ifs::draw_limit_set(){
 	X.draw_text(p,T,0x000000);
 	T.str("");		
 	p.y=p.y-20;
-	if (draw_trap_mode) {
+ 	if (draw_trap_mode) {
 		if (find_trap(int((3.0/2.0)*depth), depth, 512, 3.42, NULL,NULL, 2)) {
 			T << "trap found (toggle trap mode with [t])";
 			draw_trap();
@@ -87,6 +87,17 @@ void ifs::draw_limit_set(){
 	X.draw_text(p,T,0x000000);
 	T.str("");
 	p.y=p.y-20;
+        T << "Find trap-like vectors [r]: ";
+        if (find_trap_like_vectors) {
+          T << "on";
+          std::vector<Ball> TLB;
+          trap_like_balls(TLB, 1);
+        } else {
+          T << "off";
+        }
+        X.draw_text(p,T,0);
+        T.str("");
+        p.y-=20;
 	T << "2-color IFS (toggle with [c]): ";
 	if(color_ifs){
 		T << "on";
