@@ -24,6 +24,14 @@ Ball::Ball() {
   word_len = 0;
 }
 
+Ball::Ball(cpx c, double r) {
+  center = c;
+  radius = r;
+  to_z = to_w = 0;
+  word = std::bitset<64>(0);
+  word_len = 0;
+}
+
 Ball::Ball(cpx c, cpx tz, cpx tw, double r) {
   center = c;
   to_z = tz;
@@ -129,14 +137,37 @@ Ball ifs::act_on_right(int index, const Ball& b) const {
 }
 
 
+double ifs::distance_from_balls(cpx p, const std::vector<Ball>& balls) {
+  if (balls.size() == 0) return -1;
+  double dist = abs(balls[0].center-p)-balls[0].radius;
+  for (int i=1; i<(int)balls.size(); ++i) {
+    double d = abs(balls[i].center-p) - balls[i].radius;
+    if (d < dist) dist = d;
+  }
+  return dist;
+}
+
 
 double ifs::when_ray_hits_ball(cpx p, cpx v, const Ball& b) {
-  return 0;
+  cpx c = b.center;
+  double r = b.radius;
+  double t = cpx_dot(c-p, v) / cpx_dot(v,v);
+  cpx x = p + t*v;
+  double a = abs(c-x);
+  if (a > r) return 1e12;
+  double b = sqrt(r*r-a*a);
+  return t - b/abs(v);
 }
 
 
 double ifs::when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls) {
-  return 0;
+  if (balls.size() == 0) return -1;
+  double t = when_ray_hits_ball(p,v,balls[0]);
+  for (int i=1; i<(int)balls.size(); ++i) {
+    double tp = when_ray_hits_ball(p,v,balls[i]);
+    if (tp < t) t = tp;
+  }
+  return t;
 }
 
 

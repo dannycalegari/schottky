@@ -253,7 +253,8 @@ void ball_convex_hull(std::vector<int>& ch,
 //then finds the largest trap ball it can stick in there
 void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB, 
                                      int num_TL_balls, 
-                                     const std::vector<Ball>& balls) {
+                                     const std::vector<Ball>& balls,
+                                     int verbose) {
   //get the convex hull of the balls
   std::vector<int> ch;
   std::vector<cpx> boundary_points;
@@ -270,9 +271,9 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
   
   std::vector<int> ch_gaps(0);
   int current_gap_ind = 0;
-  int num_found_balls = 0;
+  TLB.resize(0);
   while (true) {
-    if (num_found_balls >= num_TL_balls || current_gap_ind > (int)ch.size()) {
+    if ((int)TLB.size() >= num_TL_balls || current_gap_ind > (int)ch.size()) {
       break;
     }
     int i = ch_gap_pairs[current_gap_ind].second;
@@ -284,17 +285,66 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
     cpx p2 = 0.5*x1 + 0.5*x2;
     cpx p3 = 0.75*x1 + 0.25*x2;
     double t1 = when_ray_hits_ball(p1, v, balls);
-    double t2 = when_ray_hits_ball(p1, v, balls);
-    double t3 = when_ray_hits_ball(p1, v, balls);
-    t1=t1+t2+t3;
+    double t2 = when_ray_hits_ball(p2, v, balls);
+    double t3 = when_ray_hits_ball(p3, v, balls);
+    t1 /= 2.0;
+    t2 /= 2.0;
+    t3 /= 2.0;
+    double d1 = distance_from_balls(p1 + t1*v, balls);
+    double d2 = distance_from_balls(p2 + t2*v, balls);
+    double d3 = distance_from_balls(p3 + t3*v, balls);
+    cpx best_center;
+    double best_radius;
+    if (d1 > d2 && d1 > d3) {
+      best_center = p1+t1*v;
+      best_radius = d1;
+    } else if (d2 > d3) {
+      best_center = p2 + t2*v;
+      best_radius = d2;
+    } else {
+      best_center = p3 + t3*v;
+      best_radius = d3;
+    }
+    TLB.push_back(Ball(best_center, best_radius));
   }
-    
-  
-  
+  if (verbose > 0) {
+    cpx ll, ur;
+    box_containing_balls(balls, ll, ur);  
+    int num_drawing_pixels = 512;
+    XGraphics X2(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+    //draw the convex hull
+    for (int i=0; i<(int)ch.size(); ++i) {
+      int ip1 = (i==(int)ch.size()-1 ? 0 : i+1);
+    }
+    (void)X2.wait_for_key();
+  }
 }
     
+  
+  
+    
 
-void ifs::trap_like_balls(std::vector<Ball>& TLB) {
+bool ifs::trap_like_balls(std::vector<Ball>& TLB, int verbose) {
+  
+  int n_depth = depth;
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return false;
+  
+  if (!circ_connected(min_r)) {
+    if (verbose>0) {
+      std::cout << "Not even connected\n";
+    }
+    return false;
+  }
+  
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  std::vector<Ball> balls(0);
+  compute_balls_right(balls, initial_ball, n_depth);
+  
+  trap_like_balls_from_balls(TLB, 10, balls, verbose);
+ 
+  return true;
+  
 }
   
 

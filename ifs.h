@@ -54,6 +54,7 @@ struct Ball {
   std::bitset<64> word;     //the z and w word we applied to get here (highest bit is most recent application)
   int word_len; //the number of significant bits
   Ball();
+  Ball(cpx c, double r);
   Ball(cpx c, cpx to_z, cpx to_w, double r);
   Ball(cpx c, cpx to_z, cpx to_w, double r, const std::bitset<64>& w, int wl);
   int last_gen_index() const;
@@ -108,6 +109,7 @@ class ifs{
                                                          double ratio_goal, double ratio_lower_limit);
     cpx center_of_mass(const std::vector<Ball>& balls);
 		bool minimal_enclosing_radius(double& r);
+		double distance_from_balls(cpx p, const std::vector<Ball>& balls);
 		double when_ray_hits_ball(cpx p, cpx v, const Ball& b);
 		double when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls);
 		
@@ -169,10 +171,11 @@ class ifs{
 		void draw_trap();	
 		
 		//trap-like vectors
-		void trap_like_balls(std::vector<Ball>& TLB);
+		bool trap_like_balls(std::vector<Ball>& TLB, int verbose);
 		void trap_like_balls_from_balls(std::vector<Ball>& TLB, 
                                     int max_pixels, 
-                                    const std::vector<Ball>& balls);
+                                    const std::vector<Ball>& balls,
+                                    int verbose);
 		
 		
 		//Main interface and drawing functions
