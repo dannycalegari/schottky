@@ -509,8 +509,10 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
 //plus some trap like balls for this value
 bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB, 
                                       std::vector<std::pair<Bitword,Bitword> >& words,
-                                      cpx ll, cpx ur, int n_depth, int verbose) {
+                                      cpx ll, cpx ur, int n_depth, int uv_depth, int verbose) {
   
+  cpx backup_z = z;
+  cpx backup_w = w;
   z = (ll+ur)/2.0;
   az = abs(z);
   w = z; aw = az;
@@ -527,12 +529,16 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
   if (initial_radius_increase > 100) return false;
   
   if (!trap_like_balls(TLB, initial_radius_increase, n_depth, verbose)) {
+    z = backup_z; az = abs(z);
+    w = backup_w; aw = abs(w);
     return false;
   }
   
   //now we need to find uv words 
   //z^m(u(1/2)-v(1/2)) needs to land within Cz*box_diag_rad to be feasible for this box
-  find_close_uv_words(words, TLB, Cz*box_diag_rad, 50, n_depth);
+  //std::cout << "Finding close uv words to depth " << uv_depth << "\n";
+  //find_close_uv_words(words, TLB, Cz*box_diag_rad, 10000, uv_depth);
+  words.resize(0);
   if (verbose>0) {
     std::cout << "Box radius: " << box_diag_rad << "\n";
     std::cout << "Initial radius increase: " << initial_radius_increase << "\n";
@@ -546,7 +552,8 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
       std::cout << i << ": " << words[i].first << "\n" << words[i].second << "\n";
     }
   }
-  
+  z = backup_z; az = abs(z);
+  w = backup_w; aw = abs(w);
   return true;
 }
 
@@ -555,13 +562,13 @@ void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
                               const std::vector<Ball>& TLB, 
                               double within,
                               int how_many,
-                              int n_depth) {
+                              int uv_depth) {
   words.resize(0);
   std::vector<double> distances(0);
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return;
   
-  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
   std::vector<std::pair<Ball, Ball> > stack(1);
   stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
   if (stack[0].first.is_disjoint(stack[0].second)) return;
@@ -572,11 +579,11 @@ void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
     //we are assuming they are not disjoint if they got pushed on
     //so check the displacement vector
     cpx d = bz.center - bw.center;
-    d *= pow(z, bz.word_len);
+    d *= pow(z, -bz.word_len);
     for (int i=0; i<(int)TLB.size(); ++i) {
       double dist = abs(TLB[i].center - d) - TLB[i].radius;
       if (dist < within) {
-        if (distances.size() > 1 && dist > distances.back()) {
+        if (distances.size() > 0 && dist > distances.back()) {
           continue;
         }
         int position = 0;
@@ -595,18 +602,22 @@ void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
     }
     
     //if the word length is too big, we can't push the children
-    if (bz.word_len >= n_depth) continue;
+    if (bz.word_len >= uv_depth) continue;
     
     //now push on any children
     //if they are disjoint, put them on the stack
     Ball bzs[2] = {act_on_right(0, bz), act_on_right(1, bz)};
     Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
     for (int i=0; i<4; ++i) {
-      if ( bzs[i>>1].is_disjoint(bws[i&1]) ) { 
+      if ( !bzs[i>>1].is_disjoint(bws[i&1]) ) { 
         stack.push_back(std::make_pair(bzs[i>>1], bws[i&1]));
       }
     }
   }
+  
+  //for (int i=0; i<(int)distances.size(); ++i) {
+  //  std::cout << words[i].first << " " << words[i].second << " " << distances[i] << "\n";
+  //}
   
 }
 
@@ -616,7 +627,7 @@ int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB,
   for (int i=0; i<(int)words.size(); ++i) {
     cpx u12 = apply_bitword(words[i].first, 0.5);
     cpx v12 = apply_bitword(words[i].second, 0.5);
-    cpx zm = pow(z, words[i].first.len);
+    cpx zm = pow(z, -words[i].first.len);
     cpx x = zm*(u12-v12);
     for (int j=0; j<(int)TLB.size(); ++j) {
       if (abs(TLB[j].center - x) < TLB[j].radius) {
@@ -628,7 +639,43 @@ int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB,
 }
 
 
-
+int ifs::check_TLB(const std::vector<Ball>& TLB, int uv_depth) {
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return -1;
+  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
+  std::vector<std::pair<Ball, Ball> > stack(1);
+  stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
+  if (stack[0].first.is_disjoint(stack[0].second)) return -1;
+  while (stack.size() > 0) {
+    Ball bz = stack.back().first;
+    Ball bw = stack.back().second;
+    stack.pop_back();
+    //we are assuming they are not disjoint if they got pushed on
+    //so check the displacement vector
+    cpx d = bz.center - bw.center;
+    d *= pow(z, -bz.word_len);
+    for (int i=0; i<(int)TLB.size(); ++i) {
+      if (abs(TLB[i].center - d) < TLB[i].radius) {
+        return bz.word_len;
+      }
+    }
+    
+    //if the word length is too big, we can't push the children
+    if (bz.word_len >= uv_depth) continue;
+    
+    //now push on any children
+    //if they are disjoint, put them on the stack
+    Ball bzs[2] = {act_on_right(0, bz), act_on_right(1, bz)};
+    Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
+    for (int i=0; i<4; ++i) {
+      if ( !bzs[i>>1].is_disjoint(bws[i&1]) ) { 
+        stack.push_back(std::make_pair(bzs[i>>1], bws[i&1]));
+      }
+    }
+  }
+  return -1;
+  
+}
 
 
 

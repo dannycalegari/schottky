@@ -253,14 +253,19 @@ void ifs::draw_mandelbrot_set(){
 	std::vector<std::pair<Bitword,Bitword> > uv_words;
 	std::vector<Ball> TLB;
 	int tlb_result;
+        bool found_TLB = false;
 	if (find_trap_like_vectors) {
 	  TLB_and_uv_words_for_region(TLB, uv_words, 
 	                              center-wind-(wind*I), center+wind+(wind*I),
-	                              depth, 1);
-          std::cout << "Found trap like balls: \n";
-          for (int i=0; i<(int)TLB.size(); ++i) {
-            std::cout << TLB[i] << "\n";
+	                              15, depth, 0);
+          if (TLB.size() > 0) {
+            found_TLB = true;
           }
+          //std::cout << "Found " << uv_words.size() << " uv words\n";
+          //std::cout << "Found trap like balls: \n";
+          //for (int i=0; i<(int)TLB.size(); ++i) {
+          //  std::cout << TLB[i] << "\n";
+          //}
         }
 	
 	for(i=0; i<drawing_width; i=i+mesh){
@@ -282,25 +287,27 @@ void ifs::draw_mandelbrot_set(){
 			if(abs(z)>1.0){	// could truncate this to sqrt(1/2) actually
 				X.draw_box(q,mesh,0x000000);
 			} else { // if(abs(z)>0.5){
-				if(circ_connected()){
-          int temp_e_depth = exit_depth;
-          double difficulty;
-				  if (draw_trap_mode && find_trap(int((3.0/2.0)*depth), depth, 512, 3.42, NULL, &difficulty, 0)) {
-				    double gamount = difficulty/100.0;
-				    int c = X.get_rgb_color(1.0,gamount,0.0);
-            X.draw_box(q,mesh,c);
-            X.flush();
-				  } else {
-            if (draw_contains_half && contains_point(0.5, depth)) {
-              X.draw_box(q, mesh, gcol*exit_depth);
-            } else if (find_trap_like_vectors && (tlb_result = check_TLB_and_uv_words(TLB, uv_words)) >= 0) {
-              double amount = double(tlb_result)/double(depth);
-              int c = X.get_rgb_color(0,amount,1);
-              X.draw_box(q,mesh,c);
-            } else {
-              X.draw_box(q,mesh,0x000001*temp_e_depth);
-            }
-          }
+				if(true){ //circ_connected()){
+                                        int temp_e_depth = exit_depth;
+                                        double difficulty;
+                                        if (draw_trap_mode && 
+                                            find_trap(int((3.0/2.0)*depth), depth, 512, 3.42, NULL, &difficulty, 0)) {
+                                            double gamount = difficulty/100.0;
+                                            int c = X.get_rgb_color(1.0,gamount,0.0);
+                                            X.draw_box(q,mesh,c);
+                                            X.flush();
+                                        } else if (draw_contains_half && 
+                                                   contains_point(0.5, depth)) {
+                                            X.draw_box(q, mesh, gcol*exit_depth);
+                                        } else if (find_trap_like_vectors && 
+                                                    found_TLB &&
+                                                   (tlb_result = check_TLB(TLB,depth)) >= 0) {
+                                            double amount = double(tlb_result)/double(depth);
+                                            int c = X.get_rgb_color(0,amount,1);
+                                            X.draw_box(q,mesh,c);
+                                        } else if (circ_connected()) {
+                                            X.draw_box(q,mesh,0x000001*temp_e_depth);
+                                        }
 				} else if (disconnection_depth) {
 					X.draw_box(q,mesh,0x010000*exit_depth);
 				}
