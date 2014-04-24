@@ -480,20 +480,22 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
   
     
 
-bool ifs::trap_like_balls(std::vector<Ball>& TLB, int verbose) {
+bool ifs::trap_like_balls(std::vector<Ball>& TLB, 
+                          double initial_radius_increase, 
+                          int n_depth,
+                          int verbose) {
   
-  int n_depth = depth;
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return false;
   
-  if (!circ_connected(min_r)) {
+  if (!circ_connected(min_r+initial_radius_increase)) {
     if (verbose>0) {
       std::cout << "Not even connected\n";
     }
     return false;
   }
   
-  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r + initial_radius_increase);
   std::vector<Ball> balls(0);
   compute_balls_right(balls, initial_ball, n_depth);
   
@@ -506,18 +508,34 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB, int verbose) {
 //for the current z value, produce a bunch of balls in 
 //parameter space which all have traps certified by trap-like vectors
 //it searches for such balls in the box defined by ll and ur
-void balls_of_traps(std::vector<Ball>& BT, cpx ll, cpx ur, int grid, int verbose) {
+void ifs::balls_of_traps(std::vector<Ball>& BT, cpx ll, cpx ur, int n_depth, int verbose) {
+  
+  z = (ll+ur)/2.0;
+  az = abs(z);
+  w = z; aw = az;
+  
+  //we want to choose epsilon such that 
+  //any z in the box can use any of the trap balls
+  //i.e. we need the limit set to always be inside our balls
+  //so we need (R-r)|z|^n_depth > Cz*(center-corners)
+  //i.e. R-r > (Cz*(center-corners))/|z|^n_depth
+  double Cz = 3.42;
+  double initial_radius_increase = Cz*(abs(ll-ur)/2.0) / pow(az, n_depth);
+  
   std::vector<Ball> TLB(0);
-  trap_like_balls(TLB, verbose);
+  trap_like_balls(TLB, initial_radius_increase, n_depth, verbose);
+  
+  BT.resize(0);
   
   //now we need to find uv words 
-  //we'll try a grid of points
-  double hstep = (ur.real() - ll.real())/double(grid+1);
-  double vstep = (ur.imag() - ll.imag())/double(grid+1);
-  for (double x = ll.real()+step; x < ur.real(); x += hstep) {
-    for (double y = ll.imag()+step; y < ur.imag(); y += vstep) {
-    }
-  }
+  //for each uv word that is close, we'll plot where in the box it lies
+  //within the balls
+  std::vector<std::pair<std::bitset<64>, int> > u_words(0);
+  std::vector<std::pair<std::bitset<64>, int> > v_words(0);
+  find_close_uv_words(u_words, v_words, n_depth, TLB);
+  
+  
+  
   
 }
 

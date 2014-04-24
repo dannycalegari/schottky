@@ -175,13 +175,23 @@ class ifs{
 		void draw_trap();	
 		
 		//trap-like vectors
-		bool trap_like_balls(std::vector<Ball>& TLB, int verbose);
+		bool trap_like_balls(std::vector<Ball>& TLB, 
+		                     double initial_radius_increase, 
+		                     int n_depth, 
+		                     int verbose);
 		void trap_like_balls_from_balls(std::vector<Ball>& TLB, 
                                     int num_TL_balls, 
                                     int num_ball_trials,
                                     const std::vector<Ball>& balls,
                                     int verbose);
-                bool find_trap_like_vectors;
+    void balls_of_traps(std::vector<Ball>& BT, 
+                        cpx ll, cpx ur, 
+                        int n_depth, int verbose);
+                        
+    void find_close_uv_words(std::vector<std::pair<std::bitset<64>, int> >& u_words, 
+                             std::vector<std::pair<std::bitset<64>, int> >& v_words, 
+                             int n_depth, const std::vector<Ball>& TLB);
+    bool find_trap_like_vectors;
 		
 		
 		//Main interface and drawing functions

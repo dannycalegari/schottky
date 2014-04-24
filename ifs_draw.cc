@@ -91,7 +91,7 @@ void ifs::draw_limit_set(){
         if (find_trap_like_vectors) {
           T << "on";
           std::vector<Ball> TLB;
-          trap_like_balls(TLB, 1);
+          trap_like_balls(TLB, 0, depth, 1);
         } else {
           T << "off";
         }

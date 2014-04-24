@@ -172,6 +172,15 @@ double ifs::when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls) {
 }
 
 
+
+void ifs::find_close_uv_words(std::vector<std::pair<std::bitset<64>, int> >& u_words, 
+                              std::vector<std::pair<std::bitset<64>, int> >& v_words, 
+                              int n_depth, const std::vector<Ball>& TLB) {
+                        
+}
+
+
+
 //take a list of balls and compute one more level of depth 
 //(on the left)
 void ifs::compute_next_ball_depth(std::vector<Ball>& balls, int current_depth) {
