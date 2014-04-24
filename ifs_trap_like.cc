@@ -532,7 +532,20 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
   
   //now we need to find uv words 
   //z^m(u(1/2)-v(1/2)) needs to land within Cz*box_diag_rad to be feasible for this box
-  find_close_uv_words(words, TLB, Cz*box_diag_rad, n_depth);
+  find_close_uv_words(words, TLB, Cz*box_diag_rad, 50, n_depth);
+  if (verbose>0) {
+    std::cout << "Box radius: " << box_diag_rad << "\n";
+    std::cout << "Initial radius increase: " << initial_radius_increase << "\n";
+    std::cout << "Finding uv words that land within " << Cz*box_diag_rad << "\n";
+    std::cout << "Found the TLB: \n";
+    for (int i=0; i<(int)TLB.size(); ++i) {
+      std::cout << TLB[i] << "\n";
+    }
+    std::cout << "Found the uv words: \n";
+    for (int i=0; i<(int)words.size(); ++i) {
+      std::cout << i << ": " << words[i].first << "\n" << words[i].second << "\n";
+    }
+  }
   
   return true;
 }
@@ -541,8 +554,10 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
 void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
                               const std::vector<Ball>& TLB, 
                               double within,
+                              int how_many,
                               int n_depth) {
   words.resize(0);
+  std::vector<double> distances(0);
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return;
   
@@ -561,8 +576,20 @@ void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
     for (int i=0; i<(int)TLB.size(); ++i) {
       double dist = abs(TLB[i].center - d) - TLB[i].radius;
       if (dist < within) {
-        words.push_back( std::make_pair( Bitword(bz.word, bz.word_len),
-                                         Bitword(bw.word, bw.word_len) ) );
+        if (distances.size() > 1 && dist > distances.back()) {
+          continue;
+        }
+        int position = 0;
+        while (position < (int)distances.size() && dist > distances[position]) {
+          position++;
+        }
+        words.insert(words.begin()+position, std::make_pair( Bitword(bz.word, bz.word_len),
+                                                             Bitword(bw.word, bw.word_len) ) );
+        distances.insert(distances.begin() + position, dist);
+        if ((int)distances.size() > how_many) {
+          words.pop_back();
+          distances.pop_back();
+        }
         break;
       }
     }
@@ -585,14 +612,14 @@ void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
 
 
 int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
-                                 const std::vector<std::pair<Bitword,Bitword> >& words) {
+                                const std::vector<std::pair<Bitword,Bitword> >& words) {
   for (int i=0; i<(int)words.size(); ++i) {
     cpx u12 = apply_bitword(words[i].first, 0.5);
     cpx v12 = apply_bitword(words[i].second, 0.5);
     cpx zm = pow(z, words[i].first.len);
     cpx x = zm*(u12-v12);
     for (int j=0; j<(int)TLB.size(); ++j) {
-      if (abs(TLB[i].center - x) < TLB[i].radius) {
+      if (abs(TLB[j].center - x) < TLB[j].radius) {
         return words[i].first.len;
       }
     }

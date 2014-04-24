@@ -256,8 +256,12 @@ void ifs::draw_mandelbrot_set(){
 	if (find_trap_like_vectors) {
 	  TLB_and_uv_words_for_region(TLB, uv_words, 
 	                              center-wind-(wind*I), center+wind+(wind*I),
-	                              depth, 0);
-  }
+	                              depth, 1);
+          std::cout << "Found trap like balls: \n";
+          for (int i=0; i<(int)TLB.size(); ++i) {
+            std::cout << TLB[i] << "\n";
+          }
+        }
 	
 	for(i=0; i<drawing_width; i=i+mesh){
 		for(j=0; j<drawing_width; j=j+mesh){

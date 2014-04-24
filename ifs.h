@@ -89,6 +89,8 @@ struct Bitword {
   }
 };
 
+std::ostream& operator<<(std::ostream& os, const Bitword& b);
+
 
 /**************************************************************************
  * data defining an IFS
@@ -208,6 +210,7 @@ class ifs{
     void find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
                              const std::vector<Ball>& TLB, 
                              double within,
+                             int how_many,
                              int n_depth);
     int check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
                                const std::vector<std::pair<Bitword,Bitword> >& words);

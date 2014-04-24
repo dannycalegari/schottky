@@ -63,7 +63,9 @@ std::ostream& operator<<(std::ostream& os, const Ball& b) {
 }
 
 
-
+std::ostream& operator<<(std::ostream& os, const Bitword& b) {
+  return os << b.w << "(" << b.len << ")";
+}
 
 
 

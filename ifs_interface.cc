@@ -152,7 +152,7 @@ void ifs::user_interface() {
                     break;
                 } else if (XLookupKeysym(&report.xkey, 0) == XK_r) { //toggle trap-like vectors
                     find_trap_like_vectors = !find_trap_like_vectors;
-                    if (mode == 0) draw();
+                    draw();
                     break;
                 } else if (XLookupKeysym(&report.xkey, 0) == XK_o) { //start drawing a loop
                     if (mode == 1) { //only do it in mandlebrot mode
