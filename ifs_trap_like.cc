@@ -543,6 +543,43 @@ void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
                               double within,
                               int n_depth) {
   words.resize(0);
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return;
+  
+  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  std::vector<std::pair<Ball, Ball> > stack(1);
+  stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
+  if (stack[0].first.is_disjoint(stack[0].second)) return;
+  while (stack.size() > 0) {
+    Ball bz = stack.back().first;
+    Ball bw = stack.back().second;
+    stack.pop_back();
+    //we are assuming they are not disjoint if they got pushed on
+    //so check the displacement vector
+    cpx d = bz.center - bw.center;
+    d *= pow(z, bz.word_len);
+    for (int i=0; i<(int)TLB.size(); ++i) {
+      double dist = abs(TLB[i].center - d) - TLB[i].radius;
+      if (dist < within) {
+        words.push_back( std::make_pair( Bitword(bz.word, bz.word_len),
+                                         Bitword(bw.word, bw.word_len) ) );
+        break;
+      }
+    }
+    
+    //if the word length is too big, we can't push the children
+    if (bz.word_len >= n_depth) continue;
+    
+    //now push on any children
+    //if they are disjoint, put them on the stack
+    Ball bzs[2] = {act_on_right(0, bz), act_on_right(1, bz)};
+    Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
+    for (int i=0; i<4; ++i) {
+      if ( bzs[i>>1].is_disjoint(bws[i&1]) ) { 
+        stack.push_back(std::make_pair(bzs[i>>1], bws[i&1]));
+      }
+    }
+  }
   
 }
 
