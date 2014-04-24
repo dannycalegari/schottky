@@ -505,10 +505,11 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
   
 }
   
-//for the current z value, produce a bunch of balls in 
-//parameter space which all have traps certified by trap-like vectors
-//it searches for such balls in the box defined by ll and ur
-void ifs::balls_of_traps(std::vector<Ball>& BT, cpx ll, cpx ur, int n_depth, int verbose) {
+//for the current z value, produce a bunch of promising uv words, 
+//plus some trap like balls for this value
+bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB, 
+                                      std::vector<std::pair<Bitword,Bitword> >& words,
+                                      cpx ll, cpx ur, int n_depth, int verbose) {
   
   z = (ll+ur)/2.0;
   az = abs(z);
@@ -520,28 +521,47 @@ void ifs::balls_of_traps(std::vector<Ball>& BT, cpx ll, cpx ur, int n_depth, int
   //so we need (R-r)|z|^n_depth > Cz*(center-corners)
   //i.e. R-r > (Cz*(center-corners))/|z|^n_depth
   double Cz = 3.42;
-  double initial_radius_increase = Cz*(abs(ll-ur)/2.0) / pow(az, n_depth);
+  double box_diag_rad = abs(ll-ur)/2.0;
+  double initial_radius_increase = Cz*box_diag_rad / pow(az, n_depth);
   
-  std::vector<Ball> TLB(0);
-  trap_like_balls(TLB, initial_radius_increase, n_depth, verbose);
+  if (initial_radius_increase > 100) return false;
   
-  BT.resize(0);
+  if (!trap_like_balls(TLB, initial_radius_increase, n_depth, verbose)) {
+    return false;
+  }
   
   //now we need to find uv words 
-  //for each uv word that is close, we'll plot where in the box it lies
-  //within the balls
-  std::vector<std::pair<std::bitset<64>, int> > u_words(0);
-  std::vector<std::pair<std::bitset<64>, int> > v_words(0);
-  find_close_uv_words(u_words, v_words, n_depth, TLB);
+  //z^m(u(1/2)-v(1/2)) needs to land within Cz*box_diag_rad to be feasible for this box
+  find_close_uv_words(words, TLB, Cz*box_diag_rad, n_depth);
   
-  
-  
+  return true;
+}
+
+
+void ifs::find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
+                              const std::vector<Ball>& TLB, 
+                              double within,
+                              int n_depth) {
+  words.resize(0);
   
 }
 
 
-
-
+int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
+                                 const std::vector<std::pair<Bitword,Bitword> >& words) {
+  for (int i=0; i<(int)words.size(); ++i) {
+    cpx u12 = apply_bitword(words[i].first, 0.5);
+    cpx v12 = apply_bitword(words[i].second, 0.5);
+    cpx zm = pow(z, words[i].first.len);
+    cpx x = zm*(u12-v12);
+    for (int j=0; j<(int)TLB.size(); ++j) {
+      if (abs(TLB[i].center - x) < TLB[i].radius) {
+        return words[i].first.len;
+      }
+    }
+  }
+  return -1;
+}
 
 
 

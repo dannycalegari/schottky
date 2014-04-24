@@ -138,6 +138,20 @@ Ball ifs::act_on_right(int index, const Ball& b) const {
 }
 
 
+//compute the image of a point under the action of a word
+cpx ifs::apply_bitword(const Bitword& b, cpx x) const {
+  cpx ans = x;
+  for (int i=0; i<(int)b.len; ++i) {
+    if (b.w[i] == 0) {
+      ans = z*ans;
+    } else {
+      ans = w*(ans-1.0)+1.0;
+    }
+  }
+  return ans;
+}
+
+
 double ifs::distance_from_balls(cpx p, const std::vector<Ball>& balls) {
   if (balls.size() == 0) return -1;
   double dist = abs(balls[0].center-p)-balls[0].radius;
@@ -169,14 +183,6 @@ double ifs::when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls) {
     if (tp < t) t = tp;
   }
   return t;
-}
-
-
-
-void ifs::find_close_uv_words(std::vector<std::pair<std::bitset<64>, int> >& u_words, 
-                              std::vector<std::pair<std::bitset<64>, int> >& v_words, 
-                              int n_depth, const std::vector<Ball>& TLB) {
-                        
 }
 
 

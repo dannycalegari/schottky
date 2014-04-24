@@ -229,6 +229,15 @@ void ifs::draw_mandelbrot_set(){
 	}
 	X.draw_text(p,T,0x000000);	
 	T.str("");
+	p.y=p.y-20;
+  T << "Find traps via trap-like vectors [r]: ";
+  if (find_trap_like_vectors) {
+    T << "on";
+  } else {
+    T << "off";
+  }
+  X.draw_text(p,T,0);
+	T.str("");
 	p.y-=20;
 	T << "Draw trap loop with [o]";
 	X.draw_text(p,T,0);
@@ -240,6 +249,15 @@ void ifs::draw_mandelbrot_set(){
 	
 	//int rcol = X.get_rgb_color(1,0,0);
   int gcol = X.get_rgb_color(0,1,0);
+	
+	std::vector<std::pair<Bitword,Bitword> > uv_words;
+	std::vector<Ball> TLB;
+	int tlb_result;
+	if (find_trap_like_vectors) {
+	  TLB_and_uv_words_for_region(TLB, uv_words, 
+	                              center-wind-(wind*I), center+wind+(wind*I),
+	                              depth, 0);
+  }
 	
 	for(i=0; i<drawing_width; i=i+mesh){
 		for(j=0; j<drawing_width; j=j+mesh){
@@ -269,12 +287,16 @@ void ifs::draw_mandelbrot_set(){
             X.draw_box(q,mesh,c);
             X.flush();
 				  } else {
-                                    if (draw_contains_half && contains_point(0.5, depth)) {
-                                      X.draw_box(q, mesh, gcol*exit_depth);
-                                    } else {
-                                      X.draw_box(q,mesh,0x000001*temp_e_depth);
-                                    }
-                                  }
+            if (draw_contains_half && contains_point(0.5, depth)) {
+              X.draw_box(q, mesh, gcol*exit_depth);
+            } else if (find_trap_like_vectors && (tlb_result = check_TLB_and_uv_words(TLB, uv_words)) >= 0) {
+              double amount = double(tlb_result)/double(depth);
+              int c = X.get_rgb_color(0,amount,1);
+              X.draw_box(q,mesh,c);
+            } else {
+              X.draw_box(q,mesh,0x000001*temp_e_depth);
+            }
+          }
 				} else if (disconnection_depth) {
 					X.draw_box(q,mesh,0x010000*exit_depth);
 				}
