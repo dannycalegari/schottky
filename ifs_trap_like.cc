@@ -643,7 +643,7 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, int uv_depth) {
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return -1;
   Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
-  std::vector<std::pair<Ball, Ball> > stack(1);
+  std::deque<std::pair<Ball, Ball> > stack(1);
   stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
   if (stack[0].first.is_disjoint(stack[0].second)) return -1;
   while (stack.size() > 0) {
@@ -669,7 +669,7 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, int uv_depth) {
     Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
     for (int i=0; i<4; ++i) {
       if ( !bzs[i>>1].is_disjoint(bws[i&1]) ) { 
-        stack.push_back(std::make_pair(bzs[i>>1], bws[i&1]));
+        stack.push_front(std::make_pair(bzs[i>>1], bws[i&1]));
       }
     }
   }
