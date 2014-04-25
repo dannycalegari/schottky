@@ -82,37 +82,37 @@ ifs::ifs(cpx a, cpx b, int width, int mode) {
 
 //set everything and start graphics
 void ifs::initialize(cpx a, cpx b, int width, int mode){
-	// initialize z to a and w to b
-	z=a;
-	w=b;
-	az = abs(z);
-	aw = abs(w);
-	sync=0;
-	color_ifs=true;
-	chunky_ifs=false;
-	disconnection_depth=false;
-        draw_contains_half = false;
-	draw_trap_mode = false;
-        find_trap_like_vectors = false;
-	step=0.01;	// size of adjustments to z and w
-	seed=0.0;	// initial seed point for IFS
-	center=0.0;	// in mandelbrot mode; center of screen, size of window, and mesh of accuracy
-	wind=1.0;
-	mesh=2;
-	depth=10;	  // depth to iterate IFS or detect connectedness to
-	trap_depth = depth;  //depth to search for traps 
-	drawing_width = width;
-	drawing_radius = drawing_width/2;  
-	this->mode = mode;
-	
+  // initialize z to a and w to b
+  z=a;
+  w=b;
+  az = abs(z);
+  aw = abs(w);
+  sync=0;
+  color_ifs=true;
+  chunky_ifs=false;
+  disconnection_depth=false;
+  draw_contains_half = false;
+  draw_trap_mode = false;
+  find_trap_like_vectors = false;
+  find_close_uv_words = false;
+  step=0.01;	// size of adjustments to z and w
+  seed=0.0;	// initial seed point for IFS
+  center=0.0;	// in mandelbrot mode; center of screen, size of window, and mesh of accuracy
+  wind=1.0;
+  mesh=2;
+  depth=10;	  // depth to iterate IFS or detect connectedness to
+  trap_depth = depth;  //depth to search for traps 
+  drawing_width = width;
+  drawing_radius = drawing_width/2;  
+  this->mode = mode;
 }
 
 //reset stuff when switching
 void ifs::reinitialize(cpx a, cpx b) {
   z=a;
-	w=b;
-	az = abs(z);
-	aw = abs(w);
+  w=b;
+  az = abs(z);
+  aw = abs(w);
 }
 
 
@@ -457,6 +457,75 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
 }
 
 
+//returns the u,v pair which are closest of the given length
+//
+//it does a breadth-first search, and keeps track of the closest
+//pair it finds in each length.  If a pair under consideration
+//move necessarily result in a farther pair, it can be discarded
+void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
+                                int uv_depth) {
+  words.resize(0);
+  std::vector<double> distances(0);
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return;
+  
+  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
+  std::vector<std::pair<Ball, Ball> > pairs(1);
+  std::vector<std::pair<Ball, Ball> > next_pairs;
+  pairs[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
+
+  for (int i=2; i<uv_depth; ++i) {
+    //make all possible next pairs
+    next_pairs.resize(4*pairs.size());
+    for (int j=0; j<(int)pairs.size(); ++j) {
+      Ball& bz = pairs[j].first;
+      Ball& bw = pairs[j].second;
+      Ball bzs[2] = {act_on_right(0, bz), act_on_right(1, bz)};
+      Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
+      for (int k=0; k<4; ++k) {
+        next_pairs[4*j + k] = std::make_pair( bzs[k>>1], bws[k&1] );
+      }
+    }
+    //go through and find the closest
+    double min_d = 1e10;
+    for (int j=0; j<(int)next_pairs.size(); ++j) {
+      double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
+      if (d < min_d) min_d = d;
+    }
+    //make up the next pairs
+    //we want all possibilities, so we allow duplicate lengths
+    //(for safety, take a little range)
+    double cutoff_dist = min_d + pow(az, i)*2*min_r;
+    std::cout << "Cutoff for i=" << i << ": " << cutoff_dist << "\n";
+    pairs.resize(0);
+    for (int j=0; j<(int)next_pairs.size(); ++j) {
+      double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
+      if (d < cutoff_dist) {
+        pairs.push_back(next_pairs[j]);
+      }
+    }  
+  }
+  //now we've got a bunch of pairs
+  words.resize(pairs.size());
+  for (int i=0; i<(int)pairs.size(); ++i) {
+    words[i] = std::make_pair( Bitword(pairs[i].first.word, pairs[i].first.word_len),
+                               Bitword(pairs[i].second.word, pairs[i].second.word_len) );
+    std::cout << abs(pairs[i].first.center - pairs[i].second.center) << " " << pairs[i].first.center << " - ";
+  }
+  std::cout << "\n";
+}
+
+
+
+
+
+
+
+
+
+
+
+
 //find the center of mass of the balls (I guess just average for now
 cpx ifs::center_of_mass(const std::vector<Ball>& balls) {
   cpx a = 0.0;
@@ -483,12 +552,12 @@ bool ifs::minimal_enclosing_radius(double& r) {
 }
 
 cpx ifs::iterate(int index, cpx u){
-	// apply generator to u
-	if(index==0){
-		return(u*z);
-	} else {
-		return(((u-1.0)*w)+1.0);
-	};
+  // apply generator to u
+  if(index==0){
+          return(u*z);
+  } else {
+          return(((u-1.0)*w)+1.0);
+  };
 };
 
 

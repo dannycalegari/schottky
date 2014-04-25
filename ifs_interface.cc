@@ -142,6 +142,10 @@ void ifs::user_interface() {
                     draw_contains_half = !draw_contains_half;
                     draw();
                     break;
+                } else if(XLookupKeysym(&report.xkey, 0) == XK_w){ 
+                    find_close_uv_words = !find_close_uv_words;
+                    draw();
+                    break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_t){ 
                     draw_trap_mode = !draw_trap_mode;
                     draw();
