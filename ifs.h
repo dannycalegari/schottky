@@ -206,6 +206,7 @@ class ifs{
                                     int verbose);
     bool TLB_and_uv_words_for_region(std::vector<Ball>& TLB, 
                                      std::vector<std::pair<Bitword,Bitword> >& words,
+                                     double& guaranteed_neighborhood,
                                     cpx ll, cpx ur, int n_depth, int uv_depth, int verbose);
     void find_close_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
                              const std::vector<Ball>& TLB, 
@@ -214,7 +215,11 @@ class ifs{
                              int n_depth);
     int check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
                                const std::vector<std::pair<Bitword,Bitword> >& words);
-    int check_TLB(const std::vector<Ball>& TLB, int uv_depth) ;
+    int check_TLB(const std::vector<Ball>& TLB, double& trap_radius,
+                  double guaranteed_neighborhood, int uv_depth) ;
+    bool find_TLB_along_loop(const std::vector<cpx>& loop, 
+                             bool draw_it, 
+                             int verbose);
     bool find_trap_like_vectors;
 		
 		

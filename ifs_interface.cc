@@ -159,7 +159,7 @@ void ifs::user_interface() {
                       //get a loop
                       std::vector<cpx> loop(0);
                       input_loop(loop);
-                      find_traps_along_loop(loop, true, 1);
+                      find_TLB_along_loop(loop, true, 1);
                       break;
                     }
                 }

@@ -253,9 +253,11 @@ void ifs::draw_mandelbrot_set(){
 	std::vector<std::pair<Bitword,Bitword> > uv_words;
 	std::vector<Ball> TLB;
 	int tlb_result;
-        bool found_TLB = false;
+  bool found_TLB = false;
+  double TLB_neighborhood;
+  double trap_radius;
 	if (find_trap_like_vectors) {
-	  TLB_and_uv_words_for_region(TLB, uv_words, 
+	  TLB_and_uv_words_for_region(TLB, uv_words, TLB_neighborhood,
 	                              center-wind-(wind*I), center+wind+(wind*I),
 	                              15, depth, 0);
           if (TLB.size() > 0) {
@@ -301,7 +303,7 @@ void ifs::draw_mandelbrot_set(){
                                             X.draw_box(q, mesh, gcol*exit_depth);
                                         } else if (find_trap_like_vectors && 
                                                     found_TLB &&
-                                                   (tlb_result = check_TLB(TLB,depth)) >= 0) {
+                                                   (tlb_result = check_TLB(TLB,trap_radius,TLB_neighborhood,depth)) >= 0) {
                                             double amount = double(tlb_result)/double(depth);
                                             int c = X.get_rgb_color(0,amount,1);
                                             X.draw_box(q,mesh,c);

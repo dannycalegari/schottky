@@ -1,6 +1,6 @@
 #include <algorithm>
 
-#include "trap_grid.h"
+#include "ifs.h"
 
 //this does dot product as if they were vectors
 double cpx_dot(cpx a, cpx b) {
@@ -499,7 +499,7 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
   std::vector<Ball> balls(0);
   compute_balls_right(balls, initial_ball, n_depth);
   
-  trap_like_balls_from_balls(TLB, 10, 3, balls, verbose);
+  trap_like_balls_from_balls(TLB, 5, 3, balls, verbose);
  
   return true;
   
@@ -509,6 +509,7 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
 //plus some trap like balls for this value
 bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB, 
                                       std::vector<std::pair<Bitword,Bitword> >& words,
+                                      double& guaranteed_neighborhood,
                                       cpx ll, cpx ur, int n_depth, int uv_depth, int verbose) {
   
   cpx backup_z = z;
@@ -522,10 +523,14 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
   //i.e. we need the limit set to always be inside our balls
   //so we need (R-r)|z|^n_depth > Cz*(center-corners)
   //i.e. R-r > (Cz*(center-corners))/|z|^n_depth
+  //however, we also need there to be a little epsilon neighborhood
+  //even at the edges.  Therefore, we'll double this radius increase
+  //then every point in this region will have an epsilon neighborhood
+  //of at least Cz*box_diag_rad
   double Cz = 3.42;
   double box_diag_rad = abs(ll-ur)/2.0;
-  double initial_radius_increase = Cz*box_diag_rad / pow(az, n_depth);
-  
+  double initial_radius_increase = 2*Cz*box_diag_rad / pow(az, n_depth);
+  guaranteed_neighborhood = Cz*box_diag_rad;
   if (initial_radius_increase > 100) return false;
   
   if (!trap_like_balls(TLB, initial_radius_increase, n_depth, verbose)) {
@@ -639,13 +644,25 @@ int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB,
 }
 
 
-int ifs::check_TLB(const std::vector<Ball>& TLB, int uv_depth) {
+int ifs::check_TLB(const std::vector<Ball>& TLB, double& trap_radius, 
+                   double guaranteed_neighborhood, int uv_depth) {
   double min_r;
+  double Cz = 3.42;
   if (!minimal_enclosing_radius(min_r)) return -1;
   Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
   std::deque<std::pair<Ball, Ball> > stack(1);
   stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
   if (stack[0].first.is_disjoint(stack[0].second)) return -1;
+  //check that there are points within guaranteed_neighborhood
+  //we need to make depth temporarily such that min_r*|z|^depth < guaranteed_neighborhood/4
+  //(the /4 is so there's a little neighborhood about this trap)
+  int old_depth = depth;
+  depth = int( log(guaranteed_neighborhood/(4.0*min_r))/log(az) + 1 );
+  if (!circ_connected(min_r)) {
+    depth = old_depth;
+    return -1;
+  }
+  depth = old_depth;
   while (stack.size() > 0) {
     Ball bz = stack.back().first;
     Ball bw = stack.back().second;
@@ -655,7 +672,17 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, int uv_depth) {
     cpx d = bz.center - bw.center;
     d *= pow(z, -bz.word_len);
     for (int i=0; i<(int)TLB.size(); ++i) {
-      if (abs(TLB[i].center - d) < TLB[i].radius) {
+      double dist = abs(TLB[i].center - d) - TLB[i].radius;
+      if (dist < -0.001) {
+        //if we wiggle z, it can change the trap vector image by 2*Cz
+        //and it can change the limit set by Cz
+        //and it can separate the points by 2*Cz
+        //so we have the min of (-dist)*|z|^m and (guaranteed_neighborhood/4)
+        //divided by 2*Cz
+        double m1 = ((-dist)*pow(az, bz.word_len))/(2.0*Cz);
+        double m2 = guaranteed_neighborhood/(8.0*Cz);
+        //std::cout << "Found min of " << m1 << " " << m2 << " (raised " << az << " to length " << bz.word_len << " with dist " << dist << "\n";
+        trap_radius = (m1 < m2 ? m1 : m2);
         return bz.word_len;
       }
     }
@@ -681,7 +708,124 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, int uv_depth) {
 
 
 
+bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop, 
+                              bool draw_it, 
+                              int verbose) {
   
+  //trap parameters
+  int uv_depth = depth;
+
+
+  int nL = loop.size();
+  if (verbose>0) {
+    std::cout << "Finding traps along the loop:\n";
+    for (int i=0; i<nL; ++i) {
+      std::cout << i << ": " << loop[i] << "\n";
+    }
+  }
+  if (verbose>0) std::cout << "Finding traps along the vertices:\n";
+  //this is a list of the balls along each segment of the path
+  std::vector<std::vector<std::pair<cpx,double> > > trap_list(loop.size());
   
+  //get graphics stuff
+  //int rcol = X.get_rgb_color(1,0,0);
+  double pixel_width = (2*wind)/double(drawing_width);
+  double difficulty;
+  
+  //find the TLB and stuff
+  std::vector<std::pair<Bitword,Bitword> > uv_words;
+	std::vector<Ball> TLB;
+  double TLB_neighborhood;
+  cpx center = z;
+  TLB_and_uv_words_for_region(TLB, uv_words, TLB_neighborhood,
+                              center-cpx(wind,wind), center+cpx(wind,wind),
+                              15, uv_depth, 0);
+  
+  //get the traps at the vertices
+  for (int i=0; i<nL; ++i) {
+    trap_list[i].resize(1);
+    z = loop[i]; az = abs(z);
+    w = z; aw = az;
+    double epsilon;
+    if ( (difficulty = check_TLB(TLB,epsilon,TLB_neighborhood,depth)) < 0 ) {
+      if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
+      return false;
+    }
+    trap_list[i][0] = std::make_pair(z, epsilon);
+    if (draw_it) {
+      Point2d<int> p = cpx_to_point_mandlebrot(z);
+      double r = trap_list[i][0].second / pixel_width;
+      if (r<2) r = 2;
+      double gamount = difficulty/100.0;
+      int c = X.get_rgb_color(0, gamount, 1.0);
+      X.draw_disk(p,r,c);
+      X.flush();
+    }
+    if (verbose>0) std::cout << i << ": " << trap_list[i][0].first << ", " << trap_list[i][0].second << "\n";
+  }
+  
+  //for each interval, go along it, placing the center of the 
+  //next trap at exactly the edge of the previous one
+  if (verbose>0) std::cout << "Pixel width: " << pixel_width << "\n";
+  for (int i=0; i<nL; ++i) {
+    //vector of length 1 pointing along the path
+    cpx d = trap_list[(i+1)%nL][0].first - trap_list[i][0].first;
+    d = d / abs(d);
+    while (true) {
+      std::pair<cpx,double> last_trap = trap_list[i].back();
+      //detect if we are done
+      double d_to_end = abs(trap_list[(i+1)%nL][0].first - last_trap.first);
+      if (d_to_end < last_trap.second ||
+          d_to_end < trap_list[(i+1)%nL][0].second) {
+        if (verbose>1) std::cout << "Done this edge\n";
+        break;
+      }
+      //otherwise, go to the end of our current ball
+      cpx new_z = last_trap.first + last_trap.second*d;
+      //set it
+      z = new_z; az = abs(z);
+      w = z; aw = az;
+      //run it
+      trap_list[i].resize(trap_list[i].size()+1);
+      trap_list[i].back().first = z;
+      if ( (difficulty = check_TLB(TLB, trap_list[i].back().second,
+                                   TLB_neighborhood, depth)) < 0 ) {
+        if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
+        return false;
+      }
+      //display it
+      if (draw_it) {
+        Point2d<int> p = cpx_to_point_mandlebrot(z);
+        double r = trap_list[i].back().second / pixel_width;
+        if (r<2) r = 2;
+        double gamount = difficulty/100.0;
+        int c = X.get_rgb_color(0, gamount, 1.0);
+        X.draw_disk(p,r,c);
+        X.flush();
+      }
+      if (verbose>1) {
+        std::cout << "Found new trap " << trap_list[i].back().first << ", " << trap_list[i].back().second << "\n";
+      }
+    }
+  }
+  if (verbose>0) {
+    std::cout << "Loop certified:\n";
+    for (int i=0; i<nL; ++i) {
+      std::cout << i << ": " << loop[i] << "\n";
+    }
+  }
+  return true;
+    
+  
+}
+
+
+
+
+
+
+
+
+
   
   
