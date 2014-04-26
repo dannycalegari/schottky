@@ -495,12 +495,12 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
     //make up the next pairs
     //we want all possibilities, so we allow duplicate lengths
     //(for safety, take a little range)
-    double cutoff_dist = min_d + pow(az, i)*2*min_r;
-    std::cout << "Cutoff for i=" << i << ": " << cutoff_dist << "\n";
+    double cutoff_dist = (i==uv_depth-1 ? min_d : min_d + pow(az, i)*2*min_r);
+    //std::cout << "Cutoff for i=" << i << ": " << cutoff_dist << "\n";
     pairs.resize(0);
     for (int j=0; j<(int)next_pairs.size(); ++j) {
       double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
-      if (d < cutoff_dist) {
+      if (d <= cutoff_dist) {
         pairs.push_back(next_pairs[j]);
       }
     }  
