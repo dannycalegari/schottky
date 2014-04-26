@@ -187,11 +187,11 @@ void ifs::input_loop(std::vector<cpx>& loop) {
   p.x = drawing_width + 15;
   p.y = drawing_width/2 + 50;
   T.str("");
-  T << "*click to draw trap loop*";
+  T << "*click to draw path/loop*";
   X.draw_text(p, T, 0);
   p.y-=20;
   T.str("");
-  T << "[o] to close the loop and finish";
+  T << "[o] to finish";
   X.draw_text(p, T, 0);
   
   while (!done_drawing) {
