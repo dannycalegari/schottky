@@ -38,6 +38,7 @@ extern "C" {
 
 class XGraphics {
 private:
+  bool initialized;
   Display *display;
   int screen_num;
   unsigned int display_width, display_height;

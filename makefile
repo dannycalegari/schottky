@@ -12,12 +12,15 @@ schottky.o: schottky.cc
 
 trap_grid.o: trap_grid.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c trap_grid.cc
+	
+movie.o: movie.cc
+	$(CC) $(CFLAGS) $(IFLAGS) -c movie.cc
 
 ifs.o: ifs.cc ifs_draw.cc ifs_trap.cc ifs_interface.cc ifs_connected.cc ifs_trap_like.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c ifs.cc
 
-schottky: schottky.o graphics.o ifs.o trap_grid.o
-	$(CC) $(CFLAGS) -o schottky schottky.o graphics.o trap_grid.o ifs.o $(LFLAGS) -lm
+schottky: schottky.o graphics.o ifs.o trap_grid.o movie.o
+	$(CC) $(CFLAGS) -o schottky schottky.o graphics.o trap_grid.o movie.o ifs.o $(LFLAGS) -lm
 
 clean:
 	rm *.o

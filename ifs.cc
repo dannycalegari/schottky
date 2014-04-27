@@ -14,6 +14,7 @@
 #include "ifs_connected.cc"    //the function to detect if the IFS is connected 
 #include "ifs_trap.cc"         //functions to build a trap
 #include "ifs_trap_like.cc"    //functions to find trap balls via u,v words
+#include "ifs_set_A.cc"        //function to find the boundary of holes in set A
 
 //first some ball functions
 Ball::Ball() { 
@@ -252,7 +253,7 @@ void ifs::compute_balls_right(std::vector<Ball>& balls, const Ball& ball_seed, i
 
 
 
-//given a ball, check if it is disjoint from the square given
+//given a ball, check if it is disjoint from the rectangle given
 //this is lame as always with these functions
 bool ifs::is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur) {
   const cpx& bc = b.center;
@@ -599,14 +600,53 @@ Point2d<int> ifs::cpx_to_point_mandlebrot(cpx w) {
 
 
 
+void ifs::set_params(cpx Z, cpx W) {
+  z = Z;
+  az = abs(z);
+  w = W;
+  aw = abs(w);
+}
 
-
-
-
-
-
-
-
+void ifs::draw_ifs_to_array(std::vector<std::vector<Point3d<char> > >& bmp, 
+                            const cpx& region_ll, const cpx& region_ur, int depth) {
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return;
+  
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  
+  //clear the array
+  for (int i=0; i<(int)bmp.size(); ++i) {
+    for (int j=0; j<(int)bmp[i].size(); ++j) {
+      bmp[i][j] = Point3d<char>(255,255,255);
+    }
+  }
+  
+  double drawing_width = region_ur.real() - region_ll.real();
+  int num_pixels = bmp.size();
+  double pixel_width = drawing_width/double(num_pixels);
+  
+  std::deque<Ball> stack(1);
+  stack[0] = initial_ball;
+  while (stack.size() > 0) {
+    Ball b = stack.back();
+    stack.pop_back();
+    if ( (depth > 0 && b.word_len >= depth) || 
+         (depth < 0 && b.radius < pixel_width/2.0) ) {
+      int x = int(num_pixels*((b.center.real() - region_ll.real()) / drawing_width));
+      int y = int(num_pixels*((b.center.imag() - region_ll.imag()) / drawing_width));
+      if (0 <= x && x < num_pixels && 0 <= y && y < num_pixels) {
+        bmp[x][y] = (b.last_gen_index() == 0 ? Point3d<char>(0xFF, 0xAA, 0x00) :
+                                               Point3d<char>(0x00, 0xAA, 0xFF));
+      }
+    } else {
+      Ball bz = act_on_right(0, b);
+      Ball bw = act_on_right(1, b);
+      if (!is_ball_disjoint(bz, region_ll, region_ur)) stack.push_front(bz);
+      if (!is_ball_disjoint(bw, region_ll, region_ur)) stack.push_front(bw);
+    }
+  }
+    
+}
 
 
 

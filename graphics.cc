@@ -40,6 +40,7 @@ XGraphics::XGraphics() {
   }
   setup_font();
   */
+  initialized = false;
 }
 
 XGraphics::XGraphics(int w, int h, float s, const Point2d<float>& t) {
@@ -49,7 +50,7 @@ XGraphics::XGraphics(int w, int h, float s, const Point2d<float>& t) {
 
 
 void XGraphics::initialize(int w, int h, float s, const Point2d<float>& t) {
-    border_width = 4;
+  border_width = 4;
   display=XOpenDisplay(NULL);
   screen_num = DefaultScreen(display);  
   display_width = DisplayWidth(display, screen_num);
@@ -75,6 +76,8 @@ void XGraphics::initialize(int w, int h, float s, const Point2d<float>& t) {
   scale = s;
   translate = t;
   
+  initialized = true;
+  
   while (true) {  //wait until the window is actually mapped
     XEvent e;
     XNextEvent(display, &e);
@@ -89,7 +92,7 @@ void XGraphics::initialize(int w, int h, float s, const Point2d<float>& t) {
 
 
 XGraphics::~XGraphics() {
-  XCloseDisplay(display);
+  if (initialized) XCloseDisplay(display);
 }
 
 

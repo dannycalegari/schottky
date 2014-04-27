@@ -1,5 +1,7 @@
 /* interface.cc */
 
+#include "movie.h"
+
 void ifs::user_interface() {
 	bool finished;
 	Point2d<int> p,pp;
@@ -142,6 +144,18 @@ void ifs::user_interface() {
                     draw_contains_half = !draw_contains_half;
                     draw();
                     break;
+                } else if (XLookupKeysym(&report.xkey, 0) == XK_0) { //movie of ifs stuff
+                    std::vector<cpx> path(0);
+                    input_loop(path);
+                    (void)ifs_movie_from_path(*this, path, false, "movie_test", 
+                                              cpx(-1.0,-1.5), cpx(2.0,1.5), 
+                                              depth, 
+                                              drawing_width/mesh, drawing_width/mesh,
+                                              40, 5, 1); 
+                    //std::cout << "Got back to the interface\n";
+                    std::cout.flush();
+                    draw();
+                    break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_w){ 
                     find_close_uv_words = !find_close_uv_words;
                     draw();
@@ -180,7 +194,7 @@ void ifs::user_interface() {
 void ifs::input_loop(std::vector<cpx>& loop) {
   bool done_drawing = false;
   Point2d<int> p;
-  int wcol = X.get_rgb_color(1,1,1);
+  int wcol = X.get_rgb_color(1,0.1,0);
   std::stringstream T;
   Point2d<int> pp;
   

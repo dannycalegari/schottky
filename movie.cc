@@ -105,7 +105,7 @@ bool ifs_movie_from_path(const ifs& IFS,
                          int verbose) {
   
   //create a copy of the ifs, because we're going to mess with it
-  ifs IFS2 = IFS;
+  ifs IFS2(IFS.z, IFS.w, IFS.drawing_width, IFS.mode);
   
   //find the total path length and step size and stuff
   double total_path_len = 0;
@@ -120,6 +120,7 @@ bool ifs_movie_from_path(const ifs& IFS,
   }
   double length_per_frame = total_path_len / double(num_frames);
   if (verbose>0) {
+    std::cout << "Box: " << region_ll << " " << region_ur << "\n";
     std::cout << "Path length: " << total_path_len << "\n";
     std::cout << "Total frames: " << num_frames << "\n";
     std::cout << "Distance per frame: " << length_per_frame << "\n";
@@ -130,20 +131,28 @@ bool ifs_movie_from_path(const ifs& IFS,
   cpx z = path[0];
   int path_edge = 0;
   int frame_num = 0;
+  std::stringstream T;
   std::vector<std::vector<Point3d<char> > > bmp(pixel_w, 
                                                 std::vector<Point3d<char> >(pixel_h, 
                                                                             Point3d<char>(0,0,0)));
   do {
     //write out the bitmap
-    if (verbose > 0) std::cout << "\rWriting frame " << frame;
+    if (verbose > 0) {
+      std::cout << "\rWriting frame " << frame_num;
+      std::cout.flush();
+    }
     IFS2.set_params(z,z);
-    IFS2.write_to_bmp_array
+    IFS2.draw_ifs_to_array(bmp, region_ll, region_ur, depth);
+    T.str("");
+    T << filename << frame_num << ".bmp";
+    write_bitmap(bmp, T.str());
+    ++frame_num;
     
     
     //figure out the next z value
     double length_remaining = length_per_frame;
     while (true) {
-      int next_path_ind = (path_edge == path.size()-1 ? 0 : path_edge + 1);
+      int next_path_ind = (path_edge == (int)path.size()-1 ? 0 : path_edge + 1);
       double to_next_endpoint = abs(z - path[next_path_ind]);
       if (to_next_endpoint > length_remaining) {
         cpx v = path[next_path_ind] - z;
@@ -160,15 +169,22 @@ bool ifs_movie_from_path(const ifs& IFS,
   if (verbose>0) {
     std::cout << "\nWrote frame files\n";
     std::cout << "Calling movie encoder...";
+    std::cout.flush();
   }
    
   //call ffmpeg to encode the movie
-  
+  std::stringstream command("");
+  command << PATH_TO_FFMPEG << "ffmpeg -loglevel error -f image2 -r " << fps << " -i " << 
+                                filename << "%d.bmp -c:v mpeg4 -qscale:v 8 " << 
+                                filename << ".mp4";
+  system(command.str().c_str());
   if (verbose>0) std::cout << "done\nErasing frame files...";
   
   //erase the frame files
-  
-  if (verbose>0) std::cout << "\ndone\n";
+  command.str("");
+  command << "rm " << filename << "*.bmp";
+  system(command.str().c_str());
+  if (verbose>0) std::cout << "done\n";
   
   return true;
   

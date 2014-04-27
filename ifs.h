@@ -138,7 +138,9 @@ class ifs{
     double when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls);
     void find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
                                int uv_depth);
-                
+    void set_params(cpx Z, cpx W);
+    void draw_ifs_to_array(std::vector<std::vector<Point3d<char> > >& bmp, 
+                           const cpx& region_ll, const cpx& region_ur, int depth);     
                 
     //IFS drawing
     bool color_ifs;        // draw fL and gL in different colors
@@ -220,6 +222,11 @@ class ifs{
                              bool draw_it, 
                              int verbose);
     bool find_trap_like_vectors;
+    
+    //hole boundary finding functions
+    bool hole_boundary_containing_point(std::vector<cpx>& path, bool& closed, 
+                                        cpx p, int verbose);
+    
     
     //Main interface and drawing functions
     XGraphics X;

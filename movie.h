@@ -7,6 +7,8 @@
 #include "cpx.h"
 #include "ifs.h"
 
+#define PATH_TO_FFMPEG "../ffmpeg/"
+
 bool write_bitmap(const std::vector<std::vector<Point3d<char> > >& p, 
                   const std::string& filename);
                   
