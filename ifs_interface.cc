@@ -194,7 +194,8 @@ void ifs::user_interface() {
 void ifs::input_loop(std::vector<cpx>& loop) {
   bool done_drawing = false;
   Point2d<int> p;
-  int wcol = X.get_rgb_color(1,0.1,0);
+  int wcol = X.get_rgb_color(1,1,1);
+  int rcol = X.get_rgb_color(1,0.1,0);
   std::stringstream T;
   Point2d<int> pp;
   
@@ -228,16 +229,16 @@ void ifs::input_loop(std::vector<cpx>& loop) {
       p = X.mouse_location();
       cpx mz = point_to_cpx(p);
       mz = (mz*wind)+center;   //now mz is the real complex number
-      X.draw_dot(p, wcol);
+      X.draw_dot(p, rcol);
       if (loop.size() > 0) { 
-        X.draw_line(cpx_to_point_mandlebrot(loop.back()), p, wcol);
+        X.draw_line(cpx_to_point_mandlebrot(loop.back()), p, rcol);
       }
       loop.push_back(mz);
     
     } else if (report.type == KeyPress && 
                XLookupKeysym(&report.xkey, 0) == XK_o) {
       X.draw_line(cpx_to_point_mandlebrot(loop.back()), 
-                  cpx_to_point_mandlebrot(loop.front()), wcol);
+                  cpx_to_point_mandlebrot(loop.front()), rcol);
       done_drawing= true;
     }
   }
