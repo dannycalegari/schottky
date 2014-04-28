@@ -146,14 +146,14 @@ void ifs::user_interface() {
                     break;
                 } else if (XLookupKeysym(&report.xkey, 0) == XK_0) { //movie of ifs stuff
                     std::vector<cpx> path(0);
-                    input_loop(path);
+                    bool closed_path;
+                    //input_loop(path);
+                    hole_boundary_containing_point(path, closed_path, center, 1);
                     (void)ifs_movie_from_path(*this, path, false, "movie_test", 
                                               cpx(-1.0,-1.5), cpx(2.0,1.5), 
-                                              depth, 
+                                              -1, 
                                               drawing_width/mesh, drawing_width/mesh,
                                               40, 5, 1); 
-                    //std::cout << "Got back to the interface\n";
-                    std::cout.flush();
                     draw();
                     break;
                 } else if(XLookupKeysym(&report.xkey, 0) == XK_w){ 
