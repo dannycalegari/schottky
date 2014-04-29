@@ -9,7 +9,7 @@ extern "C" {
 
 #include "ifs.h"
 
-enum IFSWindowMode { IFS, MANDLEBROT, BOTH };
+enum IFSWindowMode { LIMIT, MANDLEBROT, BOTH };
 
 struct IFSGui {
   
@@ -30,7 +30,17 @@ struct IFSGui {
   Display* display;
   int screen;
   Window main_window;
-  bool initialized;
+  Pixmap limit_pixmap;
+  Pixmap mand_pixmap;
+  
+  
+  bool main_window_initialized;
+  int main_window_height;
+  int main_window_width;
+  bool limit_pixmap_intialized;
+  bool mand_pixmap_initialized;
+  int limit_sidebar_size;
+  int mand_sidebar_size;
   
 
   void launch(IFSWindowMode m = BOTH);
