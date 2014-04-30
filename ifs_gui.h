@@ -16,34 +16,37 @@ struct IFSGui;
 
 
 struct Widget {
-  Point2d<int> ul; //the upper left have corner
+  Point2d<int> ul; //the upper left hand corner
   int height;
   int width;
   IFSGui* ifsg; //the gui, so we can call the member functions
   Pixmap p;
+  GC gc;
   
-  virtual void initial_draw();
-  virtual void redraw();
-  virtual bool contains_pixel();
-  Widget();
+  virtual void initial_draw() {}
+  virtual void redraw() {}
+  virtual bool contains_pixel() { return false; }
+  Widget() {}
 };
 
 struct WidgetDraw : Widget {
-  WidgetDraw(IFSGui* i, int w, int h) {
-    width = w;
-    height = h;
-    ifsg = i;
-  }
+  WidgetDraw() {}
+  WidgetDraw(IFSGui* i, int w, int h);
 };
 
 struct WidgetButton : Widget {
   std::string text;
   void (IFSGui::*clicker)();
+  
+  WidgetButton() {}
   WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)());
+  void initial_draw();
 };
 
 struct WidgetText : Widget {
   std::string text;
+  
+  WidgetText() {}
   WidgetText(IFSGui* i, const std::string& t, int w, int h);
 };
 
@@ -51,16 +54,22 @@ struct WidgetCheck : Widget {
   std::string text;
   bool checked;
   void (IFSGui::*clicker)();
+  
+  WidgetCheck() {}
   WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)());
 };
 
 struct WidgetLeftArrow : Widget {
   void (IFSGui::*clicker)();
+  
+  WidgetLeftArrow() {}
   WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
 };
 
 struct WidgetRightArrow : Widget {
   void (IFSGui::*clicker)();
+  
+  WidgetRightArrow() {}
   WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
 };
 
@@ -155,6 +164,10 @@ struct IFSGui {
   WidgetRightArrow W_mand_trap_depth_rightarrow;
   
   //signal functions
+  void S_switch_to_limit();
+  void S_switch_to_mandlebrot();
+  void S_switch_to_combined();
+  
   void S_limit_increase_depth();
   void S_limit_decrease_depth();
   void S_limit_switch_chunky();
@@ -162,7 +175,20 @@ struct IFSGui {
   void S_limit_zoom_out();
   void S_limit_recenter();
   
+  void S_mand_connected();
+  void S_mand_connected_increase_depth();
+  void S_mand_connected_decrease_depth();
+  void S_mand_contains_half();
+  void S_mand_contains_half_increase_depth();
+  void S_mand_contains_half_decrease_depth();
+  void S_mand_trap();
+  void S_mand_trap_increase_depth();
+  void S_mand_trap_decrease_depth();
   
+  void S_point_connected();
+  void S_point_contains_half();
+  void S_point_trap();
+  void S_point_uv_words();
   
   
   

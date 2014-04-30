@@ -15,6 +15,7 @@
 #include <cmath>
 
 #include "ifs.h"
+#include "ifs_gui.h"
 
 #define TWOPI 6.28318530718
 
@@ -31,11 +32,16 @@ int main(int argc, char *argv[]) {
 	
 	//std::cout << sizeof(long long int) <<"\n";
 	
-	std::cout << "enter 'i' for IFS or 'm' for mandelbrot:";
+	std::cout << "enter 'i' for IFS or 'm' for mandelbrot (n for new GUI):";
 	std::cin >> c;
-	mode = (c=='i' ? 0 : 1);
-	ifs G(cos(TWOPI/3.0)+I*sin(TWOPI/3.0), 0.5, w, mode);      // default value : Sierpinski triangle
-	G.user_interface();
+	if (c == 'n') {
+	  IFSGui G;
+	  G.launch(BOTH);
+  } else {
+    mode = (c=='i' ? 0 : 1);
+    ifs G(cos(TWOPI/3.0)+I*sin(TWOPI/3.0), 0.5, w, mode);      // default value : Sierpinski triangle
+    G.user_interface();
+  }
 	
 	return 0;
 };

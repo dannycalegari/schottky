@@ -23,7 +23,7 @@ ifs.o: ifs.cc ifs_draw.cc ifs_trap.cc ifs_interface.cc ifs_connected.cc ifs_trap
 	$(CC) $(CFLAGS) $(IFLAGS) -c ifs.cc
 
 schottky: schottky.o graphics.o ifs.o trap_grid.o movie.o ifs_gui.o
-	$(CC) $(CFLAGS) -o schottky schottky.o graphics.o trap_grid.o movie.o ifs.o $(LFLAGS) -lm
+	$(CC) $(CFLAGS) -o schottky schottky.o graphics.o trap_grid.o movie.o ifs.o ifs_gui.o $(LFLAGS) -lm
 
 clean:
 	rm *.o

@@ -12,14 +12,13 @@
 /***************************************************************************
  * widget functions
  ***************************************************************************/
-Widget::Widget() {
-  //don't do anything
-}
 
 WidgetDraw::WidgetDraw(IFSGui* i, int w, int h) {
   width = w;
   height = h;
   ifsg = i;
+  p = XCreatePixmap(ifsg->display, ifsg->main_window,
+                    width, height, DefaultDepth(ifsg->display, ifsg->screen));
 }
 
 WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)()) {
@@ -28,7 +27,33 @@ WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (
   height = h;
   text = t;
   clicker = f;
+  p = XCreatePixmap(ifsg->display, ifsg->main_window,
+                    width, height, DefaultDepth(ifsg->display, ifsg->screen));
+  gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
+  
+  //clear the pixmap
+  XSetForeground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XSetBackground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XFillRectangle(ifsg->display, p, gc, 0, 0, width, height);
+  
+  //set the real colors
+  XSetForeground(ifsg->display, gc, BlackPixel(ifsg->display, ifsg->screen));
+  XSetBackground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  
+  //draw the square
+  XSetLineAttributes(ifsg->display, gc, 0.1, LineSolid, CapButt, JoinMiter);
+  XDrawLine(ifsg->display, p, gc, 1, 1, 1, height-2);
+  XDrawLine(ifsg->display, p, gc, 1, height-2, width-2, height-2);
+  XDrawLine(ifsg->display, p, gc, width-2, height-2, width-2, 1);
+  XDrawLine(ifsg->display, p, gc, width-2, 1, 1, 1);
+  //draw the label
+  XDrawString(ifsg->display, p, gc, 5, height/2, text.c_str(), text.size()); 
 }
+
+void WidgetButton::initial_draw() {
+  XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
+}
+
 
 WidgetText::WidgetText(IFSGui* i, const std::string& t, int w, int h) {
   ifsg = i;
@@ -53,7 +78,7 @@ WidgetLeftArrow::WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) {
   clicker = f;
 }
 
-WidgeRightArrow::WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) {
+WidgetRightArrow::WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) {
   ifsg = i;
   width = w;
   height = h;
@@ -80,8 +105,16 @@ WidgeRightArrow::WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) 
  * signal handlers
  ****************************************************************************/
  
+void IFSGui::S_switch_to_limit() {
+}
+
+void IFSGui::S_switch_to_mandlebrot() {
+}
+
+void IFSGui::S_switch_to_combined() {
+}
  
- 
+//limit set
 void IFSGui::S_limit_increase_depth() {
 }
 
@@ -99,6 +132,24 @@ void IFSGui::S_limit_zoom_out() {
 
 void IFSGui::S_limit_recenter() {
 }
+
+//mandlebrot
+void IFSGui::S_mand_connected() {}
+void IFSGui::S_mand_connected_increase_depth() {}
+void IFSGui::S_mand_connected_decrease_depth() {}
+void IFSGui::S_mand_contains_half() {}
+void IFSGui::S_mand_contains_half_increase_depth() {}
+void IFSGui::S_mand_contains_half_decrease_depth() {}
+void IFSGui::S_mand_trap() {}
+void IFSGui::S_mand_trap_increase_depth() {}
+void IFSGui::S_mand_trap_decrease_depth() {}
+
+//point
+void IFSGui::S_point_connected() {}
+void IFSGui::S_point_contains_half() {}
+void IFSGui::S_point_trap() {}
+void IFSGui::S_point_uv_words() {}
+
 
 
 /****************************************************************************
@@ -203,30 +254,30 @@ void IFSGui::reset_and_pack_window() {
   widgets.resize(0);
   
   //stuff that shows up everywhere
-  W_switch_to_limit = WidgetButton(this, "Switch to limit", 50, 20);
-  W_switch_to_mandlebrot = WidgetButton(this, "Switch to mandlebrot", 50,20);
-  W_switch_to_combined = WidgetButton(this, "Switch to combined", 50, 20);
+  W_switch_to_limit = WidgetButton(this, "Switch to limit", 50, 20, &IFSGui::S_switch_to_limit);
+  W_switch_to_mandlebrot = WidgetButton(this, "Switch to mandlebrot", 50,20, &IFSGui::S_switch_to_mandlebrot);
+  W_switch_to_combined = WidgetButton(this, "Switch to combined", 50, 20, &IFSGui::S_switch_to_combined);
   
   W_point_title = WidgetText(this, "Highlighted IFS options:", 100, 20);
-  W_point_connected_check = WidgetCheck(this, "Connectedness", 100, 20, (point_connected ? 1 : 0));
-  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", 100, 20, (point_contains_half ? 1 : 0));
-  W_point_trap_check = WidgetCheck(this, "Find trap", 50, 20, (point_trap ? 1 : 0));
-  W_point_uv_word_check = WidgetCheck(this, "Find uv words", 50, 20, (point_uv_words ? 1 : 0));
+  W_point_connected_check = WidgetCheck(this, "Connectedness", 100, 20, (point_connected ? 1 : 0), &IFSGui::S_point_connected);
+  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", 100, 20, (point_contains_half ? 1 : 0), &IFSGui::S_point_contains_half);
+  W_point_trap_check = WidgetCheck(this, "Find trap", 50, 20, (point_trap ? 1 : 0), &IFSGui::S_point_trap);
+  W_point_uv_word_check = WidgetCheck(this, "Find uv words", 50, 20, (point_uv_words ? 1 : 0), &IFSGui::S_point_trap);
   
   
   if (window_mode != MANDLEBROT) {
     W_limit_plot = WidgetDraw(this, x,x);
     W_limit_depth_title = WidgetText(this, "Depth: ", 50, 20);
-    W_limit_depth_leftarrow = WidgetLeftArrow(this, 20,20);
+    W_limit_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_limit_decrease_depth);
     std::stringstream T; T.str(""); T << limit_depth;
     W_limit_depth_label = WidgetText(this, T.str().c_str(), 30, 20);
-    W_limit_depth_rightarrow = WidgetRightArrow(this, 20,20);
+    W_limit_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_limit_increase_depth);
     W_limit_chunky_title = WidgetText(this, "Chunky: ", 50, 20);
-    W_limit_chunky_on = WidgetCheck(this, "on", 20, 20, (limit_chunky ? 1 : 0));
-    W_limit_chunky_off = WidgetCheck(this, "off", 30, 20, (limit_chunky ? 0 : 1));
+    W_limit_chunky_on = WidgetCheck(this, "on", 20, 20, (limit_chunky ? 1 : 0), &IFSGui::S_limit_switch_chunky);
+    W_limit_chunky_off = WidgetCheck(this, "off", 30, 20, (limit_chunky ? 0 : 1), &IFSGui::S_limit_switch_chunky);
     W_limit_zoom_title = WidgetText(this, "Zoom: ", 40, 20);
-    W_limit_zoom_in = WidgetButton(this, "in", 30, 20);
-    W_limit_zoom_out = WidgetButton(this, "out", 30, 20);
+    W_limit_zoom_in = WidgetButton(this, "in", 30, 20, &IFSGui::S_limit_zoom_in);
+    W_limit_zoom_out = WidgetButton(this, "out", 30, 20, &IFSGui::S_limit_zoom_out);
     W_limit_center_title = WidgetText(this, "(Click to center)", 40, 20);
     
     pack_widget_upper_right(NULL, &W_limit_plot);
@@ -257,21 +308,21 @@ void IFSGui::reset_and_pack_window() {
   
   if (window_mode != LIMIT) {
     W_mand_plot = WidgetDraw(this, x,x);
-    W_mand_connected_check = WidgetCheck(this, "Connectedness - depth:", 100, 20, (mand_connected ? 1 : 0));
-    W_mand_connected_depth_leftarrow = WidgetLeftArrow(this, 20,20);
+    W_mand_connected_check = WidgetCheck(this, "Connectedness - depth:", 100, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
+    W_mand_connected_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_connected_decrease_depth);
     std::stringstream T;  T.str("");  T << mand_connected_depth;
     W_mand_connected_depth_label = WidgetText(this, T.str().c_str(), 30, 20);
-    W_mand_connected_depth_rightarrow = WidgetRightArrow(this, 20,20);
-    W_mand_contains_half_check = WidgetCheck(this, "Contains 1/2 - depth:", 100, 20, (mand_contains_half ? 1 : 0));
-    W_mand_contains_half_depth_leftarrow = WidgetLeftArrow(this, 20,20);
+    W_mand_connected_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_connected_increase_depth);
+    W_mand_contains_half_check = WidgetCheck(this, "Contains 1/2 - depth:", 100, 20, (mand_contains_half ? 1 : 0), &IFSGui::S_mand_contains_half);
+    W_mand_contains_half_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_contains_half_decrease_depth);
     T.str("");  T << mand_contains_half_depth;
     W_mand_contains_half_depth_label = WidgetText(this, T.str().c_str(), 30, 20);
-    W_mand_contains_half_depth_rightarrow = WidgetRightArrow(this, 20,20);
-    W_mand_trap_check = WidgetCheck(this, "Traps - depth:", 100, 20, (mand_trap ? 1 : 0));;
-    W_mand_trap_depth_leftarrow = WidgetLeftArrow(this, 20,20);
+    W_mand_contains_half_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_contains_half_increase_depth);
+    W_mand_trap_check = WidgetCheck(this, "Traps - depth:", 100, 20, (mand_trap ? 1 : 0), &IFSGui::S_mand_trap);
+    W_mand_trap_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_trap_decrease_depth);
     T.str("");  T << mand_trap_depth;
     W_mand_trap_depth_label = WidgetText(this, T.str().c_str(), 30, 20);
-    W_mand_trap_depth_rightarrow = WidgetRightArrow(this, 20,20);
+    W_mand_trap_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_trap_increase_depth);
     
     if (window_mode == MANDLEBROT) {
       pack_widget_upper_right(NULL, &W_mand_plot);
@@ -313,7 +364,13 @@ void IFSGui::reset_and_pack_window() {
 
 void IFSGui::main_loop() {
   XEvent e;
-  XNextEvent(display, &e);
+  while (true) {
+    XNextEvent(display, &e);
+    if (e.type != KeyPress) continue; //ignore the mouse
+    if(XLookupKeysym(&e.xkey, 0) == XK_q){ // left arrow
+      break;
+    }
+  }
 }
 
 
