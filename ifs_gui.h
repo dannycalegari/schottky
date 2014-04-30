@@ -32,10 +32,12 @@ struct Widget {
 struct WidgetDraw : Widget {
   WidgetDraw() {}
   WidgetDraw(IFSGui* i, int w, int h);
+  void initial_draw();
 };
 
 struct WidgetButton : Widget {
   std::string text;
+  Point2d<int> text_position;
   void (IFSGui::*clicker)();
   
   WidgetButton() {}
@@ -45,6 +47,7 @@ struct WidgetButton : Widget {
 
 struct WidgetText : Widget {
   std::string text;
+  Point2d<int> text_position;
   
   WidgetText() {}
   WidgetText(IFSGui* i, const std::string& t, int w, int h);
@@ -54,10 +57,12 @@ struct WidgetText : Widget {
 struct WidgetCheck : Widget {
   std::string text;
   bool checked;
+  Point2d<int> text_position;
   void (IFSGui::*clicker)();
   
   WidgetCheck() {}
   WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)());
+  void initial_draw();
 };
 
 struct WidgetLeftArrow : Widget {
@@ -65,6 +70,7 @@ struct WidgetLeftArrow : Widget {
   
   WidgetLeftArrow() {}
   WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
+  void initial_draw();
 };
 
 struct WidgetRightArrow : Widget {
@@ -72,6 +78,7 @@ struct WidgetRightArrow : Widget {
   
   WidgetRightArrow() {}
   WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
+  void initial_draw();
 };
 
 
