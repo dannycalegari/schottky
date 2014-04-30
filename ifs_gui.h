@@ -48,6 +48,7 @@ struct WidgetText : Widget {
   
   WidgetText() {}
   WidgetText(IFSGui* i, const std::string& t, int w, int h);
+  void initial_draw();
 };
 
 struct WidgetCheck : Widget {

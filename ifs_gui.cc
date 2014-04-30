@@ -60,6 +60,24 @@ WidgetText::WidgetText(IFSGui* i, const std::string& t, int w, int h) {
   text = t;
   width = w; 
   height = h;
+  p = XCreatePixmap(ifsg->display, ifsg->main_window,
+                    width, height, DefaultDepth(ifsg->display, ifsg->screen));
+  gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
+  
+  //clear the pixmap
+  XSetForeground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XSetBackground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XFillRectangle(ifsg->display, p, gc, 0, 0, width, height);
+  
+  //set the real colors
+  XSetForeground(ifsg->display, gc, BlackPixel(ifsg->display, ifsg->screen));
+  XSetBackground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  //draw the label
+  XDrawString(ifsg->display, p, gc, 5, height/2, text.c_str(), text.size()); 
+}
+
+void WidgetText::initial_draw() {
+  XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
 }
 
 WidgetCheck::WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)()) {
@@ -194,6 +212,8 @@ void IFSGui::pack_widget_upper_right(const Widget* w1, Widget* w2) {
   
   //find the position
   w2->ul = Point2d<int>(x, y);
+  
+  std::cout << "Packed widget at " << w2->ul << "\n";
   
   //record it in the list of widgets
   widgets.push_back(w2);
