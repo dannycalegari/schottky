@@ -12,6 +12,53 @@
 /***************************************************************************
  * widget functions
  ***************************************************************************/
+Widget::Widget() {
+  //don't do anything
+}
+
+WidgetDraw::WidgetDraw(IFSGui* i, int w, int h) {
+  width = w;
+  height = h;
+  ifsg = i;
+}
+
+WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)()) {
+  ifsg = i;
+  width = w;
+  height = h;
+  text = t;
+  clicker = f;
+}
+
+WidgetText::WidgetText(IFSGui* i, const std::string& t, int w, int h) {
+  ifsg = i;
+  text = t;
+  width = w; 
+  height = h;
+}
+
+WidgetCheck::WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)()) {
+  width = w;
+  height = h;
+  ifsg = i;
+  text = t;
+  checked = c;
+  clicker = f;
+} 
+
+WidgetLeftArrow::WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) {
+  ifsg = i;
+  width = w;
+  height = h;
+  clicker = f;
+}
+
+WidgeRightArrow::WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) {
+  ifsg = i;
+  width = w;
+  height = h;
+  clicker = f;
+}
 
 
 
@@ -32,8 +79,26 @@
 /****************************************************************************
  * signal handlers
  ****************************************************************************/
+ 
+ 
+ 
+void IFSGui::S_limit_increase_depth() {
+}
 
+void IFSGui::S_limit_decrease_depth() {
+}
 
+void IFSGui::S_limit_switch_chunky() {
+}
+
+void IFSGui::S_limit_zoom_in() {
+}
+
+void IFSGui::S_limit_zoom_out() {
+}
+
+void IFSGui::S_limit_recenter() {
+}
 
 
 /****************************************************************************

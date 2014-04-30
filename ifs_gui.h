@@ -25,9 +25,7 @@ struct Widget {
   virtual void initial_draw();
   virtual void redraw();
   virtual bool contains_pixel();
-  Widget() {
-    //don't do anything
-  }
+  Widget();
 };
 
 struct WidgetDraw : Widget {
@@ -41,54 +39,29 @@ struct WidgetDraw : Widget {
 struct WidgetButton : Widget {
   std::string text;
   void (IFSGui::*clicker)();
-  WidgetButton(IFSGui* i, const std::string& t, int w, int h) {
-    ifsg = i;
-    width = w;
-    height = h;
-    text = t;
-  }
+  WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)());
 };
 
 struct WidgetText : Widget {
-std::string text;
-  WidgetText(IFSGui* i, const std::string& t, int w, int h) {
-    ifsg = i;
-    text = t;
-    width = w; 
-    height = h;
-  }
+  std::string text;
+  WidgetText(IFSGui* i, const std::string& t, int w, int h);
 };
 
 struct WidgetCheck : Widget {
   std::string text;
   bool checked;
   void (IFSGui::*clicker)();
-  
-  WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c) {
-    width = w;
-    height = h;
-    ifsg = i;
-    text = t;
-    checked = c;
-  } 
+  WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)());
 };
 
 struct WidgetLeftArrow : Widget {
   void (IFSGui::*clicker)();
-  WidgetLeftArrow(IFSGui* i, int w, int h) {
-    ifsg = i;
-    width = w;
-    height = h;
-  }
+  WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
 };
 
 struct WidgetRightArrow : Widget {
   void (IFSGui::*clicker)();
-  WidgetRightArrow(IFSGui* i, int w, int h) {
-    ifsg = i;
-    width = w;
-    height = h;
-  }
+  WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
 };
 
 
@@ -180,6 +153,18 @@ struct IFSGui {
   WidgetLeftArrow W_mand_trap_depth_leftarrow;
   WidgetText W_mand_trap_depth_label;
   WidgetRightArrow W_mand_trap_depth_rightarrow;
+  
+  //signal functions
+  void S_limit_increase_depth();
+  void S_limit_decrease_depth();
+  void S_limit_switch_chunky();
+  void S_limit_zoom_in();
+  void S_limit_zoom_out();
+  void S_limit_recenter();
+  
+  
+  
+  
   
   bool main_window_initialized;
   int main_window_height;
