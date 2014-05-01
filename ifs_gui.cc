@@ -422,9 +422,61 @@ void IFSGui::S_mand_zoom_out(XEvent* e) {
   if (e->type == ButtonPress) mand_zoom(1.5);
 }
 
-void IFSGui::S_mand_connected(XEvent* e) {}
-void IFSGui::S_mand_connected_increase_depth(XEvent* e) {}
-void IFSGui::S_mand_connected_decrease_depth(XEvent* e) {}
+void IFSGui::S_mand_decrease_mesh(XEvent* e) {
+  if (e->type == ButtonPress) {
+    if (mand_pixel_group_size == 1) return;
+    mand_pixel_group_size /= 2;
+    mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(W_mand_plot.width);
+    mand_pixel_group_width = mand_pixel_group_size * mand_pixel_group_width;
+    mand_grid_connected_valid = false;
+    mand_grid_contains_half_valid = false;
+    mand_grid_trap_valid = false;
+    draw_mand();
+  }
+}
+
+void IFSGui::S_mand_increase_mesh(XEvent* e) {
+  if (e->type == ButtonPress) {
+    if (mand_pixel_group_size == 1) return;
+    mand_pixel_group_size *= 2;
+    mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(W_mand_plot.width);
+    mand_pixel_group_width = mand_pixel_group_size * mand_pixel_group_width;
+    mand_grid_connected_valid = false;
+    mand_grid_contains_half_valid = false;
+    mand_grid_trap_valid = false;
+    draw_mand();
+  }
+}
+
+void IFSGui::S_mand_connected(XEvent* e) {
+  if (e->type == ButtonPress) {
+    mand_connected = !mand_connected;
+    W_mand_connected_check.checked = mand_connected;
+    W_mand_connected_check.redraw();
+    draw_mand();
+  }
+}
+
+void IFSGui::S_mand_connected_increase_depth(XEvent* e) {
+  if (e->type == ButtonPress) {
+    ++mand_connected_depth;
+    std::stringstream T; T.str(""); T << mand_connected_depth;
+    W_mand_connected_depth_label.update_text(T.str());
+    mand_grid_connected_valid = false;
+    draw_mand();
+  }
+}
+
+void IFSGui::S_mand_connected_decrease_depth(XEvent* e) {
+  if (e->type == ButtonPress) {
+    --mand_connected_depth;
+    std::stringstream T; T.str(""); T << mand_connected_depth;
+    W_mand_connected_depth_label.update_text(T.str());
+    mand_grid_connected_valid = false;
+    draw_mand();
+  }
+}
+
 void IFSGui::S_mand_contains_half(XEvent* e) {}
 void IFSGui::S_mand_contains_half_increase_depth(XEvent* e) {}
 void IFSGui::S_mand_contains_half_decrease_depth(XEvent* e) {}
@@ -899,9 +951,14 @@ void IFSGui::reset_and_pack_window() {
     W_mand_zoom_title = WidgetText(this, "Zoom: ", -1, 20);
     W_mand_zoom_in = WidgetButton(this, "in", -1, 20, &IFSGui::S_mand_zoom_in);
     W_mand_zoom_out = WidgetButton(this, "out", -1, 20, &IFSGui::S_mand_zoom_out);  
+    W_mand_mesh_title = WidgetText(this, "Mesh size:", -1, 20);
+    W_mand_mesh_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_decrease_mesh);
+    std::stringstream T;  T.str("");  T << mand_connected_depth;
+    W_mand_mesh_label = WidgetText(this, T.str().c_str(), -1, 20);
+    W_mand_mesh_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_increase_mesh);
     W_mand_connected_check = WidgetCheck(this, "Connectedness:", 105, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
     W_mand_connected_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_connected_decrease_depth);
-    std::stringstream T;  T.str("");  T << mand_connected_depth;
+    T.str("");  T << mand_connected_depth;
     W_mand_connected_depth_label = WidgetText(this, T.str().c_str(), -1, 20);
     W_mand_connected_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_connected_increase_depth);
     W_mand_contains_half_check = WidgetCheck(this, "Contains 1/2:", 105, 20, (mand_contains_half ? 1 : 0), &IFSGui::S_mand_contains_half);
