@@ -12,11 +12,16 @@
 /***************************************************************************
  * widget functions
  ***************************************************************************/
+bool Widget::contains_pixel(int x, int y) {
+  return (ul.x <= x) && (x < ul.x + width) && (ul.y <= y) && (y < ul.y + height);
+}
 
-WidgetDraw::WidgetDraw(IFSGui* i, int w, int h) {
+
+WidgetDraw::WidgetDraw(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*)) {
   width = w;
   height = h;
   ifsg = i;
+  click_signal = f;
   p = XCreatePixmap(ifsg->display, ifsg->main_window,
                     width, height, DefaultDepth(ifsg->display, ifsg->screen));
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
@@ -27,6 +32,10 @@ WidgetDraw::WidgetDraw(IFSGui* i, int w, int h) {
   XDrawRectangle(ifsg->display, p, gc, 0, 0, width-1, height-1);
 }
 
+void WidgetDraw::redraw() {
+  initial_draw();
+}
+
 void WidgetDraw::initial_draw() {
   std::cout << "Drawing the drawing area\n";
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
@@ -34,12 +43,12 @@ void WidgetDraw::initial_draw() {
 
 
 
-WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)()) {
+WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)(XEvent*)) {
   ifsg = i;
   width = w;
   height = h;
   text = t;
-  clicker = f;
+  click_signal = f;
   
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
   
@@ -90,7 +99,7 @@ WidgetText::WidgetText(IFSGui* i, const std::string& t, int w, int h) {
   ifsg = i;
   text = t;
   height = h;
-  
+  click_signal = NULL;
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
   
   XFontStruct* font = XLoadQueryFont(ifsg->display, "fixed");
@@ -125,19 +134,33 @@ WidgetText::WidgetText(IFSGui* i, const std::string& t, int w, int h) {
   XDrawString(ifsg->display, p, gc, text_position.x, text_position.y, text.c_str(), text.size()); 
 }
 
+void WidgetText::update_text(const std::string& s) {
+  text = s;
+  //clear it
+  XSetForeground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XFillRectangle(ifsg->display, p, gc, 0, 0, width, height);
+  XSetForeground(ifsg->display, gc, BlackPixel(ifsg->display, ifsg->screen));
+  XDrawString(ifsg->display, p, gc, text_position.x, text_position.y, text.c_str(), text.size()); 
+  redraw();
+} 
+
+void WidgetText::redraw() {
+  initial_draw();
+}
+
 void WidgetText::initial_draw() {
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
   std::cout << "Drawing string: " << text << "\n";
   std::cout << "At position: " << ul.x << " " << ul.y << "\n";
 }
 
-WidgetCheck::WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)()) {
+WidgetCheck::WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)(XEvent*)) {
   width = w;
   height = h;
   ifsg = i;
   text = t;
   checked = c;
-  clicker = f;
+  click_signal = f;
   
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
   
@@ -180,16 +203,30 @@ WidgetCheck::WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, 
   XDrawString(ifsg->display, p, gc, text_position.x, text_position.y, text.c_str(), text.size()); 
 } 
 
+void WidgetCheck::redraw() {
+  XSetForeground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XFillRectangle(ifsg->display, p, gc, 0, 0, width, height);
+  XSetForeground(ifsg->display, gc, BlackPixel(ifsg->display, ifsg->screen));
+  if (checked) {
+    XFillRectangle(ifsg->display, p, gc, 5, height/2-5, 11, 11);
+  } else {
+    XDrawRectangle(ifsg->display, p, gc, 5, height/2-5, 10, 10);
+  }
+  XDrawString(ifsg->display, p, gc, text_position.x, text_position.y, text.c_str(), text.size());  
+  XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
+}
+  
+
 void WidgetCheck::initial_draw() {
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
 }
 
 
-WidgetLeftArrow::WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) {
+WidgetLeftArrow::WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*)) {
   ifsg = i;
   width = w;
   height = h;
-  clicker = f;
+  click_signal = f;
   p = XCreatePixmap(ifsg->display, ifsg->main_window,
                     width, height, DefaultDepth(ifsg->display, ifsg->screen));
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
@@ -217,11 +254,11 @@ void WidgetLeftArrow::initial_draw() {
 
 
 
-WidgetRightArrow::WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)()) {
+WidgetRightArrow::WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*)) {
   ifsg = i;
   width = w;
   height = h;
-  clicker = f;
+  click_signal = f;
   p = XCreatePixmap(ifsg->display, ifsg->main_window,
                     width, height, DefaultDepth(ifsg->display, ifsg->screen));
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
@@ -266,50 +303,175 @@ void WidgetRightArrow::initial_draw() {
  * signal handlers
  ****************************************************************************/
  
-void IFSGui::S_switch_to_limit() {
+void IFSGui::S_switch_to_limit(XEvent* e) {
 }
 
-void IFSGui::S_switch_to_mandlebrot() {
+void IFSGui::S_switch_to_mandlebrot(XEvent* e) {
 }
 
-void IFSGui::S_switch_to_combined() {
+void IFSGui::S_switch_to_combined(XEvent* e) {
 }
  
 //limit set
-void IFSGui::S_limit_increase_depth() {
+void IFSGui::S_limit_draw(XEvent* e) {
 }
 
-void IFSGui::S_limit_decrease_depth() {
+void IFSGui::S_limit_increase_depth(XEvent* e) {
+  if (e->type == MotionNotify) return;
+  ++limit_depth;
+  std::stringstream T; T.str(""); T << limit_depth;
+  W_limit_depth_label.update_text(T.str());
+  draw_limit();
 }
 
-void IFSGui::S_limit_switch_chunky() {
+void IFSGui::S_limit_decrease_depth(XEvent* e) {
+  if (e->type == KeyPress || e->type == MotionNotify) return;
+  --limit_depth;
+  std::stringstream T; T.str(""); T << limit_depth;
+  W_limit_depth_label.update_text(T.str());
+  draw_limit();
 }
 
-void IFSGui::S_limit_zoom_in() {
+void IFSGui::S_limit_switch_chunky(XEvent* e) {
+  if (e->type == KeyPress || e->type == MotionNotify) return;
+  limit_chunky = !limit_chunky;
+  W_limit_chunky.checked = limit_chunky;
+  W_limit_chunky.redraw();
+  draw_limit();
 }
 
-void IFSGui::S_limit_zoom_out() {
+void IFSGui::S_limit_switch_colors(XEvent* e) {
+  if (e->type == KeyPress || e->type == MotionNotify) return;
+  limit_colors = !limit_colors;
+  W_limit_colors.checked = limit_colors;
+  W_limit_colors.redraw();
+  draw_limit();
 }
 
-void IFSGui::S_limit_recenter() {
+void IFSGui::S_limit_zoom_in(XEvent* e) {
+}
+
+void IFSGui::S_limit_zoom_out(XEvent* e) {
+}
+
+void IFSGui::S_limit_recenter(XEvent* e) {
 }
 
 //mandlebrot
-void IFSGui::S_mand_connected() {}
-void IFSGui::S_mand_connected_increase_depth() {}
-void IFSGui::S_mand_connected_decrease_depth() {}
-void IFSGui::S_mand_contains_half() {}
-void IFSGui::S_mand_contains_half_increase_depth() {}
-void IFSGui::S_mand_contains_half_decrease_depth() {}
-void IFSGui::S_mand_trap() {}
-void IFSGui::S_mand_trap_increase_depth() {}
-void IFSGui::S_mand_trap_decrease_depth() {}
+void IFSGui::S_mand_draw(XEvent* e) {}
+void IFSGui::S_mand_connected(XEvent* e) {}
+void IFSGui::S_mand_connected_increase_depth(XEvent* e) {}
+void IFSGui::S_mand_connected_decrease_depth(XEvent* e) {}
+void IFSGui::S_mand_contains_half(XEvent* e) {}
+void IFSGui::S_mand_contains_half_increase_depth(XEvent* e) {}
+void IFSGui::S_mand_contains_half_decrease_depth(XEvent* e) {}
+void IFSGui::S_mand_trap(XEvent* e) {}
+void IFSGui::S_mand_trap_increase_depth(XEvent* e) {}
+void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {}
 
 //point
-void IFSGui::S_point_connected() {}
-void IFSGui::S_point_contains_half() {}
-void IFSGui::S_point_trap() {}
-void IFSGui::S_point_uv_words() {}
+void IFSGui::S_point_connected(XEvent* e) {}
+void IFSGui::S_point_contains_half(XEvent* e) {}
+void IFSGui::S_point_trap(XEvent* e) {}
+void IFSGui::S_point_uv_words(XEvent* e) {}
+
+
+
+
+
+
+
+
+/**************************************************************************
+ * back end functions
+ * ************************************************************************/
+Point2d<int> IFSGui::limit_cpx_to_pixel(const cpx& c) {
+  int x = int( (c.real() - limit_ll.real()) / limit_pixel_width );
+  int real_y = int( (c.imag() - limit_ll.imag()) / limit_pixel_width );
+  int x11_y = W_limit_plot.height - real_y;
+  return Point2d<int>(x, x11_y);
+}
+
+void IFSGui::draw_limit() {
+  double min_r;
+  if (!IFS.minimal_enclosing_radius(min_r)) {
+    return;
+  }
+  
+  Widget& LW = W_limit_plot;
+  
+  //clear the limit widget
+  XSetForeground(display, LW.gc, WhitePixel(display, screen));
+  XFillRectangle(display, LW.p, LW.gc, 0, 0, LW.width, LW.height);
+  XSetForeground(display, LW.gc, BlackPixel(display, screen));
+  XDrawRectangle(display, LW.p, LW.gc, 0, 0, LW.width-1, LW.height-1);
+  XSetFillStyle(display, LW.gc, FillSolid);
+  
+  int blue_color = get_rgb_color(0,0.6,1.0);
+  int yellow_color = get_rgb_color(1.0,0.6,0);
+  
+  Ball initial_ball(0.5,(IFS.z-1.0)/2.0,(1.0-IFS.w)/2.0,min_r);
+  std::vector<std::pair<bool,Ball> > stack(0);
+  stack.push_back(std::make_pair(false, initial_ball));
+  while (stack.size() > 0) {
+    std::pair<bool,Ball> b = stack.back();
+    stack.pop_back();
+    //if the ball is disjoint from the window, we might as well 
+    //get rid of it
+    if (!b.first && b.second.is_disjoint(limit_ll, limit_ur)) continue;
+    if (b.second.word_len >= limit_depth) {
+      Point2d<int> p = limit_cpx_to_pixel(b.second.center);
+      int r = int( b.second.radius / limit_pixel_width );
+      if (r < 1) r = 1;
+      if (limit_colors) {
+	XSetForeground(display, LW.gc, (b.second.last_gen_index()==0 ? blue_color : yellow_color));
+      }
+      if (limit_chunky) {
+	XFillArc(display, LW.p, LW.gc, p.x-r, p.y-r, 2*r, 2*r, 23040, 23040);
+      } else {
+	XDrawPoint(display, LW.p, LW.gc, p.x, p.y);
+      }
+      continue;
+    }
+    //if the ball isn't disjoint from the window, maybe it is contained in it?
+    Ball bz = IFS.act_on_right(0, b.second);
+    Ball bw = IFS.act_on_right(1, b.second);
+    if (b.first) {
+      stack.push_back(std::make_pair(true, bz));
+      stack.push_back(std::make_pair(true, bw));
+    } else {
+      if (b.second.is_contained(limit_ll, limit_ur)) {
+	stack.push_back(std::make_pair(true, bz));
+	stack.push_back(std::make_pair(true, bw));
+      } else {
+	stack.push_back(std::make_pair(false, bz));
+	stack.push_back(std::make_pair(false, bw));
+      }
+    }
+  }
+  LW.redraw();
+}
+
+
+cpx IFSGui::mand_pixel_group_to_cpx(const Point2d<int>& p) {
+  double r = (p.x + 0.5)*mand_pixel_group_width + mand_ll.real();
+  double i = mand_ur.imag() - (p.y + 0.5)*mand_pixel_group_width;
+  return cpx(r,i);
+}
+
+void IFSGui::draw_mand() {
+  ifs temp_IFS;
+  Widget& MW = W_mand_plot;
+  int num_pixel_groups = MW.width / mand_pixel_group_size;
+  for (int i=0; i<(int)num_pixel_groups; ++i) {
+  }
+}
+
+
+
+
+
+
 
 
 
@@ -370,6 +532,19 @@ void IFSGui::pack_widget_upper_right(const Widget* w1, Widget* w2) {
 }
 
 
+int IFSGui::get_rgb_color(double r, double g, double b) {
+  XColor temp;
+  temp.flags = DoRed | DoGreen | DoBlue;
+  temp.red = (int)(r*65535);
+  temp.green = (int)(g*65535);
+  temp.blue = (int)(b*65535);
+  if (XAllocColor(display, DefaultColormap(display, screen), &temp) == 0) {
+    std::cout << "Color not found?\n";
+  }
+  return temp.pixel;
+}
+
+
 
 
 void IFSGui::reset_and_pack_window() {
@@ -401,6 +576,10 @@ void IFSGui::reset_and_pack_window() {
     main_window_width = 2*x + mand_sidebar_size + limit_sidebar_size;
   }
   
+  //compute the widths
+  limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(x);
+  mand_pixel_group_width = mand_pixel_group_width*( (mand_ur.real() - mand_ll.real()) / double(x) );
+  
   //create the window
   main_window = XCreateSimpleWindow(display, 
                                     RootWindow(display, screen), 20, 20,
@@ -429,22 +608,21 @@ void IFSGui::reset_and_pack_window() {
   W_switch_to_combined = WidgetButton(this, "Switch to combined", -1, 20, &IFSGui::S_switch_to_combined);
   
   W_point_title = WidgetText(this, "Highlighted IFS options:", -1, 20);
-  W_point_connected_check = WidgetCheck(this, "Connectedness", -1, 20, (point_connected ? 1 : 0), &IFSGui::S_point_connected);
-  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", -1, 20, (point_contains_half ? 1 : 0), &IFSGui::S_point_contains_half);
-  W_point_trap_check = WidgetCheck(this, "Find trap", -1, 20, (point_trap ? 1 : 0), &IFSGui::S_point_trap);
-  W_point_uv_word_check = WidgetCheck(this, "Find uv words", -1, 20, (point_uv_words ? 1 : 0), &IFSGui::S_point_trap);
+  W_point_connected_check = WidgetCheck(this, "Connectedness", -1, 20, point_connected, &IFSGui::S_point_connected);
+  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", -1, 20, point_contains_half, &IFSGui::S_point_contains_half);
+  W_point_trap_check = WidgetCheck(this, "Find trap", -1, 20, point_trap, &IFSGui::S_point_trap);
+  W_point_uv_word_check = WidgetCheck(this, "Find uv words", -1, 20, point_uv_words, &IFSGui::S_point_trap);
   
   
   if (window_mode != MANDLEBROT) {
-    W_limit_plot = WidgetDraw(this, x,x);
+    W_limit_plot = WidgetDraw(this, x,x, &IFSGui::S_limit_draw);
     W_limit_depth_title = WidgetText(this, "Depth: ", -1, 20);
     W_limit_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_limit_decrease_depth);
     std::stringstream T; T.str(""); T << limit_depth;
     W_limit_depth_label = WidgetText(this, T.str().c_str(), -1, 20);
     W_limit_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_limit_increase_depth);
-    W_limit_chunky_title = WidgetText(this, "Chunky: ", -1, 20);
-    W_limit_chunky_on = WidgetCheck(this, "on", -1, 20, (limit_chunky ? 1 : 0), &IFSGui::S_limit_switch_chunky);
-    W_limit_chunky_off = WidgetCheck(this, "off", -1, 20, (limit_chunky ? 0 : 1), &IFSGui::S_limit_switch_chunky);
+    W_limit_chunky = WidgetCheck(this, "Chunky", -1, 20, limit_chunky, &IFSGui::S_limit_switch_chunky);
+    W_limit_colors = WidgetCheck(this, "Colors", -1, 20, limit_colors, &IFSGui::S_limit_switch_colors);
     W_limit_zoom_title = WidgetText(this, "Zoom: ", -1, 20);
     W_limit_zoom_in = WidgetButton(this, "in", 30, 20, &IFSGui::S_limit_zoom_in);
     W_limit_zoom_out = WidgetButton(this, "out", 30, 20, &IFSGui::S_limit_zoom_out);
@@ -459,12 +637,11 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_depth_title, &W_limit_depth_leftarrow);
     pack_widget_upper_right(&W_limit_depth_leftarrow, &W_limit_depth_label);
     pack_widget_upper_right(&W_limit_depth_label, &W_limit_depth_rightarrow);
-    pack_widget_upper_right(&W_limit_plot, &W_limit_chunky_title);
-    pack_widget_upper_right(&W_limit_chunky_title, &W_limit_chunky_on);
-    pack_widget_upper_right(&W_limit_chunky_on, &W_limit_chunky_off);
     pack_widget_upper_right(&W_limit_plot, &W_limit_zoom_title);
     pack_widget_upper_right(&W_limit_zoom_title, &W_limit_zoom_in);
     pack_widget_upper_right(&W_limit_zoom_in, &W_limit_zoom_out);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_chunky);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_colors);
     pack_widget_upper_right(&W_limit_plot, &W_limit_center_title);
     
     if (window_mode == LIMIT) {
@@ -477,7 +654,7 @@ void IFSGui::reset_and_pack_window() {
   }
   
   if (window_mode != LIMIT) {
-    W_mand_plot = WidgetDraw(this, x,x);
+    W_mand_plot = WidgetDraw(this, x,x, &IFSGui::S_mand_draw);
     W_mand_connected_check = WidgetCheck(this, "Connectedness:", 105, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
     W_mand_connected_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_connected_decrease_depth);
     std::stringstream T;  T.str("");  T << mand_connected_depth;
@@ -528,6 +705,9 @@ void IFSGui::reset_and_pack_window() {
     widgets[i]->initial_draw();
   }
   
+  //plot the limit set
+  draw_limit();
+  
   
 }
 
@@ -535,9 +715,21 @@ void IFSGui::main_loop() {
   XEvent e;
   while (true) {
     XNextEvent(display, &e);
-    if (e.type != KeyPress) continue; //ignore the mouse
-    if(XLookupKeysym(&e.xkey, 0) == XK_q){ // left arrow
-      break;
+    //if it was the keyboard, we deal with it here
+    if (e.type == KeyPress) {
+      if(XLookupKeysym(&e.xkey, 0) == XK_q){ // left arrow
+	break;
+      }
+     
+    //if it involves the mouse, we find the appropriate 
+    //widget to send it off to
+    } else if (e.type == ButtonPress || e.type == MotionNotify) {
+      for (int i=0; i<(int)widgets.size(); ++i) {
+	if (widgets[i]->contains_pixel( e.xbutton.x, e.xbutton.y) &&
+	    widgets[i]->click_signal != NULL) {
+	  (this->*(widgets[i]->click_signal))(&e);
+	}
+      }
     }
   }
 }
@@ -545,16 +737,20 @@ void IFSGui::main_loop() {
 
 
 
-void IFSGui::launch(IFSWindowMode m) {
+void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   
   //set the initial window mode
   window_mode = m;
+  
+  //set the ifs
+  IFS.set_params(c,c);
   
   //set the initial settings for limit and mandlebrot
   limit_ll = cpx(-1, -1.5);
   limit_ur = cpx(2, 1.5);
   limit_depth = 12;
   limit_chunky = true;
+  limit_colors = true;
   
   mand_ll = cpx(-1,-1);
   mand_ur = cpx(1,1);

@@ -22,26 +22,27 @@ struct Widget {
   IFSGui* ifsg; //the gui, so we can call the member functions
   Pixmap p;
   GC gc;
+  void (IFSGui::*click_signal)(XEvent*);
   
   virtual void initial_draw() {}
   virtual void redraw() {}
-  virtual bool contains_pixel() { return false; }
+  virtual bool contains_pixel(int x, int y);
   Widget() {}
 };
 
 struct WidgetDraw : Widget {
   WidgetDraw() {}
-  WidgetDraw(IFSGui* i, int w, int h);
+  WidgetDraw(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*));
+  void redraw();
   void initial_draw();
 };
 
 struct WidgetButton : Widget {
   std::string text;
   Point2d<int> text_position;
-  void (IFSGui::*clicker)();
   
   WidgetButton() {}
-  WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)());
+  WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)(XEvent*));
   void initial_draw();
 };
 
@@ -51,6 +52,8 @@ struct WidgetText : Widget {
   
   WidgetText() {}
   WidgetText(IFSGui* i, const std::string& t, int w, int h);
+  void update_text(const std::string& s);
+  void redraw();
   void initial_draw();
 };
 
@@ -58,26 +61,22 @@ struct WidgetCheck : Widget {
   std::string text;
   bool checked;
   Point2d<int> text_position;
-  void (IFSGui::*clicker)();
   
   WidgetCheck() {}
-  WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)());
+  WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)(XEvent*));
+  void redraw();
   void initial_draw();
 };
 
 struct WidgetLeftArrow : Widget {
-  void (IFSGui::*clicker)();
-  
   WidgetLeftArrow() {}
-  WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
+  WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*));
   void initial_draw();
 };
 
 struct WidgetRightArrow : Widget {
-  void (IFSGui::*clicker)();
-  
   WidgetRightArrow() {}
-  WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)());
+  WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*));
   void initial_draw();
 };
 
@@ -111,11 +110,16 @@ struct IFSGui {
   cpx limit_ur;
   int limit_depth;
   bool limit_chunky;
+  bool limit_colors;
+  
+  double limit_pixel_width;
+  Point2d<int> limit_cpx_to_pixel(const cpx& c);
   
   //mandlebrot
   cpx mand_ll;
   cpx mand_ur;
   int mand_pixel_group_size;
+  int mand_pixel_group_width;
   bool mand_connected;
   int mand_connected_depth;
   bool mand_contains_half;
@@ -126,12 +130,28 @@ struct IFSGui {
   bool point_contains_half;
   bool point_trap;
   bool point_uv_words;
+  cpx mand_pixel_group_to_cpx(const Point2d<int>& p); 
+  
+  //data for mandlebrot
+  //std::vector<std::vector<bool> > mand_grid_connected;
+  //std::vector<std::vector<bool> > mand_grid_contains_half;
+  //std::vector<std::vector<bool> > mand_grid_trap;
+  
+  //data about highlighted point
+  bool point_is_connected;
+  bool point_is_contains_half;
+  bool point_is_trap;
+  
+  
+  //computation functions
+  void draw_limit();
+  void draw_mand();
   
   //graphics stuff
   Display* display;
   int screen;
   Window main_window;
-  
+  Colormap col_map;
   std::vector<Widget*> widgets;
   
   //widgets:
@@ -149,9 +169,8 @@ struct IFSGui {
   WidgetLeftArrow W_limit_depth_leftarrow;
   WidgetText W_limit_depth_label;
   WidgetRightArrow W_limit_depth_rightarrow;
-  WidgetText W_limit_chunky_title;
-  WidgetCheck W_limit_chunky_on;
-  WidgetCheck W_limit_chunky_off;
+  WidgetCheck W_limit_chunky;
+  WidgetCheck W_limit_colors;
   WidgetText W_limit_zoom_title;
   WidgetButton W_limit_zoom_in;
   WidgetButton W_limit_zoom_out;
@@ -172,31 +191,34 @@ struct IFSGui {
   WidgetRightArrow W_mand_trap_depth_rightarrow;
   
   //signal functions
-  void S_switch_to_limit();
-  void S_switch_to_mandlebrot();
-  void S_switch_to_combined();
+  void S_switch_to_limit(XEvent* e);
+  void S_switch_to_mandlebrot(XEvent* e);
+  void S_switch_to_combined(XEvent* e);
   
-  void S_limit_increase_depth();
-  void S_limit_decrease_depth();
-  void S_limit_switch_chunky();
-  void S_limit_zoom_in();
-  void S_limit_zoom_out();
-  void S_limit_recenter();
+  void S_limit_draw(XEvent* e);
+  void S_limit_increase_depth(XEvent* e);
+  void S_limit_decrease_depth(XEvent* e);
+  void S_limit_switch_chunky(XEvent* e);
+  void S_limit_switch_colors(XEvent* e);
+  void S_limit_zoom_in(XEvent* e);
+  void S_limit_zoom_out(XEvent* e);
+  void S_limit_recenter(XEvent* e);
   
-  void S_mand_connected();
-  void S_mand_connected_increase_depth();
-  void S_mand_connected_decrease_depth();
-  void S_mand_contains_half();
-  void S_mand_contains_half_increase_depth();
-  void S_mand_contains_half_decrease_depth();
-  void S_mand_trap();
-  void S_mand_trap_increase_depth();
-  void S_mand_trap_decrease_depth();
+  void S_mand_draw(XEvent* e);
+  void S_mand_connected(XEvent* e);
+  void S_mand_connected_increase_depth(XEvent* e);
+  void S_mand_connected_decrease_depth(XEvent* e);
+  void S_mand_contains_half(XEvent* e);
+  void S_mand_contains_half_increase_depth(XEvent* e);
+  void S_mand_contains_half_decrease_depth(XEvent* e);
+  void S_mand_trap(XEvent* e);
+  void S_mand_trap_increase_depth(XEvent* e);
+  void S_mand_trap_decrease_depth(XEvent* e);
   
-  void S_point_connected();
-  void S_point_contains_half();
-  void S_point_trap();
-  void S_point_uv_words();
+  void S_point_connected(XEvent* e);
+  void S_point_contains_half(XEvent* e);
+  void S_point_trap(XEvent* e);
+  void S_point_uv_words(XEvent* e);
   
   
   
@@ -206,9 +228,9 @@ struct IFSGui {
   int limit_sidebar_size;
   int mand_sidebar_size;
   
-
+  int get_rgb_color(double r, double g, double b);
   void pack_widget_upper_right(const Widget* w1, Widget* w2);
-  void launch(IFSWindowMode m = BOTH);
+  void launch(IFSWindowMode m = BOTH, const cpx& c = cpx(0.5,0.5));
   void reset_and_pack_window();
   void main_loop();
 

@@ -62,6 +62,8 @@ struct Ball {
   Ball(cpx c, cpx to_z, cpx to_w, double r, const std::bitset<64>& w, int wl);
   int last_gen_index() const;
   bool is_disjoint(const Ball& b);
+  bool is_disjoint(const cpx& ll, const cpx& ur);
+  bool is_contained(const cpx& ll, const cpx& ur);
 };
 
 std::ostream& operator<<(std::ostream& os, const Ball& b);

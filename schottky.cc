@@ -21,22 +21,22 @@
 
 
 int main(int argc, char *argv[]) { 
-	char c;
-	int w = 1024;
-	cpx I(0,1);
-	int mode = 0;
-	
-	if (argc > 1) {
-	  w = atoi(argv[1]);
-	}
-	
-	//std::cout << sizeof(long long int) <<"\n";
-	
-	std::cout << "enter 'i' for IFS or 'm' for mandelbrot (n for new GUI):";
-	std::cin >> c;
-	if (c == 'n') {
-	  IFSGui G;
-	  G.launch(BOTH);
+  char c;
+  int w = 1024;
+  cpx I(0,1);
+  int mode = 0;
+  
+  if (argc > 1) {
+    w = atoi(argv[1]);
+  }
+  
+  //std::cout << sizeof(long long int) <<"\n";
+  
+  std::cout << "enter 'i' for IFS or 'm' for mandelbrot (n for new GUI):";
+  std::cin >> c;
+  if (c == 'n') {
+    IFSGui G;
+    G.launch(BOTH, cpx(-0.6, 0.1));
   } else {
     mode = (c=='i' ? 0 : 1);
     ifs G(cos(TWOPI/3.0)+I*sin(TWOPI/3.0), 0.5, w, mode);      // default value : Sierpinski triangle

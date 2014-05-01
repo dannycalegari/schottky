@@ -59,6 +59,39 @@ bool Ball::is_disjoint(const Ball& b) {
   return abs(center - b.center) > radius + b.radius;
 }
 
+bool Ball::is_disjoint(const cpx& ll, const cpx& ur) {
+  cpx ul(ll.real(), ur.imag());
+  cpx lr(ur.real(), ll.imag());
+  cpx& bc = center;
+  double& r = radius;
+  if (ur.real() < bc.real() && ur.imag() < bc.imag()) { //upper right
+    return !(abs(bc-ur)<r);
+  } else if (ul.real() > bc.real() && ul.imag() < bc.imag()) {
+    return !(abs(bc-ul)<r);
+  } else if (ll.real() > bc.real() && ll.imag() > bc.imag()) {
+    return !(abs(bc-ll)<r);
+  } else if (lr.real() < bc.real() && lr.imag() > bc.imag()) {
+    return !(abs(bc-lr)<r);
+  } else if (ur.real() < bc.real()) {
+    return !(ur.real() > bc.real() - r);
+  } else if (ul.imag() < bc.imag()) {
+    return !(ul.imag() > bc.imag() -r);
+  } else if (ll.real() > bc.real()) {
+    return !(ll.real() < bc.real() + r);
+  } else if (lr.imag() > bc.imag()) {
+    return !(lr.imag() < bc.imag() + r);
+  }
+  return false; //it's right over the square
+}
+
+bool Ball::is_contained(const cpx& ll, const cpx& ur) {
+  return (ll.real() < center.real() - radius) && 
+         (center.real() + radius < ur.real()) && 
+         (ll.imag() < center.imag() - radius) && 
+         (center.imag() + radius < ur.imag());
+}
+
+
 std::ostream& operator<<(std::ostream& os, const Ball& b) {
   return os << "Ball(" << b.center << "," << b.to_z << "," << b.to_w << "," << b.radius << "," << b.word << "," << b.word_len << ")";
 }
