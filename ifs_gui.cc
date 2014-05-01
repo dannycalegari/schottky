@@ -387,15 +387,21 @@ void IFSGui::S_mand_draw(XEvent* e) {
   
   //the follow is run if the button is pressed or if there is
   //motion where the button is down
-  if (e->type == ButtonPress ||
-      (e->type == MotionNotify && ((e->xmotion.state >> 8)&1)) ) {
+  if ( (e->type == ButtonPress && e->xbutton.button == Button1) ||
+       (e->type == MotionNotify && ((e->xmotion.state >> 8)&1)) ) {
     int widget_x = e->xbutton.x - W_mand_plot.ul.x;
     int widget_y = e->xbutton.y - W_mand_plot.ul.y;
     cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
-    
     change_highlighted_ifs(c);
   
-  } 
+  //it's a right mouse click -- zoom in
+  } else if (e->type == ButtonPress && e->xbutton.button == Button3) { 
+    int widget_x = e->xbutton.x - W_mand_plot.ul.x;
+    int widget_y = e->xbutton.y - W_mand_plot.ul.y;
+    cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
+    IFS.set_params(c,c);
+    mand_zoom(0.75);
+  }
   //additionally, if the mouse is moved, we need to update the 
   //text
   if (e->type == MotionNotify) {
@@ -597,8 +603,8 @@ void IFSGui::draw_mand() {
     }
   }
   if (mand_connected && !mand_grid_connected_valid) mand_grid_connected_valid = true;
-  if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_connected_valid = true;
-  if (mand_trap && !mand_grid_trap_valid) mand_grid_connected_valid = true;
+  if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_contains_half_valid = true;
+  if (mand_trap && !mand_grid_trap_valid) mand_grid_trap_valid = true;
   
   //now draw the highlighted point
   Point2d<int> h = mand_cpx_to_pixel(IFS.z);
@@ -657,6 +663,33 @@ void IFSGui::change_highlighted_ifs(cpx c) {
 }
 
 
+//this zooms on whatever the highlighted ifs is
+void IFSGui::mand_zoom(double radius_multiplier) {
+  double radius = (mand_ur.real() - mand_ll.real())/2.0;
+  cpx c = IFS.z;
+  radius *= radius_multiplier;
+  mand_ll = c - cpx(radius, radius);
+  mand_ur = c + cpx(radius, radius);
+  double w = mand_ur.real() - mand_ll.real();
+  mand_pixel_width = w / W_mand_plot.width;
+  mand_pixel_group_width = mand_pixel_group_size*mand_pixel_width;
+  mand_grid_connected_valid = false;;
+  mand_grid_connected_valid = false;
+  mand_grid_connected_valid = false;
+  draw_mand();
+}
+
+//recenters on the highlighted ifs
+void IFSGui::mand_recenter() {
+  double radius = (mand_ur.real() - mand_ll.real())/2.0;
+  cpx c = IFS.z;
+  mand_ll = c - cpx(radius, radius);
+  mand_ur = c + cpx(radius, radius);
+  mand_grid_connected_valid = false;;
+  mand_grid_connected_valid = false;
+  mand_grid_connected_valid = false;
+  draw_mand();
+}
 
 
 /****************************************************************************

@@ -154,6 +154,8 @@ struct IFSGui {
   void recenter_limit(cpx c);
   void draw_mand();
   void change_highlighted_ifs(cpx c);
+  void mand_zoom(double radius_multiplier);
+  void mand_recenter();
   
   //graphics stuff
   Display* display;
