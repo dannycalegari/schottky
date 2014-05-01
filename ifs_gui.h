@@ -119,7 +119,7 @@ struct IFSGui {
   cpx mand_ll;
   cpx mand_ur;
   int mand_pixel_group_size;
-  int mand_pixel_group_width;
+  double mand_pixel_group_width;
   bool mand_connected;
   int mand_connected_depth;
   bool mand_contains_half;

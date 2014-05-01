@@ -121,7 +121,24 @@ bool ifs::circ_connected(double r){ 	// circle algorithm to test for connectedne
 
 
 
-
+bool ifs::is_connected(int d, int& difficulty) {
+  if ((abs(z-w) < 0.000001) && az > 1.0/sqrt(2.0)) {
+    difficulty = 0;
+    return true;
+  }
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) {
+    difficulty = 0;
+    return true;
+  }
+  //std::cout << "Checking if " << z << " " << w << " is connected with minimal radius " << min_r << "\n";
+  int old_depth = depth;
+  depth = d;
+  bool ans = circ_connected(min_r);
+  difficulty = exit_depth;
+  depth = old_depth;
+  return ans;
+}
 
 
 

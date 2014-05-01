@@ -177,6 +177,7 @@ class ifs{
     bool circles_intersect(cpx center_1, cpx z_img_1, cpx w_img_1, double R1,
                             cpx center_2, cpx z_img_2, cpx w_img_2, double R2, int d);
     bool circ_connected(double r=-1);                                        // circle algorithm to test for connectedness
+    bool is_connected(int d, int& difficulty); //automates it
     bool contains_point(cpx pt, double r=-1);
     bool contains_point_recurse(const cpx& pt, const Ball& b, int d);
 		

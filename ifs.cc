@@ -573,16 +573,16 @@ cpx ifs::center_of_mass(const std::vector<Ball>& balls) {
 //compute the minimal radius of a ball around 1/2 which contains 
 //its image under both actions
 bool ifs::minimal_enclosing_radius(double& r) {
-  if (fabs(az-1.0) < 1e-4 || fabs(aw-1.0) < 1e-4) return false;
+  if (1.0 - az < 1e-4 || 1.0 - aw < 1e-4) return false;
   //initialize the chunky radius to contain the whole set
   double z_restriction = abs(0.5*z-0.5)/(1.0-az);
   double w_restriction = abs(0.5-0.5*w)/(1.0-aw);
   r = (z_restriction > w_restriction ? z_restriction : w_restriction);
+  //std::cout << "z: " << z << " az: " << az << " w: " << w << " aw: " << aw << "\n"; 
+  //std::cout << "Z restriction: " << z_restriction << "\n";
+  //std::cout << "W restriction: " << w_restriction << "\n";
+  //std::cout << "Computed minimal radius as " << r << "\n";
   return true;
-  //cout << "z: " << z << " az: " << az << " w: " << w << " aw: " << aw << "\n"; 
-  //cout << "Z restriction: " << z_restriction << "\n";
-  //cout << "W restriction: " << w_restriction << "\n";
-  //cout << "Computed minimal radius as " << chunky_radius << "\n";
 }
 
 cpx ifs::iterate(int index, cpx u){

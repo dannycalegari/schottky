@@ -421,15 +421,15 @@ void IFSGui::draw_limit() {
     if (!b.first && b.second.is_disjoint(limit_ll, limit_ur)) continue;
     if (b.second.word_len >= limit_depth) {
       Point2d<int> p = limit_cpx_to_pixel(b.second.center);
-      int r = int( b.second.radius / limit_pixel_width );
-      if (r < 1) r = 1;
+      double r = b.second.radius / limit_pixel_width;
+      if (r <= 1.0) r = 1.0;
       if (limit_colors) {
-	XSetForeground(display, LW.gc, (b.second.last_gen_index()==0 ? blue_color : yellow_color));
+        XSetForeground(display, LW.gc, (b.second.last_gen_index()==0 ? blue_color : yellow_color));
       }
       if (limit_chunky) {
-	XFillArc(display, LW.p, LW.gc, p.x-r, p.y-r, 2*r, 2*r, 23040, 23040);
+        XFillArc(display, LW.p, LW.gc, p.x-r, p.y-r, int(2.0*r), int(2.0*r), 23040, 23040);
       } else {
-	XDrawPoint(display, LW.p, LW.gc, p.x, p.y);
+        XDrawPoint(display, LW.p, LW.gc, p.x, p.y);
       }
       continue;
     }
@@ -441,11 +441,11 @@ void IFSGui::draw_limit() {
       stack.push_back(std::make_pair(true, bw));
     } else {
       if (b.second.is_contained(limit_ll, limit_ur)) {
-	stack.push_back(std::make_pair(true, bz));
-	stack.push_back(std::make_pair(true, bw));
+        stack.push_back(std::make_pair(true, bz));
+        stack.push_back(std::make_pair(true, bw));
       } else {
-	stack.push_back(std::make_pair(false, bz));
-	stack.push_back(std::make_pair(false, bw));
+        stack.push_back(std::make_pair(false, bz));
+        stack.push_back(std::make_pair(false, bw));
       }
     }
   }
@@ -463,8 +463,30 @@ void IFSGui::draw_mand() {
   ifs temp_IFS;
   Widget& MW = W_mand_plot;
   int num_pixel_groups = MW.width / mand_pixel_group_size;
+  int connectedness_difficulty;
   for (int i=0; i<(int)num_pixel_groups; ++i) {
+    for (int j=0; j<(int)num_pixel_groups; ++j) {
+      cpx c = mand_pixel_group_to_cpx(Point2d<int>(i,j));
+      temp_IFS.set_params(c,c);
+      if (mand_connected && temp_IFS.is_connected(mand_connected_depth, connectedness_difficulty)) {
+        XSetForeground(display, MW.gc, connectedness_difficulty*0x000001);
+      } else {
+        XSetForeground(display, MW.gc, WhitePixel(display, screen));
+      }
+      XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
+                                           j*mand_pixel_group_size, 
+                                           mand_pixel_group_size, 
+                                           mand_pixel_group_size);
+      //for instant gratification, copy the area over
+      XCopyArea(display, MW.p, main_window, MW.gc, i*mand_pixel_group_size, 
+                                                   j*mand_pixel_group_size, 
+                                                   mand_pixel_group_size, 
+                                                   mand_pixel_group_size, 
+                                                   MW.ul.x + i*mand_pixel_group_size,
+                                                   MW.ul.y + j*mand_pixel_group_size);
+    }
   }
+  MW.redraw();
 }
 
 
@@ -578,7 +600,7 @@ void IFSGui::reset_and_pack_window() {
   
   //compute the widths
   limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(x);
-  mand_pixel_group_width = mand_pixel_group_width*( (mand_ur.real() - mand_ll.real()) / double(x) );
+  mand_pixel_group_width = mand_pixel_group_size*( (mand_ur.real() - mand_ll.real()) / double(x) );
   
   //create the window
   main_window = XCreateSimpleWindow(display, 
@@ -706,8 +728,8 @@ void IFSGui::reset_and_pack_window() {
   }
   
   //plot the limit set
-  draw_limit();
-  
+  if (window_mode != MANDLEBROT) draw_limit();
+  if (window_mode != LIMIT) draw_mand();
   
 }
 
@@ -754,7 +776,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   
   mand_ll = cpx(-1,-1);
   mand_ur = cpx(1,1);
-  mand_pixel_group_size = 4;
+  mand_pixel_group_size = 2;
   mand_connected = true;
   mand_connected_depth = 12;
   mand_contains_half = false;
