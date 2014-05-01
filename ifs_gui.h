@@ -189,6 +189,11 @@ struct IFSGui {
   WidgetText W_limit_center_title;
   
   WidgetDraw W_mand_plot;
+  WidgetText W_mand_options_title;
+  WidgetButton W_mand_recenter;
+  WidgetText W_mand_zoom_title;
+  WidgetButton W_mand_zoom_in;
+  WidgetButton W_mand_zoom_out;
   WidgetCheck W_mand_connected_check;
   WidgetLeftArrow W_mand_connected_depth_leftarrow;
   WidgetText W_mand_connected_depth_label;
@@ -216,6 +221,9 @@ struct IFSGui {
   void S_limit_zoom_out(XEvent* e);
   
   void S_mand_draw(XEvent* e);
+  void S_mand_recenter(XEvent* e);
+  void S_mand_zoom_in(XEvent* e);
+  void S_mand_zoom_out(XEvent* e);
   void S_mand_connected(XEvent* e);
   void S_mand_connected_increase_depth(XEvent* e);
   void S_mand_connected_decrease_depth(XEvent* e);

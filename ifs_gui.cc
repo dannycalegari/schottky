@@ -410,6 +410,17 @@ void IFSGui::S_mand_draw(XEvent* e) {
 }
 
 
+void IFSGui::S_mand_recenter(XEvent* e) {
+  if (e->type == ButtonPress) mand_recenter();
+}
+
+void IFSGui::S_mand_zoom_in(XEvent* e) {
+  if (e->type == ButtonPress) mand_zoom(0.75);
+}
+
+void IFSGui::S_mand_zoom_out(XEvent* e) {
+  if (e->type == ButtonPress) mand_zoom(1.5);
+}
 
 void IFSGui::S_mand_connected(XEvent* e) {}
 void IFSGui::S_mand_connected_increase_depth(XEvent* e) {}
@@ -883,6 +894,11 @@ void IFSGui::reset_and_pack_window() {
   
   if (window_mode != LIMIT) {
     W_mand_plot = WidgetDraw(this, x,x, &IFSGui::S_mand_draw);
+    W_mand_options_title = WidgetText(this, "Mandlebrot options:", -1, 20);
+    W_mand_recenter = WidgetButton(this, "Recenter", -1, 20, &IFSGui::S_mand_recenter);
+    W_mand_zoom_title = WidgetText(this, "Zoom: ", -1, 20);
+    W_mand_zoom_in = WidgetButton(this, "in", -1, 20, &IFSGui::S_mand_zoom_in);
+    W_mand_zoom_out = WidgetButton(this, "out", -1, 20, &IFSGui::S_mand_zoom_out);  
     W_mand_connected_check = WidgetCheck(this, "Connectedness:", 105, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
     W_mand_connected_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_connected_decrease_depth);
     std::stringstream T;  T.str("");  T << mand_connected_depth;
@@ -908,6 +924,11 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_limit);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_mandlebrot);
     }
+    pack_widget_upper_right(&W_mand_plot, &W_mand_options_title);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_recenter);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_zoom_title);
+    pack_widget_upper_right(&W_mand_zoom_title, &W_mand_zoom_in);
+    pack_widget_upper_right(&W_mand_zoom_in, &W_mand_zoom_out);
     pack_widget_upper_right(&W_mand_plot, &W_mand_connected_check);
     pack_widget_upper_right(&W_mand_connected_check, &W_mand_connected_depth_leftarrow);
     pack_widget_upper_right(&W_mand_connected_depth_leftarrow, &W_mand_connected_depth_label);
