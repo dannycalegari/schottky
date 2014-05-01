@@ -111,9 +111,9 @@ struct IFSGui {
   int limit_depth;
   bool limit_chunky;
   bool limit_colors;
-  
   double limit_pixel_width;
   Point2d<int> limit_cpx_to_pixel(const cpx& c);
+  cpx limit_pixel_to_cpx(const Point2d<int>& p);
   
   //mandlebrot
   cpx mand_ll;
@@ -151,7 +151,9 @@ struct IFSGui {
   
   //computation functions
   void draw_limit();
+  void recenter_limit(cpx c);
   void draw_mand();
+  void change_highlighted_ifs(cpx c);
   
   //graphics stuff
   Display* display;
@@ -210,7 +212,6 @@ struct IFSGui {
   void S_limit_switch_colors(XEvent* e);
   void S_limit_zoom_in(XEvent* e);
   void S_limit_zoom_out(XEvent* e);
-  void S_limit_recenter(XEvent* e);
   
   void S_mand_draw(XEvent* e);
   void S_mand_connected(XEvent* e);

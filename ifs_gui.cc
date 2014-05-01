@@ -37,7 +37,6 @@ void WidgetDraw::redraw() {
 }
 
 void WidgetDraw::initial_draw() {
-  std::cout << "Drawing the drawing area\n";
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
 }
 
@@ -150,8 +149,8 @@ void WidgetText::redraw() {
 
 void WidgetText::initial_draw() {
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
-  std::cout << "Drawing string: " << text << "\n";
-  std::cout << "At position: " << ul.x << " " << ul.y << "\n";
+  //std::cout << "Drawing string: " << text << "\n";
+  //std::cout << "At position: " << ul.x << " " << ul.y << "\n";
 }
 
 WidgetCheck::WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, void (IFSGui::*f)(XEvent*)) {
@@ -314,6 +313,16 @@ void IFSGui::S_switch_to_combined(XEvent* e) {
  
 //limit set
 void IFSGui::S_limit_draw(XEvent* e) {
+  if (e->type == KeyPress || e->type == MotionNotify) return;
+  
+  //if we clicked, center the window
+  //on the mouse pointer
+  if (e->type == ButtonPress) {
+    int widget_x = e->xbutton.x - W_limit_plot.ul.x;
+    int widget_y = e->xbutton.y - W_limit_plot.ul.y;
+    cpx c = limit_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
+    recenter_limit(c);
+  }
 }
 
 void IFSGui::S_limit_increase_depth(XEvent* e) {
@@ -349,23 +358,49 @@ void IFSGui::S_limit_switch_colors(XEvent* e) {
 }
 
 void IFSGui::S_limit_zoom_in(XEvent* e) {
+  if (e->type == ButtonPress) {
+    double radius = (limit_ur.real() - limit_ll.real())/2.0;
+    radius /= 1.5;
+    cpx center = (limit_ll + limit_ur) / 2.0;
+    limit_ll = center - cpx(radius, radius);
+    limit_ur = center + cpx(radius, radius);
+    limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(W_limit_plot.width);
+    draw_limit();
+  }
 }
 
 void IFSGui::S_limit_zoom_out(XEvent* e) {
-}
-
-void IFSGui::S_limit_recenter(XEvent* e) {
+  if (e->type == ButtonPress) {
+    double radius = (limit_ur.real() - limit_ll.real())/2.0;
+    radius *= 1.5;
+    cpx center = (limit_ll + limit_ur) / 2.0;
+    limit_ll = center - cpx(radius, radius);
+    limit_ur = center + cpx(radius, radius);
+    limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(W_limit_plot.width);
+    draw_limit();
+  }
 }
 
 //mandlebrot
 void IFSGui::S_mand_draw(XEvent* e) {
-  if (e->type == KeyPress || e->type == MotionNotify) return;
-  int widget_x = e->xbutton.x - W_mand_plot.ul.x;
-  int widget_y = e->xbutton.y - W_mand_plot.ul.y;
-  cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
-  IFS.set_params(c,c);
-  draw_mand();
-  if (window_mode != MANDLEBROT) draw_limit();
+  if (e->type == KeyPress) return;
+  
+  //the follow is run if the button is pressed or if there is
+  //motion where the button is down
+  if (e->type == ButtonPress ||
+      (e->type == MotionNotify && ((e->xmotion.state >> 8)&1)) ) {
+    int widget_x = e->xbutton.x - W_mand_plot.ul.x;
+    int widget_y = e->xbutton.y - W_mand_plot.ul.y;
+    cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
+    
+    change_highlighted_ifs(c);
+  
+  } 
+  //additionally, if the mouse is moved, we need to update the 
+  //text
+  if (e->type == MotionNotify) {
+  }
+  
 }
 
 
@@ -401,6 +436,12 @@ Point2d<int> IFSGui::limit_cpx_to_pixel(const cpx& c) {
   int real_y = int( (c.imag() - limit_ll.imag()) / limit_pixel_width );
   int x11_y = W_limit_plot.height - real_y;
   return Point2d<int>(x, x11_y);
+}
+
+cpx IFSGui::limit_pixel_to_cpx(const Point2d<int>& p) {
+  double r = (p.x+0.5)*limit_pixel_width + limit_ll.real();
+  double i = limit_ur.imag() - (p.y+0.5)*limit_pixel_width;
+  return cpx(r,i);
 }
 
 void IFSGui::draw_limit() {
@@ -462,6 +503,15 @@ void IFSGui::draw_limit() {
   }
   LW.redraw();
 }
+
+void IFSGui::recenter_limit(cpx c) {
+  double radius = (limit_ur.real() - limit_ll.real())/2.0;
+  limit_ll = c - cpx(radius, radius);
+  limit_ur = c + cpx(radius, radius);
+  draw_limit();
+}
+
+
 
 
 cpx IFSGui::mand_pixel_group_to_cpx(const Point2d<int>& p) {
@@ -560,7 +610,51 @@ void IFSGui::draw_mand() {
 }
 
 
-
+  
+void IFSGui::change_highlighted_ifs(cpx c) {
+  //redraw the current red dot with the saved stuff
+  Widget& MW = W_mand_plot;
+  int num_groups = (MW.width / mand_pixel_group_size);
+  Point2d<int> p = mand_cpx_to_pixel(IFS.z);
+  int pg_i = (p.x/mand_pixel_group_size) - 2;
+  if (pg_i < 0) pg_i = 0;
+  int upper_limit_i = pg_i + 6;
+  if (upper_limit_i >= num_groups) upper_limit_i = num_groups-1;
+  int pg_j = (p.y/mand_pixel_group_size) - 2;
+  if (pg_j < 0) pg_j = 0;
+  int upper_limit_j = pg_j + 6;
+  if (upper_limit_j >= num_groups) upper_limit_j = num_groups-1;
+  
+  for (int i=pg_i; i<upper_limit_i; ++i) {
+    for (int j=pg_j; j<upper_limit_j; ++j) {
+      int col = mand_get_color(mand_data_grid[i][j]);
+      XSetForeground(display, MW.gc, col);
+      XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
+                                           j*mand_pixel_group_size, 
+                                           mand_pixel_group_size, 
+                                           mand_pixel_group_size);
+    }
+  }
+  XCopyArea(display, MW.p, main_window, MW.gc, pg_i*mand_pixel_group_size, 
+                                               pg_j*mand_pixel_group_size, 
+                                               6*mand_pixel_group_size, 
+                                               6*mand_pixel_group_size, 
+                                               MW.ul.x + pg_i*mand_pixel_group_size,
+                                               MW.ul.y + pg_j*mand_pixel_group_size);
+  //now actually switch the point
+  IFS.set_params(c,c);
+  Point2d<int> h = mand_cpx_to_pixel(c);
+  int rcol = get_rgb_color(1.0,0.1,0.0);
+  XSetForeground(display, MW.gc, rcol);
+  XFillArc(display, MW.p, MW.gc, h.x-2, h.y-2, 5, 5, 23040, 23040);
+  XCopyArea(display, MW.p, main_window, MW.gc,h.x-2, h.y-2, 6, 6, 
+                                              MW.ul.x + h.x-2, MW.ul.y + h.y-2);
+  
+  if (window_mode != MANDLEBROT) {
+    draw_limit();
+  }
+  
+}
 
 
 
