@@ -128,7 +128,7 @@ bool ifs::is_connected(int d, int& difficulty) {
   }
   double min_r;
   if (!minimal_enclosing_radius(min_r)) {
-    difficulty = 0;
+    difficulty = 1;
     return true;
   }
   //std::cout << "Checking if " << z << " " << w << " is connected with minimal radius " << min_r << "\n";
@@ -168,6 +168,22 @@ bool ifs::contains_point(cpx pt, double r) {
   exit_depth = 0;
   Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,R);
   bool ans = contains_point_recurse(pt, initial_ball, depth);
+  return ans;
+}
+
+
+
+bool ifs::contains_half(int d, int& difficulty) {
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) {
+    difficulty = 0;
+    return true;
+  }
+  int old_depth = depth;
+  depth = d;
+  bool ans = contains_point(0.5, min_r);
+  depth = old_depth;
+  difficulty = exit_depth;
   return ans;
 }
 

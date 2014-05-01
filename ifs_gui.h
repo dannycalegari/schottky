@@ -120,6 +120,7 @@ struct IFSGui {
   cpx mand_ur;
   int mand_pixel_group_size;
   double mand_pixel_group_width;
+  double mand_pixel_width;
   bool mand_connected;
   int mand_connected_depth;
   bool mand_contains_half;
@@ -131,11 +132,16 @@ struct IFSGui {
   bool point_trap;
   bool point_uv_words;
   cpx mand_pixel_group_to_cpx(const Point2d<int>& p); 
+  cpx mand_pixel_to_cpx(const Point2d<int>& p);
+  Point2d<int> mand_cpx_to_pixel(const cpx& c);
+  int mand_get_color(const Point3d<int>& p);
   
+
   //data for mandlebrot
-  //std::vector<std::vector<bool> > mand_grid_connected;
-  //std::vector<std::vector<bool> > mand_grid_contains_half;
-  //std::vector<std::vector<bool> > mand_grid_trap;
+  std::vector<std::vector<Point3d<int> > > mand_data_grid;
+  bool mand_grid_connected_valid;
+  bool mand_grid_contains_half_valid;
+  bool mand_grid_trap_valid;
   
   //data about highlighted point
   bool point_is_connected;
@@ -153,6 +159,8 @@ struct IFSGui {
   Window main_window;
   Colormap col_map;
   std::vector<Widget*> widgets;
+  
+  int get_rgb_color(double r, double g, double b);
   
   //widgets:
   WidgetButton W_switch_to_limit;
@@ -228,7 +236,7 @@ struct IFSGui {
   int limit_sidebar_size;
   int mand_sidebar_size;
   
-  int get_rgb_color(double r, double g, double b);
+
   void pack_widget_upper_right(const Widget* w1, Widget* w2);
   void launch(IFSWindowMode m = BOTH, const cpx& c = cpx(0.5,0.5));
   void reset_and_pack_window();

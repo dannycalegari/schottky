@@ -180,7 +180,7 @@ class ifs{
     bool is_connected(int d, int& difficulty); //automates it
     bool contains_point(cpx pt, double r=-1);
     bool contains_point_recurse(const cpx& pt, const Ball& b, int d);
-		
+		bool contains_half(int d, int& difficulty);
 		
     //trap construction
     bool draw_trap_mode;      //whether to check for a trap and draw it in limit set mode

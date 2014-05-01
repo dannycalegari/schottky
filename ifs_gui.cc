@@ -358,7 +358,18 @@ void IFSGui::S_limit_recenter(XEvent* e) {
 }
 
 //mandlebrot
-void IFSGui::S_mand_draw(XEvent* e) {}
+void IFSGui::S_mand_draw(XEvent* e) {
+  if (e->type == KeyPress || e->type == MotionNotify) return;
+  int widget_x = e->xbutton.x - W_mand_plot.ul.x;
+  int widget_y = e->xbutton.y - W_mand_plot.ul.y;
+  cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
+  IFS.set_params(c,c);
+  draw_mand();
+  if (window_mode != MANDLEBROT) draw_limit();
+}
+
+
+
 void IFSGui::S_mand_connected(XEvent* e) {}
 void IFSGui::S_mand_connected_increase_depth(XEvent* e) {}
 void IFSGui::S_mand_connected_decrease_depth(XEvent* e) {}
@@ -459,25 +470,74 @@ cpx IFSGui::mand_pixel_group_to_cpx(const Point2d<int>& p) {
   return cpx(r,i);
 }
 
+cpx IFSGui::mand_pixel_to_cpx(const Point2d<int>& p) {
+  double r = (p.x + 0.5)*mand_pixel_width + mand_ll.real();
+  double i = mand_ur.imag() - (p.y + 0.5)*mand_pixel_width;
+  return cpx(r,i);
+}
+
+Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
+  return Point2d<int>( (c.real() - mand_ll.real()) / mand_pixel_width,
+                       W_mand_plot.height - ((c.imag() - mand_ll.imag()) / mand_pixel_width) );
+}
+
+int IFSGui::mand_get_color(const Point3d<int>& p) {
+  if (mand_trap && p.z > 0) { //use the trap color
+    return get_rgb_color(1.0, double(p.z)/100, 0.0);
+  } else if (mand_contains_half && p.y > 0) {
+    return get_rgb_color(0.1, double(p.y)/100, 0.1);
+  } else if (mand_connected && p.x >= 0) {
+    return p.x*0x000001;
+  } else {
+    return WhitePixel(display, screen);
+  }
+}
+
+
 void IFSGui::draw_mand() {
   ifs temp_IFS;
   Widget& MW = W_mand_plot;
   int num_pixel_groups = MW.width / mand_pixel_group_size;
-  int connectedness_difficulty;
+  
+  std::vector<std::pair<Bitword,Bitword> > uv_words;
+  std::vector<Ball> TLB;
+  bool found_TLB = false;
+  double TLB_neighborhood;
+  if (mand_trap && !mand_grid_trap_valid) {
+    temp_IFS.TLB_and_uv_words_for_region(TLB, uv_words, TLB_neighborhood,
+                                          mand_ll, mand_ur,
+                                          0, mand_trap_depth, 0);
+    found_TLB = (TLB.size() != 0);
+  }
+  
   for (int i=0; i<(int)num_pixel_groups; ++i) {
     for (int j=0; j<(int)num_pixel_groups; ++j) {
+      
+      //do the necessary computations
       cpx c = mand_pixel_group_to_cpx(Point2d<int>(i,j));
       temp_IFS.set_params(c,c);
-      if (mand_connected && temp_IFS.is_connected(mand_connected_depth, connectedness_difficulty)) {
-        XSetForeground(display, MW.gc, connectedness_difficulty*0x000001);
-      } else {
-        XSetForeground(display, MW.gc, WhitePixel(display, screen));
+      if (mand_connected && !mand_grid_connected_valid) {
+        if (!temp_IFS.is_connected(mand_connected_depth, mand_data_grid[i][j].x) ) {
+          mand_data_grid[i][j].x = -1;
+        }
       }
+      if (mand_contains_half && !mand_grid_contains_half_valid) {
+        if (!temp_IFS.contains_half(mand_contains_half_depth, mand_data_grid[i][j].y)) {
+          mand_data_grid[i][j].y = -1;
+        }
+      }
+      if (mand_trap && !mand_grid_trap_valid && found_TLB) {
+        double trap_radius;
+        mand_data_grid[i][j].z = temp_IFS.check_TLB(TLB,trap_radius,TLB_neighborhood,mand_trap_depth);
+      }
+      
+      //draw the pixel for the impatient
+      int col = mand_get_color(mand_data_grid[i][j]);
+      XSetForeground(display, MW.gc, col);
       XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
                                            j*mand_pixel_group_size, 
                                            mand_pixel_group_size, 
                                            mand_pixel_group_size);
-      //for instant gratification, copy the area over
       XCopyArea(display, MW.p, main_window, MW.gc, i*mand_pixel_group_size, 
                                                    j*mand_pixel_group_size, 
                                                    mand_pixel_group_size, 
@@ -486,10 +546,18 @@ void IFSGui::draw_mand() {
                                                    MW.ul.y + j*mand_pixel_group_size);
     }
   }
+  if (mand_connected && !mand_grid_connected_valid) mand_grid_connected_valid = true;
+  if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_connected_valid = true;
+  if (mand_trap && !mand_grid_trap_valid) mand_grid_connected_valid = true;
+  
+  //now draw the highlighted point
+  Point2d<int> h = mand_cpx_to_pixel(IFS.z);
+  int rcol = get_rgb_color(1.0,0.1,0.0);
+  XSetForeground(display, MW.gc, rcol);
+  XFillArc(display, MW.p, MW.gc, h.x, h.y, 4, 4, 23040, 23040);
+  
   MW.redraw();
 }
-
-
 
 
 
@@ -601,6 +669,17 @@ void IFSGui::reset_and_pack_window() {
   //compute the widths
   limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(x);
   mand_pixel_group_width = mand_pixel_group_size*( (mand_ur.real() - mand_ll.real()) / double(x) );
+  mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(x) ;
+  
+  //invalidate the grids and stuff
+  if (window_mode != LIMIT) {
+    int npg = x / mand_pixel_group_size;
+    mand_data_grid.resize(npg);
+    for (int i=0; i<npg; ++i) mand_data_grid[i] = std::vector<Point3d<int> >(npg, Point3d<int>(-1,-1,-1));
+    mand_grid_connected_valid = false;
+    mand_grid_contains_half_valid = false;
+    mand_grid_trap_valid = false;
+  }
   
   //create the window
   main_window = XCreateSimpleWindow(display, 
@@ -653,7 +732,7 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(NULL, &W_limit_plot);
     if (window_mode == LIMIT) {
       pack_widget_upper_right(&W_limit_plot, &W_switch_to_mandlebrot);
-      pack_widget_upper_right(&W_switch_to_mandlebrot, &W_switch_to_combined);
+      pack_widget_upper_right(&W_limit_plot, &W_switch_to_combined);
     }
     pack_widget_upper_right(&W_limit_plot, &W_limit_depth_title);
     pack_widget_upper_right(&W_limit_depth_title, &W_limit_depth_leftarrow);
