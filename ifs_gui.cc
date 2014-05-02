@@ -400,7 +400,7 @@ void IFSGui::S_mand_draw(XEvent* e) {
     int widget_y = e->xbutton.y - W_mand_plot.ul.y;
     cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
     IFS.set_params(c,c);
-    mand_zoom(0.75);
+    mand_zoom(0.5);
   }
   //additionally, if the mouse is moved, we need to update the 
   //text
@@ -415,35 +415,30 @@ void IFSGui::S_mand_recenter(XEvent* e) {
 }
 
 void IFSGui::S_mand_zoom_in(XEvent* e) {
-  if (e->type == ButtonPress) mand_zoom(0.75);
+  if (e->type == ButtonPress) mand_zoom(0.5);
 }
 
 void IFSGui::S_mand_zoom_out(XEvent* e) {
-  if (e->type == ButtonPress) mand_zoom(1.5);
+  if (e->type == ButtonPress) mand_zoom(2.0);
 }
 
 void IFSGui::S_mand_decrease_mesh(XEvent* e) {
   if (e->type == ButtonPress) {
     if (mand_pixel_group_size == 1) return;
     mand_pixel_group_size /= 2;
-    mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(W_mand_plot.width);
-    mand_pixel_group_width = mand_pixel_group_size * mand_pixel_group_width;
-    mand_grid_connected_valid = false;
-    mand_grid_contains_half_valid = false;
-    mand_grid_trap_valid = false;
+    std::stringstream T; T.str(""); T << mand_pixel_group_size;
+    W_mand_mesh_label.update_text(T.str());
+    mand_reset_mesh();
     draw_mand();
   }
 }
 
 void IFSGui::S_mand_increase_mesh(XEvent* e) {
   if (e->type == ButtonPress) {
-    if (mand_pixel_group_size == 1) return;
     mand_pixel_group_size *= 2;
-    mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(W_mand_plot.width);
-    mand_pixel_group_width = mand_pixel_group_size * mand_pixel_group_width;
-    mand_grid_connected_valid = false;
-    mand_grid_contains_half_valid = false;
-    mand_grid_trap_valid = false;
+    std::stringstream T; T.str(""); T << mand_pixel_group_size;
+    W_mand_mesh_label.update_text(T.str());
+    mand_reset_mesh();
     draw_mand();
   }
 }
@@ -477,12 +472,61 @@ void IFSGui::S_mand_connected_decrease_depth(XEvent* e) {
   }
 }
 
-void IFSGui::S_mand_contains_half(XEvent* e) {}
-void IFSGui::S_mand_contains_half_increase_depth(XEvent* e) {}
-void IFSGui::S_mand_contains_half_decrease_depth(XEvent* e) {}
-void IFSGui::S_mand_trap(XEvent* e) {}
-void IFSGui::S_mand_trap_increase_depth(XEvent* e) {}
-void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {}
+void IFSGui::S_mand_contains_half(XEvent* e) {
+  if (e->type == ButtonPress) {
+    mand_contains_half = !mand_contains_half;
+    W_mand_contains_half_check.checked = mand_contains_half;
+    W_mand_contains_half_check.redraw();
+    draw_mand();
+  }
+}
+
+void IFSGui::S_mand_contains_half_increase_depth(XEvent* e) {
+  if (e->type == ButtonPress) {
+    ++mand_contains_half_depth;
+    std::stringstream T; T.str(""); T << mand_contains_half_depth;
+    W_mand_contains_half_depth_label.update_text(T.str());
+    mand_grid_contains_half_valid = false;
+    draw_mand();
+  }
+}
+
+void IFSGui::S_mand_contains_half_decrease_depth(XEvent* e) {
+  if (e->type == ButtonPress) {
+    --mand_contains_half_depth;
+    std::stringstream T; T.str(""); T << mand_contains_half_depth;
+    W_mand_contains_half_depth_label.update_text(T.str());
+    mand_grid_contains_half_valid = false;
+    draw_mand();
+  }
+}
+
+void IFSGui::S_mand_trap(XEvent* e) {
+  if (e->type == ButtonPress) {
+    mand_trap = !mand_trap;
+    W_mand_trap_check.checked = mand_trap;
+    W_mand_trap_check.redraw();
+    draw_mand();
+  }
+}
+void IFSGui::S_mand_trap_increase_depth(XEvent* e) {
+  if (e->type == ButtonPress) {
+    ++mand_trap_depth;
+    std::stringstream T; T.str(""); T << mand_trap_depth;
+    W_mand_trap_depth_label.update_text(T.str());
+    mand_grid_trap_valid = false;
+    draw_mand();
+  }
+}
+void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
+  if (e->type == ButtonPress) {
+    --mand_trap_depth;
+    std::stringstream T; T.str(""); T << mand_trap_depth;
+    W_mand_trap_depth_label.update_text(T.str());
+    mand_grid_trap_valid = false;
+    draw_mand();
+  }
+}
 
 //point
 void IFSGui::S_point_connected(XEvent* e) {}
@@ -602,9 +646,9 @@ Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
 
 int IFSGui::mand_get_color(const Point3d<int>& p) {
   if (mand_trap && p.z > 0) { //use the trap color
-    return get_rgb_color(1.0, double(p.z)/100, 0.0);
+    return get_rgb_color(0, double(p.z)/100, 1.0);
   } else if (mand_contains_half && p.y > 0) {
-    return get_rgb_color(0.1, double(p.y)/100, 0.1);
+    return get_rgb_color(0.5, double(p.y)/100, 0.5);
   } else if (mand_connected && p.x >= 0) {
     return p.x*0x000001;
   } else {
@@ -616,21 +660,22 @@ int IFSGui::mand_get_color(const Point3d<int>& p) {
 void IFSGui::draw_mand() {
   ifs temp_IFS;
   Widget& MW = W_mand_plot;
-  int num_pixel_groups = MW.width / mand_pixel_group_size;
   
   std::vector<std::pair<Bitword,Bitword> > uv_words;
   std::vector<Ball> TLB;
   bool found_TLB = false;
   double TLB_neighborhood;
   if (mand_trap && !mand_grid_trap_valid) {
+    //std::cout << "About to find TLB\n";
+    temp_IFS.set_params(IFS.z, IFS.z);
     temp_IFS.TLB_and_uv_words_for_region(TLB, uv_words, TLB_neighborhood,
                                           mand_ll, mand_ur,
-                                          0, mand_trap_depth, 0);
+                                          15, 0, 0);
     found_TLB = (TLB.size() != 0);
   }
   
-  for (int i=0; i<(int)num_pixel_groups; ++i) {
-    for (int j=0; j<(int)num_pixel_groups; ++j) {
+  for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
+    for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
       
       //do the necessary computations
       cpx c = mand_pixel_group_to_cpx(Point2d<int>(i,j));
@@ -647,7 +692,8 @@ void IFSGui::draw_mand() {
       }
       if (mand_trap && !mand_grid_trap_valid && found_TLB) {
         double trap_radius;
-        mand_data_grid[i][j].z = temp_IFS.check_TLB(TLB,trap_radius,TLB_neighborhood,mand_trap_depth);
+        int multiplier = 100/mand_trap_depth;
+        mand_data_grid[i][j].z = multiplier*temp_IFS.check_TLB(TLB,trap_radius,TLB_neighborhood,mand_trap_depth);
       }
       
       //draw the pixel for the impatient
@@ -683,16 +729,15 @@ void IFSGui::draw_mand() {
 void IFSGui::change_highlighted_ifs(cpx c) {
   //redraw the current red dot with the saved stuff
   Widget& MW = W_mand_plot;
-  int num_groups = (MW.width / mand_pixel_group_size);
   Point2d<int> p = mand_cpx_to_pixel(IFS.z);
   int pg_i = (p.x/mand_pixel_group_size) - 2;
   if (pg_i < 0) pg_i = 0;
   int upper_limit_i = pg_i + 6;
-  if (upper_limit_i >= num_groups) upper_limit_i = num_groups-1;
+  if (upper_limit_i >= mand_num_pixel_groups) upper_limit_i = mand_num_pixel_groups-1;
   int pg_j = (p.y/mand_pixel_group_size) - 2;
   if (pg_j < 0) pg_j = 0;
   int upper_limit_j = pg_j + 6;
-  if (upper_limit_j >= num_groups) upper_limit_j = num_groups-1;
+  if (upper_limit_j >= mand_num_pixel_groups) upper_limit_j = mand_num_pixel_groups-1;
   
   for (int i=pg_i; i<upper_limit_i; ++i) {
     for (int j=pg_j; j<upper_limit_j; ++j) {
@@ -733,12 +778,7 @@ void IFSGui::mand_zoom(double radius_multiplier) {
   radius *= radius_multiplier;
   mand_ll = c - cpx(radius, radius);
   mand_ur = c + cpx(radius, radius);
-  double w = mand_ur.real() - mand_ll.real();
-  mand_pixel_width = w / W_mand_plot.width;
-  mand_pixel_group_width = mand_pixel_group_size*mand_pixel_width;
-  mand_grid_connected_valid = false;;
-  mand_grid_connected_valid = false;
-  mand_grid_connected_valid = false;
+  mand_reset_mesh();
   draw_mand();
 }
 
@@ -748,12 +788,24 @@ void IFSGui::mand_recenter() {
   cpx c = IFS.z;
   mand_ll = c - cpx(radius, radius);
   mand_ur = c + cpx(radius, radius);
-  mand_grid_connected_valid = false;;
   mand_grid_connected_valid = false;
-  mand_grid_connected_valid = false;
+  mand_grid_contains_half_valid = false;
+  mand_grid_trap_valid = false;
   draw_mand();
 }
 
+void IFSGui::mand_reset_mesh() {
+  mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(W_mand_plot.width);
+  mand_pixel_group_width = mand_pixel_group_size * mand_pixel_width;
+  mand_num_pixel_groups = W_mand_plot.width / mand_pixel_group_size;
+  mand_data_grid.resize(mand_num_pixel_groups);
+  for (int i=0; i<mand_num_pixel_groups; ++i) {
+    mand_data_grid[i] = std::vector<Point3d<int> >(mand_num_pixel_groups, Point3d<int>(-1,-1,-1));
+  }
+  mand_grid_connected_valid = false;
+  mand_grid_contains_half_valid = false;
+  mand_grid_trap_valid = false;
+}
 
 /****************************************************************************
  * main gui functions
@@ -861,16 +913,6 @@ void IFSGui::reset_and_pack_window() {
   mand_pixel_group_width = mand_pixel_group_size*( (mand_ur.real() - mand_ll.real()) / double(x) );
   mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(x) ;
   
-  //invalidate the grids and stuff
-  if (window_mode != LIMIT) {
-    int npg = x / mand_pixel_group_size;
-    mand_data_grid.resize(npg);
-    for (int i=0; i<npg; ++i) mand_data_grid[i] = std::vector<Point3d<int> >(npg, Point3d<int>(-1,-1,-1));
-    mand_grid_connected_valid = false;
-    mand_grid_contains_half_valid = false;
-    mand_grid_trap_valid = false;
-  }
-  
   //create the window
   main_window = XCreateSimpleWindow(display, 
                                     RootWindow(display, screen), 20, 20,
@@ -953,7 +995,7 @@ void IFSGui::reset_and_pack_window() {
     W_mand_zoom_out = WidgetButton(this, "out", -1, 20, &IFSGui::S_mand_zoom_out);  
     W_mand_mesh_title = WidgetText(this, "Mesh size:", -1, 20);
     W_mand_mesh_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_decrease_mesh);
-    std::stringstream T;  T.str("");  T << mand_connected_depth;
+    std::stringstream T;  T.str("");  T << mand_pixel_group_size;
     W_mand_mesh_label = WidgetText(this, T.str().c_str(), -1, 20);
     W_mand_mesh_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_increase_mesh);
     W_mand_connected_check = WidgetCheck(this, "Connectedness:", 105, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
@@ -986,6 +1028,10 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_plot, &W_mand_zoom_title);
     pack_widget_upper_right(&W_mand_zoom_title, &W_mand_zoom_in);
     pack_widget_upper_right(&W_mand_zoom_in, &W_mand_zoom_out);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_mesh_title);
+    pack_widget_upper_right(&W_mand_mesh_title, &W_mand_mesh_leftarrow);
+    pack_widget_upper_right(&W_mand_mesh_leftarrow, &W_mand_mesh_label);
+    pack_widget_upper_right(&W_mand_mesh_label, &W_mand_mesh_rightarrow);
     pack_widget_upper_right(&W_mand_plot, &W_mand_connected_check);
     pack_widget_upper_right(&W_mand_connected_check, &W_mand_connected_depth_leftarrow);
     pack_widget_upper_right(&W_mand_connected_depth_leftarrow, &W_mand_connected_depth_label);
@@ -1004,6 +1050,11 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_plot, &W_point_contains_half_check);
     pack_widget_upper_right(&W_mand_plot, &W_point_trap_check);
     pack_widget_upper_right(&W_mand_plot, &W_point_uv_word_check);
+  }
+  
+  //invalidate the grids and stuff
+  if (window_mode != LIMIT) {
+    mand_reset_mesh();
   }
   
   //draw all the widgets
@@ -1060,11 +1111,11 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   
   mand_ll = cpx(-1,-1);
   mand_ur = cpx(1,1);
-  mand_pixel_group_size = 2;
+  mand_pixel_group_size = 4;
   mand_connected = true;
-  mand_connected_depth = 12;
+  mand_connected_depth = 16;
   mand_contains_half = false;
-  mand_contains_half_depth = 12;
+  mand_contains_half_depth = 16;
   mand_trap = false;
   mand_trap_depth = 20;
   

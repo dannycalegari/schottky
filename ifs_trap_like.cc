@@ -488,10 +488,13 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return false;
   
+  int old_depth = depth;
+  depth = n_depth;
   if (!circ_connected(min_r+initial_radius_increase)) {
     if (verbose>0) {
       std::cout << "Not even connected\n";
     }
+    depth = old_depth;
     return false;
   }
   
@@ -499,8 +502,13 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
   std::vector<Ball> balls(0);
   compute_balls_right(balls, initial_ball, n_depth);
   
+  if (verbose>0) {
+    std::cout << "Computed balls\n";
+  }
+  
   trap_like_balls_from_balls(TLB, 5, 3, balls, verbose);
  
+  depth = old_depth;
   return true;
   
 }
@@ -532,6 +540,11 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
   double initial_radius_increase = 2*Cz*box_diag_rad / pow(az, n_depth);
   guaranteed_neighborhood = Cz*box_diag_rad;
   if (initial_radius_increase > 100) return false;
+  
+  if (verbose>0) {
+    std::cout << "Finding TLB in box " << ll << " " << ur << " to depth " << n_depth << "\n";
+    std::cout << "Initial radius increase: " << initial_radius_increase << "\n";
+  }
   
   if (!trap_like_balls(TLB, initial_radius_increase, n_depth, verbose)) {
     z = backup_z; az = abs(z);

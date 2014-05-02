@@ -119,6 +119,7 @@ struct IFSGui {
   cpx mand_ll;
   cpx mand_ur;
   int mand_pixel_group_size;
+  int mand_num_pixel_groups;
   double mand_pixel_group_width;
   double mand_pixel_width;
   bool mand_connected;
@@ -155,6 +156,7 @@ struct IFSGui {
   void draw_mand();
   void change_highlighted_ifs(cpx c);
   void mand_zoom(double radius_multiplier);
+  void mand_reset_mesh();
   void mand_recenter();
   
   //graphics stuff

@@ -122,7 +122,7 @@ bool ifs::circ_connected(double r){ 	// circle algorithm to test for connectedne
 
 
 bool ifs::is_connected(int d, int& difficulty) {
-  if ((abs(z-w) < 0.000001) && az > 1.0/sqrt(2.0)) {
+  if ((abs(z-w) < 0.000001) && az > 1) {
     difficulty = 0;
     return true;
   }
