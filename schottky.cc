@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
   std::cin >> c;
   if (c == 'n') {
     IFSGui G;
-    G.launch(BOTH, cpx(-0.56, 0.2));
+    G.launch(BOTH, cpx(-0.6, 0.2));
   } else {
     mode = (c=='i' ? 0 : 1);
     ifs G(cos(TWOPI/3.0)+I*sin(TWOPI/3.0), 0.5, w, mode);      // default value : Sierpinski triangle

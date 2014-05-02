@@ -401,6 +401,7 @@ void IFSGui::S_mand_draw(XEvent* e) {
     int widget_x = e->xbutton.x - W_mand_plot.ul.x;
     int widget_y = e->xbutton.y - W_mand_plot.ul.y;
     cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
+    //std::cout << "Moving IFS to " << widget_x << " " << widget_y << "=" << c << "\n";
     change_highlighted_ifs(c);
   
   //it's a right mouse click -- zoom in
@@ -832,8 +833,8 @@ void IFSGui::pack_widget_upper_right(const Widget* w1, Widget* w2) {
   }
   
   
-  std::cout << "Packing widget of size " << w2->width << " " << w2->height << "\n";
-  std::cout << "Desired x: " << desired_x << "\n";
+  //std::cout << "Packing widget of size " << w2->width << " " << w2->height << "\n";
+  //std::cout << "Desired x: " << desired_x << "\n";
   
   //go through and check the other widgets to see how 
   //far down they obstruct this one
@@ -843,11 +844,11 @@ void IFSGui::pack_widget_upper_right(const Widget* w1, Widget* w2) {
     if (widgets[i]->ul.x == desired_x && 
         widgets[i]->ul.y + widgets[i]->height > greatest_y_obstruction) {
       greatest_y_obstruction = widgets[i]->ul.y + widgets[i]->height;
-      std::cout << "Found widget " << i << " obstructs to height " << greatest_y_obstruction << "\n";
+      //std::cout << "Found widget " << i << " obstructs to height " << greatest_y_obstruction << "\n";
     }
   }
   if (greatest_y_obstruction + w2->height > main_window_height) {
-    std::cout << "Cannot pack widget -- too tall\n";
+    //std::cout << "Cannot pack widget -- too tall\n";
     return;
   }
   int y = (desired_y > greatest_y_obstruction ? desired_y : greatest_y_obstruction);
@@ -866,7 +867,7 @@ void IFSGui::pack_widget_upper_right(const Widget* w1, Widget* w2) {
   //find the position
   w2->ul = Point2d<int>(x, y);
   
-  std::cout << "Packed widget at " << w2->ul << "\n";
+  //std::cout << "Packed widget at " << w2->ul << "\n";
   
   //record it in the list of widgets
   widgets.push_back(w2);
@@ -919,8 +920,6 @@ void IFSGui::reset_and_pack_window() {
   
   //compute the widths
   limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(x);
-  mand_pixel_group_width = mand_pixel_group_size*( (mand_ur.real() - mand_ll.real()) / double(x) );
-  mand_pixel_width = (mand_ur.real() - mand_ll.real()) / double(x) ;
   
   //create the window
   main_window = XCreateSimpleWindow(display, 
@@ -1084,7 +1083,7 @@ void IFSGui::main_loop() {
     //if it was the keyboard, we deal with it here
     if (e.type == KeyPress) {
       if(XLookupKeysym(&e.xkey, 0) == XK_q){ // left arrow
-	break;
+        break;
       }
      
     //if it involves the mouse, we find the appropriate 
@@ -1094,6 +1093,7 @@ void IFSGui::main_loop() {
         if (widgets[i]->contains_pixel( e.xbutton.x, e.xbutton.y) &&
             widgets[i]->click_signal != NULL) {
           (this->*(widgets[i]->click_signal))(&e);
+          break;
         }
       }
     }
@@ -1122,7 +1122,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_ur = cpx(1,1);
   mand_pixel_group_size = 4;
   mand_connected = true;
-  mand_connected_depth = 16;
+  mand_connected_depth = 13;
   mand_contains_half = false;
   mand_contains_half_depth = 16;
   mand_trap = false;
