@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-g -Wall #-O3
+CFLAGS=-g -Wall -Wextra -pedantic #-O3
 IFLAGS=-I/usr/X11R6/include
 LFLAGS=-L/usr/X11R6/lib -lX11
 all: schottky

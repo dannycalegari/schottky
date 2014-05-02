@@ -394,7 +394,7 @@ void IFSGui::S_limit_zoom_out(XEvent* e) {
 void IFSGui::S_mand_draw(XEvent* e) {
   if (e->type == KeyPress) return;
   
-  //the follow is run if the button is pressed or if there is
+  //the following is run if the button is pressed or if there is
   //motion where the button is down
   if ( (e->type == ButtonPress && e->xbutton.button == Button1) ||
        (e->type == MotionNotify && ((e->xmotion.state >> 8)&1)) ) {
@@ -411,6 +411,7 @@ void IFSGui::S_mand_draw(XEvent* e) {
     cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
     IFS.set_params(c,c);
     mand_zoom(0.5);
+    recompute_point_data();
   }
   //additionally, if the mouse is moved, we need to update the 
   //text
@@ -539,10 +540,76 @@ void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
 }
 
 //point
-void IFSGui::S_point_connected(XEvent* e) {}
-void IFSGui::S_point_contains_half(XEvent* e) {}
-void IFSGui::S_point_trap(XEvent* e) {}
-void IFSGui::S_point_uv_words(XEvent* e) {}
+void IFSGui::S_point_connected(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  point_connected_check = !point_connected_check;
+  W_point_connected_check.checked = point_connected_check;
+  W_point_connected_check.redraw();
+  recompute_point_data();
+}
+
+void IFSGui::S_point_connected_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++point_connected_depth;
+  std::stringstream T; T.str(""); T << point_connected_depth;
+  W_point_connected_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+void IFSGui::S_point_connected_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --point_connected_depth;
+  std::stringstream T; T.str(""); T << point_connected_depth;
+  W_point_connected_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+void IFSGui::S_point_contains_half(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  point_contains_half_check = !point_contains_half_check;
+  W_point_contains_half_check.checked = point_contains_half_check;
+  W_point_contains_half_check.redraw();
+  recompute_point_data();
+}
+
+void IFSGui::S_point_contains_half_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++point_contains_half_depth;
+  std::stringstream T; T.str(""); T << point_contains_half_depth;
+  W_point_contains_half_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+void IFSGui::S_point_contains_half_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --point_contains_half_depth;
+  std::stringstream T; T.str(""); T << point_contains_half_depth;
+  W_point_contains_half_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+void IFSGui::S_point_uv_words(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  point_uv_words_check = !point_uv_words_check;
+  W_point_uv_words_check.checked = point_uv_words_check;
+  W_point_uv_words_check.redraw();
+  recompute_point_data();
+}
+void IFSGui::S_point_uv_words_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++point_uv_words_depth;
+  std::stringstream T; T.str(""); T << point_uv_words_depth;
+  W_point_uv_words_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+void IFSGui::S_point_uv_words_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --point_uv_words_depth;
+  std::stringstream T; T.str(""); T << point_uv_words_depth;
+  W_point_uv_words_depth_label.update_text(T.str());
+  recompute_point_data();
+}
 
 
 
@@ -670,17 +737,14 @@ int IFSGui::mand_get_color(const Point3d<int>& p) {
 void IFSGui::draw_mand() {
   ifs temp_IFS;
   Widget& MW = W_mand_plot;
-  
-  std::vector<std::pair<Bitword,Bitword> > uv_words;
+
   std::vector<Ball> TLB;
   bool found_TLB = false;
   double TLB_neighborhood;
   if (mand_trap && !mand_grid_trap_valid) {
     //std::cout << "About to find TLB\n";
     temp_IFS.set_params(IFS.z, IFS.z);
-    temp_IFS.TLB_and_uv_words_for_region(TLB, uv_words, TLB_neighborhood,
-                                          mand_ll, mand_ur,
-                                          15, 0, 0);
+    temp_IFS.TLB_for_region(TLB, TLB_neighborhood, mand_ll, mand_ur, 15, 0);
     found_TLB = (TLB.size() != 0);
   }
   
@@ -777,6 +841,7 @@ void IFSGui::change_highlighted_ifs(cpx c) {
   if (window_mode != MANDLEBROT) {
     draw_limit();
   }
+  recompute_point_data();
   
 }
 
@@ -816,6 +881,43 @@ void IFSGui::mand_reset_mesh() {
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
 }
+
+
+
+
+void IFSGui::recompute_point_data() {
+  std::stringstream T;
+    int difficulty;
+  if (!point_connected_check) {
+    T.str(""); T << "(disabled)";
+  } else {
+    T.str("");
+    T << ( (point_is_connected = IFS.is_connected(point_connected_depth, difficulty)) ? "yes" : "no" );
+  }
+  W_point_connected_status.update_text(T.str());
+  
+  if (!point_contains_half_check) {
+     T.str(""); T << "(disabled)";
+  } else {
+    T.str("");
+    T << ( (point_is_contains_half = IFS.contains_half(point_contains_half_depth, difficulty)) ? "yes" : "no" );
+  }
+  W_point_contains_half_status.update_text(T.str());
+  
+  if (!point_uv_words_check) {
+    T.str(""); T << "(disabled)";
+  } else {
+    IFS.find_closest_uv_words(point_uv_words, point_uv_words_depth);
+    T.str("");
+    T << point_uv_words[0].first << " " << point_uv_words[0].second;
+  }
+  W_point_uv_words_status.update_text(T.str());
+  
+  
+}
+
+
+
 
 /****************************************************************************
  * main gui functions
@@ -904,17 +1006,17 @@ void IFSGui::reset_and_pack_window() {
   int ss = (limit_sidebar_size > mand_sidebar_size ? limit_sidebar_size : mand_sidebar_size);
   int width_rest = (window_mode == BOTH ? (display_width-2*ss)/2 :
                                                  display_width - ss );
-  int height_rest = display_height - 100;
+  int height_rest = display_height - 150;
   int x = (width_rest > height_rest ? height_rest : width_rest);
   
   if (window_mode == MANDLEBROT) {
-    main_window_height = x;// + 200;
+    main_window_height = x + 100;
     main_window_width = x + mand_sidebar_size;
   } else if (window_mode == LIMIT) {
-    main_window_height = x;// + 200;
+    main_window_height = x + 100;
     main_window_width = x + limit_sidebar_size;
   } else {
-    main_window_height = x;// + 200;
+    main_window_height = x + 100;
     main_window_width = 2*x + mand_sidebar_size + limit_sidebar_size;
   }
   
@@ -943,24 +1045,44 @@ void IFSGui::reset_and_pack_window() {
   //create the buttons and stuff and pack them
   widgets.resize(0);
   
-  //stuff that shows up everywhere
+  //used to fill the text
+  std::stringstream T; 
+  
+  //stuff for the IFS computations
   W_switch_to_limit = WidgetButton(this, "Switch to limit", -1, 20, &IFSGui::S_switch_to_limit);
   W_switch_to_mandlebrot = WidgetButton(this, "Switch to mandlebrot", -1,20, &IFSGui::S_switch_to_mandlebrot);
   W_switch_to_combined = WidgetButton(this, "Switch to combined", -1, 20, &IFSGui::S_switch_to_combined);
   
-  W_point_title = WidgetText(this, "Highlighted IFS options:", -1, 20);
-  W_point_connected_check = WidgetCheck(this, "Connectedness", -1, 20, point_connected, &IFSGui::S_point_connected);
-  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", -1, 20, point_contains_half, &IFSGui::S_point_contains_half);
-  W_point_trap_check = WidgetCheck(this, "Find trap", -1, 20, point_trap, &IFSGui::S_point_trap);
-  W_point_uv_word_check = WidgetCheck(this, "Find uv words", -1, 20, point_uv_words, &IFSGui::S_point_trap);
+  W_point_title = WidgetText(this, "Current IFS status:", -1, 20);
+  W_point_connected_check = WidgetCheck(this, "Connectedness", -1, 20, point_connected_check, &IFSGui::S_point_connected);
+  W_point_connected_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_connected_decrease_depth);
+  T.str(""); T << point_connected_depth;
+  W_point_connected_depth_label = WidgetText(this, T.str(), -1, 20);
+  W_point_connected_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_connected_increase_depth);
+  W_point_connected_status = WidgetText(this, "initializing", -1, 20);
+  
+  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", -1, 20, point_contains_half_check, &IFSGui::S_point_contains_half);
+  W_point_contains_half_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_contains_half_decrease_depth);
+  T.str(""); T << point_contains_half_depth;
+  W_point_contains_half_depth_label = WidgetText(this, T.str(), -1, 20);
+  W_point_contains_half_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_contains_half_increase_depth);
+  W_point_contains_half_status = WidgetText(this, "initializing", -1, 20);
+  
+  W_point_uv_words_check = WidgetCheck(this, "uv words", -1, 20, point_uv_words_check, &IFSGui::S_point_uv_words);
+  W_point_uv_words_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_uv_words_decrease_depth);
+  T.str(""); T << point_uv_words_depth;
+  W_point_uv_words_depth_label = WidgetText(this, T.str(), -1, 20);
+  W_point_uv_words_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_uv_words_increase_depth);
+  W_point_uv_words_status = WidgetText(this, "initializing", x, 20);
   
   
+  //if the limit set is shown:
   if (window_mode != MANDLEBROT) {
     W_limit_plot = WidgetDraw(this, x,x, &IFSGui::S_limit_draw);
     W_limit_depth_title = WidgetText(this, "Depth: ", -1, 20);
     W_limit_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_limit_decrease_depth);
-    std::stringstream T; T.str(""); T << limit_depth;
-    W_limit_depth_label = WidgetText(this, T.str().c_str(), -1, 20);
+    T.str(""); T << limit_depth;
+    W_limit_depth_label = WidgetText(this, T.str(), -1, 20);
     W_limit_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_limit_increase_depth);
     W_limit_chunky = WidgetCheck(this, "Chunky", -1, 20, limit_chunky, &IFSGui::S_limit_switch_chunky);
     W_limit_colors = WidgetCheck(this, "Colors", -1, 20, limit_colors, &IFSGui::S_limit_switch_colors);
@@ -984,16 +1106,9 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_plot, &W_limit_chunky);
     pack_widget_upper_right(&W_limit_plot, &W_limit_colors);
     pack_widget_upper_right(&W_limit_plot, &W_limit_center_title);
-    
-    if (window_mode == LIMIT) {
-      pack_widget_upper_right(&W_limit_plot, &W_point_title);
-      pack_widget_upper_right(&W_limit_plot, &W_point_connected_check);
-      pack_widget_upper_right(&W_limit_plot, &W_point_contains_half_check);
-      pack_widget_upper_right(&W_limit_plot, &W_point_trap_check);
-      pack_widget_upper_right(&W_limit_plot, &W_point_uv_word_check);
-    }
   }
   
+  //if the mandlebrot set is shown:
   if (window_mode != LIMIT) {
     W_mand_plot = WidgetDraw(this, x,x, &IFSGui::S_mand_draw);
     W_mand_options_title = WidgetText(this, "Mandlebrot options:", -1, 20);
@@ -1004,22 +1119,22 @@ void IFSGui::reset_and_pack_window() {
     W_mand_mesh_title = WidgetText(this, "Mesh size:", -1, 20);
     W_mand_mesh_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_decrease_mesh);
     std::stringstream T;  T.str("");  T << mand_pixel_group_size;
-    W_mand_mesh_label = WidgetText(this, T.str().c_str(), -1, 20);
+    W_mand_mesh_label = WidgetText(this, T.str(), -1, 20);
     W_mand_mesh_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_increase_mesh);
     W_mand_connected_check = WidgetCheck(this, "Connectedness:", 105, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
     W_mand_connected_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_connected_decrease_depth);
     T.str("");  T << mand_connected_depth;
-    W_mand_connected_depth_label = WidgetText(this, T.str().c_str(), -1, 20);
+    W_mand_connected_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_connected_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_connected_increase_depth);
     W_mand_contains_half_check = WidgetCheck(this, "Contains 1/2:", 105, 20, (mand_contains_half ? 1 : 0), &IFSGui::S_mand_contains_half);
     W_mand_contains_half_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_contains_half_decrease_depth);
     T.str("");  T << mand_contains_half_depth;
-    W_mand_contains_half_depth_label = WidgetText(this, T.str().c_str(), -1, 20);
+    W_mand_contains_half_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_contains_half_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_contains_half_increase_depth);
     W_mand_trap_check = WidgetCheck(this, "Traps:", 105, 20, (mand_trap ? 1 : 0), &IFSGui::S_mand_trap);
     W_mand_trap_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_trap_decrease_depth);
     T.str("");  T << mand_trap_depth;
-    W_mand_trap_depth_label = WidgetText(this, T.str().c_str(), -1, 20);
+    W_mand_trap_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_trap_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_trap_increase_depth);
     
     if (window_mode == MANDLEBROT) {
@@ -1052,13 +1167,27 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_trap_check, &W_mand_trap_depth_leftarrow);
     pack_widget_upper_right(&W_mand_trap_depth_leftarrow, &W_mand_trap_depth_label);
     pack_widget_upper_right(&W_mand_trap_depth_label, &W_mand_trap_depth_rightarrow);
-    
-    pack_widget_upper_right(&W_mand_plot, &W_point_title);
-    pack_widget_upper_right(&W_mand_plot, &W_point_connected_check);
-    pack_widget_upper_right(&W_mand_plot, &W_point_contains_half_check);
-    pack_widget_upper_right(&W_mand_plot, &W_point_trap_check);
-    pack_widget_upper_right(&W_mand_plot, &W_point_uv_word_check);
   }
+  
+  //put the IFS data on the bottom
+  pack_widget_upper_right(NULL, &W_point_title);
+  pack_widget_upper_right(NULL, &W_point_connected_check);
+  pack_widget_upper_right(&W_point_connected_check, &W_point_connected_leftarrow);
+  pack_widget_upper_right(&W_point_connected_leftarrow, &W_point_connected_depth_label);
+  pack_widget_upper_right(&W_point_connected_depth_label, &W_point_connected_rightarrow);
+  pack_widget_upper_right(&W_point_connected_rightarrow, &W_point_connected_status);
+  pack_widget_upper_right(NULL, &W_point_contains_half_check);
+  pack_widget_upper_right(&W_point_contains_half_check, &W_point_contains_half_leftarrow);
+  pack_widget_upper_right(&W_point_contains_half_leftarrow, &W_point_contains_half_depth_label);
+  pack_widget_upper_right(&W_point_contains_half_depth_label, &W_point_contains_half_rightarrow);
+  pack_widget_upper_right(&W_point_contains_half_rightarrow, &W_point_contains_half_status);
+  pack_widget_upper_right(NULL, &W_point_uv_words_check);
+  pack_widget_upper_right(&W_point_uv_words_check, &W_point_uv_words_leftarrow);
+  pack_widget_upper_right(&W_point_uv_words_leftarrow, &W_point_uv_words_depth_label);
+  pack_widget_upper_right(&W_point_uv_words_depth_label, &W_point_uv_words_rightarrow);
+  pack_widget_upper_right(&W_point_uv_words_rightarrow, &W_point_uv_words_status);
+  
+  
   
   //invalidate the grids and stuff
   if (window_mode != LIMIT) {
@@ -1074,7 +1203,12 @@ void IFSGui::reset_and_pack_window() {
   if (window_mode != MANDLEBROT) draw_limit();
   if (window_mode != LIMIT) draw_mand();
   
+  //get the point data
+  recompute_point_data();
+  
 }
+
+
 
 void IFSGui::main_loop() {
   XEvent e;
@@ -1128,10 +1262,16 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_trap = false;
   mand_trap_depth = 20;
   
-  point_connected = true;
-  point_contains_half = false;
-  point_trap = false;
-  point_uv_words = false;
+  point_connected_check = true;
+  point_connected_depth = 18;
+  point_is_connected = false;
+  point_contains_half_check = true;
+  point_contains_half_depth = 18;
+  point_is_contains_half = false;
+  //point_trap = false;
+  point_uv_words_check = true;
+  point_uv_words_depth = 18;
+  point_uv_words.resize(0);
   
   
   //set up the graphics

@@ -365,7 +365,7 @@ void XGraphics::draw_faint_line(const Point2d<int>& p1,
                                 const Point2d<int>& p2, 
                                 long col){
   XSetForeground(display, gc, (long) 0xDDDDDD);
-	XSetLineAttributes(display, gc, 1, LineOnOffDash, 1, 1);
+  XSetLineAttributes(display, gc, 1, LineOnOffDash, 1, 1);
   XDrawLine(display, win, gc, p1.x, p1.y, p2.x, p2.y);
 }
 

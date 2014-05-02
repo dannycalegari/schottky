@@ -9,7 +9,7 @@
 
 #define PATH_TO_FFMPEG "../ffmpeg/"
 
-bool write_bitmap(const std::vector<std::vector<Point3d<char> > >& p, 
+bool write_bitmap(const std::vector<std::vector<Point3d<unsigned char> > >& p, 
                   const std::string& filename);
                   
 bool ifs_movie_from_path(const ifs& IFS, 

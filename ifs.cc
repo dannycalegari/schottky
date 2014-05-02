@@ -98,7 +98,9 @@ std::ostream& operator<<(std::ostream& os, const Ball& b) {
 
 
 std::ostream& operator<<(std::ostream& os, const Bitword& b) {
-  return os << b.w << "(" << b.len << ")";
+  std::string w = b.w.to_string();
+  w = w.substr(64-b.len, b.len);
+  return os << w;
 }
 
 
@@ -544,9 +546,9 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
   for (int i=0; i<(int)pairs.size(); ++i) {
     words[i] = std::make_pair( Bitword(pairs[i].first.word, pairs[i].first.word_len),
                                Bitword(pairs[i].second.word, pairs[i].second.word_len) );
-    std::cout << abs(pairs[i].first.center - pairs[i].second.center) << " " << pairs[i].first.center << " - ";
+    //std::cout << abs(pairs[i].first.center - pairs[i].second.center) << " " << pairs[i].first.center << " - ";
   }
-  std::cout << "\n";
+  //std::cout << "\n";
 }
 
 
@@ -591,8 +593,8 @@ cpx ifs::iterate(int index, cpx u){
           return(u*z);
   } else {
           return(((u-1.0)*w)+1.0);
-  };
-};
+  }
+}
 
 
 //convert a complex to the point in the drawing
@@ -640,7 +642,7 @@ void ifs::set_params(cpx Z, cpx W) {
   aw = abs(w);
 }
 
-void ifs::draw_ifs_to_array(std::vector<std::vector<Point3d<char> > >& bmp, 
+void ifs::draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
                             const cpx& region_ll, const cpx& region_ur, int depth) {
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return;
@@ -650,7 +652,7 @@ void ifs::draw_ifs_to_array(std::vector<std::vector<Point3d<char> > >& bmp,
   //clear the array
   for (int i=0; i<(int)bmp.size(); ++i) {
     for (int j=0; j<(int)bmp[i].size(); ++j) {
-      bmp[i][j] = Point3d<char>(255,255,255);
+      bmp[i][j] = Point3d<unsigned char>(255,255,255);
     }
   }
   
@@ -668,8 +670,8 @@ void ifs::draw_ifs_to_array(std::vector<std::vector<Point3d<char> > >& bmp,
       int x = int(num_pixels*((b.center.real() - region_ll.real()) / drawing_width));
       int y = int(num_pixels*((b.center.imag() - region_ll.imag()) / drawing_width));
       if (0 <= x && x < num_pixels && 0 <= y && y < num_pixels) {
-        bmp[x][y] = (b.last_gen_index() == 0 ? Point3d<char>(0xFF, 0xAA, 0x00) :
-                                               Point3d<char>(0x00, 0xAA, 0xFF));
+        bmp[x][y] = (b.last_gen_index() == 0 ? Point3d<unsigned char>(0xFF, 0xAA, 0x00) :
+                                               Point3d<unsigned char>(0x00, 0xAA, 0xFF));
       }
     } else {
       Ball bz = act_on_right(0, b);

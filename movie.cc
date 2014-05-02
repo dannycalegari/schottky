@@ -8,7 +8,7 @@
 
 
 
-bool write_bitmap(const std::vector<std::vector<Point3d<char> > >& p, 
+bool write_bitmap(const std::vector<std::vector<Point3d<unsigned char> > >& p, 
                   const std::string& filename) {
   
   if (p.size() == 0 || p[0].size() == 0) return false;
@@ -87,6 +87,8 @@ bool write_bitmap(const std::vector<std::vector<Point3d<char> > >& p,
   fwrite(raw_data, sizeof(char), data_length, f);
   fclose(f);
   
+  free(raw_data);
+  
   return true;
 } 
 
@@ -132,9 +134,9 @@ bool ifs_movie_from_path(const ifs& IFS,
   int path_edge = 0;
   int frame_num = 0;
   std::stringstream T;
-  std::vector<std::vector<Point3d<char> > > bmp(pixel_w, 
-                                                std::vector<Point3d<char> >(pixel_h, 
-                                                                            Point3d<char>(0,0,0)));
+  std::vector<std::vector<Point3d<unsigned char> > > bmp(pixel_w, 
+                                                std::vector<Point3d<unsigned char> >(pixel_h, 
+                                                                            Point3d<unsigned char>(0,0,0)));
   do {
     //write out the bitmap
     if (verbose > 0) {
@@ -177,13 +179,13 @@ bool ifs_movie_from_path(const ifs& IFS,
   command << PATH_TO_FFMPEG << "ffmpeg -loglevel error -f image2 -r " << fps << " -i " << 
                                 filename << "%d.bmp -c:v mpeg4 -qscale:v 8 " << 
                                 filename << ".mp4";
-  system(command.str().c_str());
+  (void)system(command.str().c_str());
   if (verbose>0) std::cout << "done\nErasing frame files...";
   
   //erase the frame files
   command.str("");
   command << "rm " << filename << "*.bmp";
-  system(command.str().c_str());
+  (void)system(command.str().c_str());
   if (verbose>0) std::cout << "done\n";
   
   return true;

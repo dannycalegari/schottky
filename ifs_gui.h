@@ -128,10 +128,6 @@ struct IFSGui {
   int mand_contains_half_depth;
   bool mand_trap;
   int mand_trap_depth;
-  bool point_connected;
-  bool point_contains_half;
-  bool point_trap;
-  bool point_uv_words;
   cpx mand_pixel_group_to_cpx(const Point2d<int>& p); 
   cpx mand_pixel_to_cpx(const Point2d<int>& p);
   Point2d<int> mand_cpx_to_pixel(const cpx& c);
@@ -145,9 +141,17 @@ struct IFSGui {
   bool mand_grid_trap_valid;
   
   //data about highlighted point
+  bool point_connected_check;
+  int point_connected_depth;
   bool point_is_connected;
+  bool point_contains_half_check;
+  int point_contains_half_depth;
   bool point_is_contains_half;
-  bool point_is_trap;
+  //bool point_trap_check;
+  bool point_uv_words_check;
+  int point_uv_words_depth;
+  //bool point_is_trap;
+  std::vector<std::pair<Bitword,Bitword> > point_uv_words;
   
   
   //computation functions
@@ -158,6 +162,7 @@ struct IFSGui {
   void mand_zoom(double radius_multiplier);
   void mand_reset_mesh();
   void mand_recenter();
+  void recompute_point_data();
   
   //graphics stuff
   Display* display;
@@ -172,11 +177,31 @@ struct IFSGui {
   WidgetButton W_switch_to_limit;
   WidgetButton W_switch_to_mandlebrot;
   WidgetButton W_switch_to_combined;
+  
   WidgetText W_point_title;
   WidgetCheck W_point_connected_check;
+  WidgetLeftArrow W_point_connected_leftarrow;
+  WidgetText W_point_connected_depth_label;
+  WidgetRightArrow W_point_connected_rightarrow;
+  WidgetText W_point_connected_status;
+  
   WidgetCheck W_point_contains_half_check;
-  WidgetCheck W_point_trap_check;
-  WidgetCheck W_point_uv_word_check;
+  WidgetLeftArrow W_point_contains_half_leftarrow;
+  WidgetText W_point_contains_half_depth_label;
+  WidgetRightArrow W_point_contains_half_rightarrow;
+  WidgetText W_point_contains_half_status;
+  
+  //WidgetCheck W_point_trap_check;
+  //WidgetLeftArrow W_point_trap_decrease_depth;
+  //WidgetText W_point_trap_depth_label;
+  //WidgetRightArrow W_point_trap_increase_depth;
+  //WidgetText W_point_trap_status;
+  
+  WidgetCheck W_point_uv_words_check;
+  WidgetLeftArrow W_point_uv_words_leftarrow;
+  WidgetText W_point_uv_words_depth_label;
+  WidgetRightArrow W_point_uv_words_rightarrow;
+  WidgetText W_point_uv_words_status;
   
   WidgetDraw W_limit_plot;
   WidgetText W_limit_depth_title;
@@ -189,6 +214,7 @@ struct IFSGui {
   WidgetButton W_limit_zoom_in;
   WidgetButton W_limit_zoom_out;
   WidgetText W_limit_center_title;
+  
   
   WidgetDraw W_mand_plot;
   WidgetText W_mand_options_title;
@@ -244,9 +270,17 @@ struct IFSGui {
   void S_mand_trap_decrease_depth(XEvent* e);
   
   void S_point_connected(XEvent* e);
+  void S_point_connected_increase_depth(XEvent* e);
+  void S_point_connected_decrease_depth(XEvent* e);
   void S_point_contains_half(XEvent* e);
-  void S_point_trap(XEvent* e);
+  void S_point_contains_half_increase_depth(XEvent* e);
+  void S_point_contains_half_decrease_depth(XEvent* e);
+  //void S_point_trap(XEvent* e);
+  //void S_point_connected_increase_depth(XEvent* e);
+  //void S_point_connected_decrease_depth(XEvent* e);
   void S_point_uv_words(XEvent* e);
+  void S_point_uv_words_increase_depth(XEvent* e);
+  void S_point_uv_words_decrease_depth(XEvent* e);
   
   
   

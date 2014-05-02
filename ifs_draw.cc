@@ -170,7 +170,7 @@ void ifs::zoom(const Point2d<int>& p){
   center=(cc*wind)+center;
   wind=wind/2.0;
   mesh=mesh*2;
-};
+}
 
 void ifs::draw_mandelbrot_set(){
   // draw mandelbrot set (connectedness locus) and write values of parameters to screen
@@ -260,16 +260,15 @@ void ifs::draw_mandelbrot_set(){
   //int rcol = X.get_rgb_color(1,0,0);
   int gcol = X.get_rgb_color(0,1,0);
 	
-  std::vector<std::pair<Bitword,Bitword> > uv_words;
   std::vector<Ball> TLB;
   int tlb_result;
   bool found_TLB = false;
   double TLB_neighborhood;
   double trap_radius;
   if (find_trap_like_vectors) {
-    TLB_and_uv_words_for_region(TLB, uv_words, TLB_neighborhood,
-                                center-wind-(wind*I), center+wind+(wind*I),
-                                15, depth, 0);
+    TLB_for_region(TLB, TLB_neighborhood,
+                    center-wind-(wind*I), center+wind+(wind*I),
+                    15, 0);
     if (TLB.size() > 0) {
       found_TLB = true;
     }

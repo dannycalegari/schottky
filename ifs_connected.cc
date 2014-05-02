@@ -46,12 +46,12 @@ bool ifs::old_circles_intersect(cpx c1, cpx a1, cpx c2, cpx a2, double R, int d)
 				return(true);
 			} else {
 				return(false);
-			};
+			}
 		} else {
 			return(true);
-		};
-	};
-};
+		}
+	}
+}
 
 //recursive test if the circles intersect
 //the disks are centered at the centers, and you get to the image of the

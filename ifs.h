@@ -141,7 +141,7 @@ class ifs{
     void find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
                                int uv_depth);
     void set_params(cpx Z, cpx W);
-    void draw_ifs_to_array(std::vector<std::vector<Point3d<char> > >& bmp, 
+    void draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
                            const cpx& region_ll, const cpx& region_ur, int depth);     
                 
     //IFS drawing
@@ -213,10 +213,9 @@ class ifs{
                         int num_ball_trials,
                         const std::vector<Ball>& balls,
                         int verbose);
-    bool TLB_and_uv_words_for_region(std::vector<Ball>& TLB, 
-                                     std::vector<std::pair<Bitword,Bitword> >& words,
-                                     double& guaranteed_neighborhood,
-                                    cpx ll, cpx ur, int n_depth, int uv_depth, int verbose);
+    bool TLB_for_region(std::vector<Ball>& TLB, 
+                        double& guaranteed_neighborhood,
+                        cpx ll, cpx ur, int n_depth, int verbose);
     int check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
                                const std::vector<std::pair<Bitword,Bitword> >& words);
     int check_TLB(const std::vector<Ball>& TLB, double& trap_radius,

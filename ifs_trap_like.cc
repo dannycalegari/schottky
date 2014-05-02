@@ -515,10 +515,9 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
   
 //for the current z value, produce a bunch of promising uv words, 
 //plus some trap like balls for this value
-bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB, 
-                                      std::vector<std::pair<Bitword,Bitword> >& words,
-                                      double& guaranteed_neighborhood,
-                                      cpx ll, cpx ur, int n_depth, int uv_depth, int verbose) {
+bool ifs::TLB_for_region(std::vector<Ball>& TLB, 
+                        double& guaranteed_neighborhood,
+                        cpx ll, cpx ur, int n_depth, int verbose) {
   
   cpx backup_z = z;
   cpx backup_w = w;
@@ -556,7 +555,7 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
   //z^m(u(1/2)-v(1/2)) needs to land within Cz*box_diag_rad to be feasible for this box
   //std::cout << "Finding close uv words to depth " << uv_depth << "\n";
   //find_close_uv_words(words, TLB, Cz*box_diag_rad, 10000, uv_depth);
-  words.resize(0);
+  //words.resize(0);
   if (verbose>0) {
     std::cout << "Box radius: " << box_diag_rad << "\n";
     std::cout << "Initial radius increase: " << initial_radius_increase << "\n";
@@ -565,10 +564,10 @@ bool ifs::TLB_and_uv_words_for_region(std::vector<Ball>& TLB,
     for (int i=0; i<(int)TLB.size(); ++i) {
       std::cout << TLB[i] << "\n";
     }
-    std::cout << "Found the uv words: \n";
-    for (int i=0; i<(int)words.size(); ++i) {
-      std::cout << i << ": " << words[i].first << "\n" << words[i].second << "\n";
-    }
+    //std::cout << "Found the uv words: \n";
+    //for (int i=0; i<(int)words.size(); ++i) {
+    //  std::cout << i << ": " << words[i].first << "\n" << words[i].second << "\n";
+    //}
   }
   z = backup_z; az = abs(z);
   w = backup_w; aw = abs(w);
@@ -663,7 +662,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
                               int verbose) {
   
   //trap parameters
-  int uv_depth = depth;
+  //int uv_depth = depth;
 
 
   int nL = loop.size();
@@ -683,13 +682,12 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
   double difficulty;
   
   //find the TLB and stuff
-  std::vector<std::pair<Bitword,Bitword> > uv_words;
-	std::vector<Ball> TLB;
+  std::vector<Ball> TLB;
   double TLB_neighborhood;
   cpx center = z;
-  TLB_and_uv_words_for_region(TLB, uv_words, TLB_neighborhood,
-                              center-cpx(wind,wind), center+cpx(wind,wind),
-                              15, uv_depth, 0);
+  TLB_for_region(TLB, TLB_neighborhood,
+                  center-cpx(wind,wind), center+cpx(wind,wind),
+                  15, 0);
   
   //get the traps at the vertices
   for (int i=0; i<nL; ++i) {
