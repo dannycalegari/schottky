@@ -303,12 +303,21 @@ void WidgetRightArrow::initial_draw() {
  ****************************************************************************/
  
 void IFSGui::S_switch_to_limit(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  window_mode = LIMIT;
+  reset_and_pack_window();
 }
 
 void IFSGui::S_switch_to_mandlebrot(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  window_mode = MANDLEBROT;
+  reset_and_pack_window();
 }
 
 void IFSGui::S_switch_to_combined(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  window_mode = BOTH;
+  reset_and_pack_window();
 }
  
 //limit set
@@ -1082,10 +1091,10 @@ void IFSGui::main_loop() {
     //widget to send it off to
     } else if (e.type == ButtonPress || e.type == MotionNotify) {
       for (int i=0; i<(int)widgets.size(); ++i) {
-	if (widgets[i]->contains_pixel( e.xbutton.x, e.xbutton.y) &&
-	    widgets[i]->click_signal != NULL) {
-	  (this->*(widgets[i]->click_signal))(&e);
-	}
+        if (widgets[i]->contains_pixel( e.xbutton.x, e.xbutton.y) &&
+            widgets[i]->click_signal != NULL) {
+          (this->*(widgets[i]->click_signal))(&e);
+        }
       }
     }
   }
