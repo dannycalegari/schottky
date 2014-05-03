@@ -27,6 +27,7 @@ struct Widget {
   virtual void initial_draw() {}
   virtual void redraw() {}
   virtual bool contains_pixel(int x, int y);
+  virtual void clear();
   Widget() {}
 };
 
@@ -81,18 +82,22 @@ struct WidgetRightArrow : Widget {
 };
 
 
-
-
-
-
-
-
-
-
-
-
-
-
+struct IFSPath {
+  bool is_valid;
+  std::vector<cpx> path;
+  bool closed;
+  bool has_traps;
+  std::vector<Ball> traps;
+  bool has_uv_words;
+  std::vector<std::pair<Bitword,Bitword> > uv_words;
+  IFSPath() {
+    is_valid = false;
+    path.resize(0);
+    closed = has_traps = has_uv_words = false;
+    traps.size();
+    uv_words.size();
+  }
+};
 
 
 
@@ -109,9 +114,11 @@ struct IFSGui {
   cpx limit_ll;
   cpx limit_ur;
   int limit_depth;
+  bool limit_auto_depth;
   bool limit_chunky;
   bool limit_colors;
   double limit_pixel_width;
+  std::vector<cpx> limit_marked_points;
   Point2d<int> limit_cpx_to_pixel(const cpx& c);
   cpx limit_pixel_to_cpx(const Point2d<int>& p);
   
@@ -153,6 +160,12 @@ struct IFSGui {
   //bool point_is_trap;
   std::vector<std::pair<Bitword,Bitword> > point_uv_words;
   
+  //data about path
+  IFSPath path;
+  bool currently_drawing_path;
+  void make_path_drawing_buttons();
+  void make_path_task_buttons(bool created_by_drawing);
+  void make_path_creation_buttons(bool cancelling);
   
   //computation functions
   void draw_limit();
@@ -179,6 +192,7 @@ struct IFSGui {
   WidgetButton W_switch_to_combined;
   
   WidgetText W_point_title;
+  WidgetText W_point_point;
   WidgetCheck W_point_connected_check;
   WidgetLeftArrow W_point_connected_leftarrow;
   WidgetText W_point_connected_depth_label;
@@ -208,6 +222,7 @@ struct IFSGui {
   WidgetLeftArrow W_limit_depth_leftarrow;
   WidgetText W_limit_depth_label;
   WidgetRightArrow W_limit_depth_rightarrow;
+  WidgetCheck W_limit_depth_auto;
   WidgetCheck W_limit_chunky;
   WidgetCheck W_limit_colors;
   WidgetText W_limit_zoom_title;
@@ -239,6 +254,20 @@ struct IFSGui {
   WidgetLeftArrow W_mand_trap_depth_leftarrow;
   WidgetText W_mand_trap_depth_label;
   WidgetRightArrow W_mand_trap_depth_rightarrow;
+  WidgetText W_mand_mouse_label;
+  
+  WidgetText W_mand_path_drawing_title;
+  WidgetButton W_mand_path_create_by_drawing_button;
+  WidgetButton W_mand_path_create_by_boundary_button;
+  WidgetButton W_mand_path_finish_cancel_button;
+  WidgetButton W_mand_path_finish_path_button;
+  WidgetButton W_mand_path_finish_loop_button;
+  WidgetText W_mand_path_tasks_title;
+  WidgetButton W_mand_path_delete_button;
+  WidgetButton W_mand_path_find_traps_button;
+  WidgetButton W_mand_path_create_movie_button;
+  WidgetButton W_mand_path_find_uv_words_button;
+  
   
   //signal functions
   void S_switch_to_limit(XEvent* e);
@@ -248,6 +277,7 @@ struct IFSGui {
   void S_limit_draw(XEvent* e);
   void S_limit_increase_depth(XEvent* e);
   void S_limit_decrease_depth(XEvent* e);
+  void S_limit_auto_depth(XEvent* e);
   void S_limit_switch_chunky(XEvent* e);
   void S_limit_switch_colors(XEvent* e);
   void S_limit_zoom_in(XEvent* e);
@@ -282,7 +312,15 @@ struct IFSGui {
   void S_point_uv_words_increase_depth(XEvent* e);
   void S_point_uv_words_decrease_depth(XEvent* e);
   
-  
+  void S_mand_path_create_by_drawing_button(XEvent* e);
+  void S_mand_path_create_by_boundary(XEvent* e);
+  void S_mand_path_finish_cancel(XEvent* e);
+  void S_mand_path_finish_path(XEvent* e);
+  void S_mand_path_finish_loop(XEvent* e);
+  void S_mand_path_delete(XEvent* e);
+  void S_mand_path_find_traps(XEvent* e);
+  void S_mand_path_create_movie(XEvent* e);
+  void S_mand_path_find_uv_words(XEvent* e);
   
   bool main_window_initialized;
   int main_window_height;
@@ -290,7 +328,9 @@ struct IFSGui {
   int limit_sidebar_size;
   int mand_sidebar_size;
   
+  
 
+  void detach_widget(Widget* w);
   void pack_widget_upper_right(const Widget* w1, Widget* w2);
   void launch(IFSWindowMode m = BOTH, const cpx& c = cpx(0.5,0.5));
   void reset_and_pack_window();

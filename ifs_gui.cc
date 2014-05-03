@@ -16,6 +16,11 @@ bool Widget::contains_pixel(int x, int y) {
   return (ul.x <= x) && (x < ul.x + width) && (ul.y <= y) && (y < ul.y + height);
 }
 
+void Widget::clear() {
+  XSetForeground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XFillRectangle(ifsg->display, ifsg->main_window, gc, ul.x, ul.y, width, height);
+}
+
 
 WidgetDraw::WidgetDraw(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*)) {
   width = w;
@@ -350,6 +355,16 @@ void IFSGui::S_limit_decrease_depth(XEvent* e) {
   draw_limit();
 }
 
+
+void IFSGui::S_limit_auto_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  limit_auto_depth = !limit_auto_depth;
+  W_limit_depth_auto.checked = limit_auto_depth;
+  W_limit_depth_auto.redraw();
+  draw_limit();
+}
+
+
 void IFSGui::S_limit_switch_chunky(XEvent* e) {
   if (e->type == KeyPress || e->type == MotionNotify) return;
   limit_chunky = !limit_chunky;
@@ -393,11 +408,35 @@ void IFSGui::S_limit_zoom_out(XEvent* e) {
 //mandlebrot
 void IFSGui::S_mand_draw(XEvent* e) {
   if (e->type == KeyPress) return;
+        
+  //if we're drawing a loop, and we click, we need to add that to 
+  //the loop
+  if (e->type == ButtonPress && currently_drawing_path) {
+    int widget_x = e->xbutton.x - W_mand_plot.ul.x;
+    int widget_y = e->xbutton.y - W_mand_plot.ul.y;
+    cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
+    path.path.push_back(c);
+    //draw the next line
+    int rcol = get_rgb_color(1,0.2,1);
+    Widget& MW = W_mand_plot;
+    XSetForeground(display, MW.gc, rcol);
+    if (path.path.size() == 1) {
+      XDrawPoint(display, MW.p, MW.gc, widget_x, widget_y);
+      XCopyArea(display, MW.p, main_window, MW.gc, widget_x, widget_y, 
+                                                   1,1,
+                                                   MW.ul.x + widget_x, MW.ul.y + widget_y); 
+    } else {
+      Point2d<int> p = mand_cpx_to_pixel(path.path[path.path.size()-2]);
+      XDrawLine(display, MW.p, MW.gc, p.x, p.y, widget_x, widget_y);
+      XCopyArea(display, MW.p, main_window, MW.gc, 0,0, 
+                                                   MW.width, MW.height,
+                                                   MW.ul.x, MW.ul.y); 
+    }
   
   //the following is run if the button is pressed or if there is
   //motion where the button is down
-  if ( (e->type == ButtonPress && e->xbutton.button == Button1) ||
-       (e->type == MotionNotify && ((e->xmotion.state >> 8)&1)) ) {
+  } else if ( (e->type == ButtonPress && e->xbutton.button == Button1) ||
+              (e->type == MotionNotify && ((e->xmotion.state >> 8)&1)) ) {
     int widget_x = e->xbutton.x - W_mand_plot.ul.x;
     int widget_y = e->xbutton.y - W_mand_plot.ul.y;
     cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
@@ -413,9 +452,16 @@ void IFSGui::S_mand_draw(XEvent* e) {
     mand_zoom(0.5);
     recompute_point_data();
   }
+  
   //additionally, if the mouse is moved, we need to update the 
   //text
   if (e->type == MotionNotify) {
+    int widget_x = e->xbutton.x - W_mand_plot.ul.x;
+    int widget_y = e->xbutton.y - W_mand_plot.ul.y;
+    cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
+    std::stringstream T; T.str("");
+    T << "Mouse: " << c;
+    W_mand_mouse_label.update_text(T.str());
   }
   
 }
@@ -615,7 +661,119 @@ void IFSGui::S_point_uv_words_decrease_depth(XEvent* e) {
 
 
 
+void IFSGui::S_mand_path_create_by_drawing_button(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  currently_drawing_path = true;
+  path = IFSPath();
+  path.is_valid = true;
+  make_path_drawing_buttons();
+}
+  
+void IFSGui::S_mand_path_create_by_boundary(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  make_path_task_buttons(false);
+}
 
+void IFSGui::S_mand_path_finish_cancel(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  currently_drawing_path = false;
+  path = IFSPath();
+  make_path_creation_buttons(true);
+  draw_mand();
+}
+
+void IFSGui::S_mand_path_finish_path(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  currently_drawing_path = false;
+  path.closed = false;
+  make_path_task_buttons(true);
+}
+
+void IFSGui::S_mand_path_finish_loop(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  currently_drawing_path = false;
+  path.closed = true;
+  make_path_task_buttons(true);
+  Point2d<int> p1 = mand_cpx_to_pixel(path.path[path.path.size()-1]);
+  Point2d<int> p2 = mand_cpx_to_pixel(path.path[0]);
+  Widget& MW = W_mand_plot;
+  XSetForeground(display, MW.gc, get_rgb_color(1,0.2,1));
+  XDrawLine(display, MW.p, MW.gc, p1.x, p1.y, p2.x, p2.y);
+  XCopyArea(display, MW.p, main_window, MW.gc, 0,0, 
+                                               MW.width, MW.height,
+                                               MW.ul.x, MW.ul.y); 
+}
+
+void IFSGui::S_mand_path_delete(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  path = IFSPath();
+  make_path_creation_buttons(false);
+  draw_mand();
+}
+
+void IFSGui::S_mand_path_find_traps(XEvent* e) {
+}
+
+void IFSGui::S_mand_path_create_movie(XEvent* e) {
+}
+
+void IFSGui::S_mand_path_find_uv_words(XEvent* e) {
+}
+
+void IFSGui::make_path_drawing_buttons() {
+  detach_widget(&W_mand_path_create_by_drawing_button);
+  detach_widget(&W_mand_path_create_by_boundary_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_drawing_title);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_cancel_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_path_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_loop_button);
+  W_mand_path_drawing_title.initial_draw();
+  W_mand_path_finish_cancel_button.initial_draw();
+  W_mand_path_finish_path_button.initial_draw();
+  W_mand_path_finish_loop_button.initial_draw();
+}
+
+void IFSGui::make_path_task_buttons(bool created_by_drawing) {
+  //if it was created by drawing, we need to take those away
+  if (created_by_drawing) {
+    detach_widget(&W_mand_path_drawing_title);
+    detach_widget(&W_mand_path_finish_cancel_button);
+    detach_widget(&W_mand_path_finish_path_button);
+    detach_widget(&W_mand_path_finish_loop_button);
+  } else {
+    detach_widget(&W_mand_path_create_by_drawing_button);
+    detach_widget(&W_mand_path_create_by_boundary_button);
+  } 
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_tasks_title);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
+  W_mand_path_tasks_title.initial_draw();
+  W_mand_path_delete_button.initial_draw();
+  W_mand_path_find_traps_button.initial_draw();
+  W_mand_path_create_movie_button.initial_draw();
+  W_mand_path_find_uv_words_button.initial_draw();
+}
+
+void IFSGui::make_path_creation_buttons(bool cancelling) {
+  if (cancelling) {
+    detach_widget(&W_mand_path_drawing_title);
+    detach_widget(&W_mand_path_finish_cancel_button);
+    detach_widget(&W_mand_path_finish_path_button);
+    detach_widget(&W_mand_path_finish_loop_button);
+  } else {
+    detach_widget(&W_mand_path_tasks_title);
+    detach_widget(&W_mand_path_delete_button);
+    detach_widget(&W_mand_path_find_traps_button);
+    detach_widget(&W_mand_path_create_movie_button);
+    detach_widget(&W_mand_path_find_uv_words_button);
+  }
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);
+  W_mand_path_create_by_drawing_button.initial_draw();
+  W_mand_path_create_by_boundary_button.initial_draw();
+}
 
 
 /**************************************************************************
@@ -661,7 +819,8 @@ void IFSGui::draw_limit() {
     //if the ball is disjoint from the window, we might as well 
     //get rid of it
     if (!b.first && b.second.is_disjoint(limit_ll, limit_ur)) continue;
-    if (b.second.word_len >= limit_depth) {
+    if ( (!limit_auto_depth && b.second.word_len >= limit_depth) ||
+         (limit_auto_depth && b.second.radius < limit_pixel_width/2.0) ) {
       Point2d<int> p = limit_cpx_to_pixel(b.second.center);
       double r = b.second.radius / limit_pixel_width;
       if (r <= 1.0) r = 1.0;
@@ -691,6 +850,18 @@ void IFSGui::draw_limit() {
       }
     }
   }
+  //draw the marked points 0, 1/2, 1
+  for (int i=0; i<(int)limit_marked_points.size(); ++i) {
+    cpx& c = limit_marked_points[i];
+    int rcol = get_rgb_color(1,0.1,0);
+    if (limit_ll.real() < c.real() && c.real() < limit_ur.real() &&
+        limit_ll.imag() < c.imag() && c.imag() < limit_ur.imag()) {
+      Point2d<int> p = limit_cpx_to_pixel(c);
+      XSetForeground(display, LW.gc, rcol);
+      XFillArc(display, LW.p, LW.gc, p.x-3, p.y-3, 3, 3, 23040, 23040);
+    }
+  }
+  
   LW.redraw();
 }
 
@@ -795,6 +966,21 @@ void IFSGui::draw_mand() {
   XSetForeground(display, MW.gc, rcol);
   XFillArc(display, MW.p, MW.gc, h.x, h.y, 4, 4, 23040, 23040);
   
+  //now draw the path, if there is one
+  if (path.is_valid) {
+    int rcol = get_rgb_color(1,0.2,1);
+    XSetForeground(display, MW.gc, rcol);
+    for (int i=0; i<(int)path.path.size()-1; ++i) {
+      Point2d<int> p1 = mand_cpx_to_pixel(path.path[i]);
+      Point2d<int> p2 = mand_cpx_to_pixel(path.path[i+1]);
+      XDrawLine(display, MW.p, MW.gc, p1.x, p1.y, p2.x, p2.y);
+    }
+    if (path.closed) {
+      Point2d<int> p1 = mand_cpx_to_pixel(path.path[path.path.size()-1]);
+      Point2d<int> p2 = mand_cpx_to_pixel(path.path[0]);
+      XDrawLine(display, MW.p, MW.gc, p1.x, p1.y, p2.x, p2.y);
+    }
+  }
   MW.redraw();
 }
 
@@ -887,7 +1073,10 @@ void IFSGui::mand_reset_mesh() {
 
 void IFSGui::recompute_point_data() {
   std::stringstream T;
-    int difficulty;
+  int difficulty;
+  T.str(""); T << "Location: " << IFS.z;
+  W_point_point.update_text(T.str());
+  
   if (!point_connected_check) {
     T.str(""); T << "(disabled)";
   } else {
@@ -976,6 +1165,18 @@ void IFSGui::pack_widget_upper_right(const Widget* w1, Widget* w2) {
 }
 
 
+void IFSGui::detach_widget(Widget* w) {
+  for (int i=0; i<(int)widgets.size(); ++i) {
+    if (widgets[i] == w) {
+      widgets.erase(widgets.begin()+i);
+      break;
+    }
+  }
+  w->clear();
+}
+
+
+
 int IFSGui::get_rgb_color(double r, double g, double b) {
   XColor temp;
   temp.flags = DoRed | DoGreen | DoBlue;
@@ -1054,21 +1255,22 @@ void IFSGui::reset_and_pack_window() {
   W_switch_to_combined = WidgetButton(this, "Switch to combined", -1, 20, &IFSGui::S_switch_to_combined);
   
   W_point_title = WidgetText(this, "Current IFS status:", -1, 20);
-  W_point_connected_check = WidgetCheck(this, "Connectedness", -1, 20, point_connected_check, &IFSGui::S_point_connected);
+  W_point_point = WidgetText(this, "Location: initializing", 500, 20);
+  W_point_connected_check = WidgetCheck(this, "Connectedness", 105, 20, point_connected_check, &IFSGui::S_point_connected);
   W_point_connected_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_connected_decrease_depth);
   T.str(""); T << point_connected_depth;
   W_point_connected_depth_label = WidgetText(this, T.str(), -1, 20);
   W_point_connected_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_connected_increase_depth);
   W_point_connected_status = WidgetText(this, "initializing", -1, 20);
   
-  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", -1, 20, point_contains_half_check, &IFSGui::S_point_contains_half);
+  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", 105, 20, point_contains_half_check, &IFSGui::S_point_contains_half);
   W_point_contains_half_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_contains_half_decrease_depth);
   T.str(""); T << point_contains_half_depth;
   W_point_contains_half_depth_label = WidgetText(this, T.str(), -1, 20);
   W_point_contains_half_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_contains_half_increase_depth);
   W_point_contains_half_status = WidgetText(this, "initializing", -1, 20);
   
-  W_point_uv_words_check = WidgetCheck(this, "uv words", -1, 20, point_uv_words_check, &IFSGui::S_point_uv_words);
+  W_point_uv_words_check = WidgetCheck(this, "uv words", 105, 20, point_uv_words_check, &IFSGui::S_point_uv_words);
   W_point_uv_words_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_uv_words_decrease_depth);
   T.str(""); T << point_uv_words_depth;
   W_point_uv_words_depth_label = WidgetText(this, T.str(), -1, 20);
@@ -1084,6 +1286,7 @@ void IFSGui::reset_and_pack_window() {
     T.str(""); T << limit_depth;
     W_limit_depth_label = WidgetText(this, T.str(), -1, 20);
     W_limit_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_limit_increase_depth);
+    W_limit_depth_auto = WidgetCheck(this, "Auto depth", -1, 20, limit_auto_depth, &IFSGui::S_limit_auto_depth);
     W_limit_chunky = WidgetCheck(this, "Chunky", -1, 20, limit_chunky, &IFSGui::S_limit_switch_chunky);
     W_limit_colors = WidgetCheck(this, "Colors", -1, 20, limit_colors, &IFSGui::S_limit_switch_colors);
     W_limit_zoom_title = WidgetText(this, "Zoom: ", -1, 20);
@@ -1100,6 +1303,7 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_depth_title, &W_limit_depth_leftarrow);
     pack_widget_upper_right(&W_limit_depth_leftarrow, &W_limit_depth_label);
     pack_widget_upper_right(&W_limit_depth_label, &W_limit_depth_rightarrow);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_depth_auto);
     pack_widget_upper_right(&W_limit_plot, &W_limit_zoom_title);
     pack_widget_upper_right(&W_limit_zoom_title, &W_limit_zoom_in);
     pack_widget_upper_right(&W_limit_zoom_in, &W_limit_zoom_out);
@@ -1136,6 +1340,19 @@ void IFSGui::reset_and_pack_window() {
     T.str("");  T << mand_trap_depth;
     W_mand_trap_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_trap_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_trap_increase_depth);
+    W_mand_mouse_label = WidgetText(this, "Mouse: initializing", 200, 20);
+    
+    W_mand_path_create_by_drawing_button = WidgetButton(this, "Draw path", -1, 20, &IFSGui::S_mand_path_create_by_drawing_button);
+    W_mand_path_create_by_boundary_button = WidgetButton(this, "Find boundary path", -1, 20, &IFSGui::S_mand_path_create_by_boundary);
+    W_mand_path_drawing_title = WidgetText(this, "(Click to draw path)", -1, 20);
+    W_mand_path_finish_cancel_button = WidgetButton(this, "Cancel path", -1, 20, &IFSGui::S_mand_path_finish_cancel);
+    W_mand_path_finish_path_button = WidgetButton(this, "Finish path", -1, 20, &IFSGui::S_mand_path_finish_path);
+    W_mand_path_finish_loop_button = WidgetButton(this, "Finish loop", -1, 20, &IFSGui::S_mand_path_finish_loop);
+    W_mand_path_tasks_title = WidgetText(this, "Path options:", -1, 20);
+    W_mand_path_delete_button = WidgetButton(this, "Delete path", -2, 20, &IFSGui::S_mand_path_delete);
+    W_mand_path_find_traps_button = WidgetButton(this, "Find traps along path", -1, 20, &IFSGui::S_mand_path_find_traps);
+    W_mand_path_create_movie_button = WidgetButton(this, "Create movie along path", -1, 20, &IFSGui::S_mand_path_create_movie);
+    W_mand_path_find_uv_words_button = WidgetButton(this, "Find uv words along path", -1, 20, &IFSGui::S_mand_path_find_uv_words);
     
     if (window_mode == MANDLEBROT) {
       pack_widget_upper_right(NULL, &W_mand_plot);
@@ -1167,10 +1384,14 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_trap_check, &W_mand_trap_depth_leftarrow);
     pack_widget_upper_right(&W_mand_trap_depth_leftarrow, &W_mand_trap_depth_label);
     pack_widget_upper_right(&W_mand_trap_depth_label, &W_mand_trap_depth_rightarrow);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_label);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);
   }
   
   //put the IFS data on the bottom
   pack_widget_upper_right(NULL, &W_point_title);
+  pack_widget_upper_right(NULL, &W_point_point);
   pack_widget_upper_right(NULL, &W_point_connected_check);
   pack_widget_upper_right(&W_point_connected_check, &W_point_connected_leftarrow);
   pack_widget_upper_right(&W_point_connected_leftarrow, &W_point_connected_depth_label);
@@ -1249,8 +1470,13 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   limit_ll = cpx(-1, -1.5);
   limit_ur = cpx(2, 1.5);
   limit_depth = 12;
+  limit_auto_depth = false;
   limit_chunky = true;
   limit_colors = true;
+  limit_marked_points.resize(3);
+  limit_marked_points[0] = cpx(0,0);
+  limit_marked_points[1] = cpx(0.5,0);
+  limit_marked_points[2] = cpx(1.0,0);
   
   mand_ll = cpx(-1,-1);
   mand_ur = cpx(1,1);
@@ -1269,9 +1495,11 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   point_contains_half_depth = 18;
   point_is_contains_half = false;
   //point_trap = false;
-  point_uv_words_check = true;
+  point_uv_words_check = false;
   point_uv_words_depth = 18;
   point_uv_words.resize(0);
+  
+  currently_drawing_path = false;
   
   
   //set up the graphics
@@ -1285,7 +1513,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   
   //reset (set) the window
   limit_sidebar_size = 130;
-  mand_sidebar_size = 200;
+  mand_sidebar_size = 170;
   reset_and_pack_window();
   
   //go for it
