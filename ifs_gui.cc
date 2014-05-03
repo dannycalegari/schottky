@@ -1107,6 +1107,35 @@ void IFSGui::recompute_point_data() {
 
 
 
+void IFSGui::find_traps_along_path() {
+  if (!path.is_valid || currently_drawing_path || path.path.size() == 0) return;
+  //find the extents of the path, plus a little extra
+  cpx box_ll = path.path[0];
+  cpx box_ur = path.path[0];
+  for (int i=0; i<(int)path.path.size(); ++i) {
+    if (path.path[i].real() < box_ll.real()) {
+      box_ll = cpx(path.path[i].real(), box_ll.imag());
+    }
+    if (path.path[i].real() > box_ur.real()) {
+      box_ur = cpx(path.path[i].real(), box_ll.imag());
+    }
+    if (path.path[i].imag() < box_ll.imag()) {
+      box_ll = cpx(box_ll.real(), path.path[i].imag());
+    }
+    if (path.path[i].imag() > box_ur.real()) {
+      box_ur = cpx(box_ur.real(), path.path[i].imag());
+    }
+  }
+  double bw = box_ur.real() - box_ll.real();
+  double bh = box_ur.imag() - box_ll.imag();
+  box_ur = box_ur + cpx(0.1*bw, 0.1*bh);
+  box_ll = box_ll - cpx(0.1*bw, 0.1*bh);
+}
+
+
+
+
+
 
 /****************************************************************************
  * main gui functions

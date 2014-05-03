@@ -176,6 +176,7 @@ struct IFSGui {
   void mand_reset_mesh();
   void mand_recenter();
   void recompute_point_data();
+  void find_traps_along_path();
   
   //graphics stuff
   Display* display;
