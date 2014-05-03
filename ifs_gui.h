@@ -94,8 +94,8 @@ struct IFSPath {
     is_valid = false;
     path.resize(0);
     closed = has_traps = has_uv_words = false;
-    traps.size();
-    uv_words.size();
+    traps.resize(0);
+    uv_words.resize(0);
   }
 };
 
