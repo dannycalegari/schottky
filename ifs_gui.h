@@ -88,6 +88,7 @@ struct IFSPath {
   bool closed;
   bool has_traps;
   std::vector<Ball> traps;
+  std::vector<int> trap_colors;
   bool has_uv_words;
   std::vector<std::pair<Bitword,Bitword> > uv_words;
   IFSPath() {
@@ -95,6 +96,7 @@ struct IFSPath {
     path.resize(0);
     closed = has_traps = has_uv_words = false;
     traps.resize(0);
+    trap_colors.resize(0);
     uv_words.resize(0);
   }
 };

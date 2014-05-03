@@ -904,6 +904,12 @@ int IFSGui::mand_get_color(const Point3d<int>& p) {
   }
 }
 
+void IFSGui::mand_draw_ball(const Ball& b, int col) {
+  Point2d<int> }
+  
+  
+  
+  
 
 void IFSGui::draw_mand() {
   ifs temp_IFS;
@@ -1130,6 +1136,45 @@ void IFSGui::find_traps_along_path() {
   double bh = box_ur.imag() - box_ll.imag();
   box_ur = box_ur + cpx(0.1*bw, 0.1*bh);
   box_ll = box_ll - cpx(0.1*bw, 0.1*bh);
+  
+  //find the TLB for this region
+  std::vector<Ball> TLB;
+  double TLB_neighborhood;
+  ifs temp_IFS;
+  temp_IFS.set_params(c,c);
+  if (!tmp_IFS.TLB_for_region(TLB, TLB_neighborhood, box_ll, box_ur, mand_traps_depth, 0)) {
+    std::cout << "Couldn't find TLB\n";
+    return;
+  }
+  
+  //find traps along all the path segments
+  path.traps.resize(0);
+  path.trap_colors.resize(0);
+  path.has_traps = true;
+  int upper_index_bound = (path.closed ? path.path.size()-1 : path.path.size()-2);
+  for (int i=0; i<=upper_index_bound; ++i) {
+    int ip1 = (i == path.path.size()-1 ? 0 : i+1);
+    cpx current_z = path.path[i];
+    cpx end_z = path.path[ip1];
+    do {
+      double epsilon = -1;
+      int difficulty = -1;
+      temp_IFS.set_params(current_z, current_z);
+      if ( (difficulty = temp_IFS.check_TLB(TLB, epsilon, TLB_neighborhood, mand_traps_depth)) < 0 ) {
+        std::cout << "Failed to find trap at " << current_z << "\n";
+        return;
+      }
+      path.traps.push_back(Ball(current_z, epsilon));
+      double gamount = double(difficulty)/100.0;
+      path.trap_colors.push_back( get_rgb_color(0,gamount,1) );
+      cpx v = end_z-current_z;
+      current_z = current_z + epsilon*(v/abs(v));
+      
+      //draw it to show what's happening
+      mand_draw_ball(path.traps.back(), path.trap_colors.back());
+      
+    } while ( abs(path.path.back().center - end_z) >= path.path.back.radius );
+  }
 }
 
 
