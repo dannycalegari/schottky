@@ -140,6 +140,9 @@ class ifs{
     double when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls);
     void find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
                                int uv_depth);
+    void find_closest_uv_words_along_path(const std::vector<cpx>& path, 
+                                          bool closed_path, 
+                                          int word_len);
     void set_params(cpx Z, cpx W);
     void draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
                            const cpx& region_ll, const cpx& region_ur, int depth);     
@@ -228,7 +231,10 @@ class ifs{
     //hole boundary finding functions
     bool hole_boundary_containing_point(std::vector<cpx>& path, bool& closed, 
                                         cpx p, int verbose);
-    
+    bool hole_boundary_containing_point_from_grid(std::vector<cpx>& path, bool& closed, 
+                                                  const std::vector<std::vector<bool> >& grid,
+                                                  const Point2d<int>& marked_pixel, 
+                                                  cpx ll, cpx ur, int verbose) ;
     
     //Main interface and drawing functions
     XGraphics X;

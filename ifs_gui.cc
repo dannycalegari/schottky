@@ -1,7 +1,7 @@
 #include "ifs_gui.h"
 
 
-
+#include "movie.h"
 
 
 
@@ -671,7 +671,20 @@ void IFSGui::S_mand_path_create_by_drawing_button(XEvent* e) {
   
 void IFSGui::S_mand_path_create_by_boundary(XEvent* e) {
   if (e->type != ButtonPress) return;
+  //make a grid of what's connected
+  std::vector<std::vector<bool> > grid(mand_num_pixel_groups, 
+                                       std::vector<bool>(mand_num_pixel_groups, false));
+  for (int i=0; i<mand_num_pixel_groups; ++i) {
+    for (int j=0; j<mand_num_pixel_groups; ++j) {
+      grid[i][j] = (mand_data_grid[i][mand_num_pixel_groups-j-1].x > 0);
+    }
+  }
+  Point2d<int> p = mand_cpx_to_pixel_group(IFS.z);
+  path = IFSPath();
+  IFS.hole_boundary_containing_point_from_grid(path.path, path.closed, grid, p, mand_ll, mand_ur, 0); 
+  path.is_valid = true;
   make_path_task_buttons(false);
+  draw_mand();
 }
 
 void IFSGui::S_mand_path_finish_cancel(XEvent* e) {
@@ -712,12 +725,21 @@ void IFSGui::S_mand_path_delete(XEvent* e) {
 }
 
 void IFSGui::S_mand_path_find_traps(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  find_traps_along_path(0);
 }
 
 void IFSGui::S_mand_path_create_movie(XEvent* e) {
+  if (e->type != ButtonPress || !path.is_valid) return;
+  (void)ifs_movie_from_path(IFS, path.path, path.closed, "ifs_movie",
+                            limit_ll, limit_ur, limit_depth, 
+                            W_limit_plot.width, W_limit_plot.height, 40, 6, 1);
 }
 
 void IFSGui::S_mand_path_find_uv_words(XEvent* e) {
+  if (e->type != ButtonPress || !path.is_valid) return;
+  ifs temp_IFS;
+  temp_IFS.find_closest_uv_words_along_path(path.path, path.closed, point_uv_words_depth); 
 }
 
 void IFSGui::make_path_drawing_buttons() {
@@ -881,6 +903,11 @@ cpx IFSGui::mand_pixel_group_to_cpx(const Point2d<int>& p) {
   return cpx(r,i);
 }
 
+Point2d<int> IFSGui::mand_cpx_to_pixel_group(const cpx& c) {
+  return Point2d<int>( (c.real() - mand_ll.real()) / mand_pixel_group_width,
+                       mand_num_pixel_groups - ((c.imag() - mand_ll.imag())/ mand_pixel_group_width) );
+}
+
 cpx IFSGui::mand_pixel_to_cpx(const Point2d<int>& p) {
   double r = (p.x + 0.5)*mand_pixel_width + mand_ll.real();
   double i = mand_ur.imag() - (p.y + 0.5)*mand_pixel_width;
@@ -905,7 +932,14 @@ int IFSGui::mand_get_color(const Point3d<int>& p) {
 }
 
 void IFSGui::mand_draw_ball(const Ball& b, int col) {
-  Point2d<int> }
+  Point2d<int> p = mand_cpx_to_pixel(b.center);
+  Widget& MP = W_mand_plot;
+  XSetForeground(display, MP.gc, col);
+  int r = int(b.radius / mand_pixel_width);
+  if (r < 2) r = 2;
+  XFillArc(display, MP.p, MP.gc, p.x-r, p.y-r, 2*r, 2*r, 23040, 23040);
+  XCopyArea(display, MP.p, main_window, MP.gc, p.x-r, p.y-r, 2*r,2*r, MP.ul.x+p.x-r, MP.ul.y+p.y-r);
+}
   
   
   
@@ -970,7 +1004,7 @@ void IFSGui::draw_mand() {
   Point2d<int> h = mand_cpx_to_pixel(IFS.z);
   int rcol = get_rgb_color(1.0,0.1,0.0);
   XSetForeground(display, MW.gc, rcol);
-  XFillArc(display, MW.p, MW.gc, h.x, h.y, 4, 4, 23040, 23040);
+  XFillArc(display, MW.p, MW.gc, h.x-2, h.y-2, 4, 4, 23040, 23040);
   
   //now draw the path, if there is one
   if (path.is_valid) {
@@ -986,7 +1020,18 @@ void IFSGui::draw_mand() {
       Point2d<int> p2 = mand_cpx_to_pixel(path.path[0]);
       XDrawLine(display, MW.p, MW.gc, p1.x, p1.y, p2.x, p2.y);
     }
+    //if the path has traps, draw them
+    if (path.has_traps) {
+      for (int i=0; i<(int)path.traps.size(); ++i) {
+        XSetForeground(display, MW.gc, path.trap_colors[i]);
+        Point2d<int> p = mand_cpx_to_pixel(path.traps[i].center);
+        int r = int(path.traps[i].radius / mand_pixel_width);
+        if (r < 2) r = 2;
+        XFillArc(display, MW.p, MW.gc, p.x-r, p.y-r, 2*r, 2*r, 23040, 23040);
+      }
+    }
   }
+  
   MW.redraw();
 }
 
@@ -1113,7 +1158,7 @@ void IFSGui::recompute_point_data() {
 
 
 
-void IFSGui::find_traps_along_path() {
+void IFSGui::find_traps_along_path(int verbose) {
   if (!path.is_valid || currently_drawing_path || path.path.size() == 0) return;
   //find the extents of the path, plus a little extra
   cpx box_ll = path.path[0];
@@ -1123,7 +1168,7 @@ void IFSGui::find_traps_along_path() {
       box_ll = cpx(path.path[i].real(), box_ll.imag());
     }
     if (path.path[i].real() > box_ur.real()) {
-      box_ur = cpx(path.path[i].real(), box_ll.imag());
+      box_ur = cpx(path.path[i].real(), box_ur.imag());
     }
     if (path.path[i].imag() < box_ll.imag()) {
       box_ll = cpx(box_ll.real(), path.path[i].imag());
@@ -1136,14 +1181,15 @@ void IFSGui::find_traps_along_path() {
   double bh = box_ur.imag() - box_ll.imag();
   box_ur = box_ur + cpx(0.1*bw, 0.1*bh);
   box_ll = box_ll - cpx(0.1*bw, 0.1*bh);
+  cpx av = (box_ll + box_ur)/2.0;
   
   //find the TLB for this region
   std::vector<Ball> TLB;
   double TLB_neighborhood;
   ifs temp_IFS;
-  temp_IFS.set_params(c,c);
-  if (!tmp_IFS.TLB_for_region(TLB, TLB_neighborhood, box_ll, box_ur, mand_traps_depth, 0)) {
-    std::cout << "Couldn't find TLB\n";
+  temp_IFS.set_params(av, av);
+  if (!temp_IFS.TLB_for_region(TLB, TLB_neighborhood, box_ll, box_ur, 15, verbose)) {
+    std::cout << "Couldn't find TLB for box " << box_ll << " " << box_ur << " at depth " << mand_trap_depth << "\n";
     return;
   }
   
@@ -1153,27 +1199,33 @@ void IFSGui::find_traps_along_path() {
   path.has_traps = true;
   int upper_index_bound = (path.closed ? path.path.size()-1 : path.path.size()-2);
   for (int i=0; i<=upper_index_bound; ++i) {
-    int ip1 = (i == path.path.size()-1 ? 0 : i+1);
+    int ip1 = (i == (int)path.path.size()-1 ? 0 : i+1);
     cpx current_z = path.path[i];
     cpx end_z = path.path[ip1];
+    if (verbose>0) {
+      std::cout << "Finding traps along segment " << current_z << " - " << end_z << "\n";
+    }
     do {
       double epsilon = -1;
       int difficulty = -1;
       temp_IFS.set_params(current_z, current_z);
-      if ( (difficulty = temp_IFS.check_TLB(TLB, epsilon, TLB_neighborhood, mand_traps_depth)) < 0 ) {
+      if ( (difficulty = temp_IFS.check_TLB(TLB, epsilon, TLB_neighborhood, mand_trap_depth)) < 0 ) {
         std::cout << "Failed to find trap at " << current_z << "\n";
         return;
       }
+      if (verbose>0) {
+        std::cout << "Found trap " << current_z << " - " << epsilon << "\n";
+      }
       path.traps.push_back(Ball(current_z, epsilon));
-      double gamount = double(difficulty)/100.0;
-      path.trap_colors.push_back( get_rgb_color(0,gamount,1) );
+      double gamount = double(difficulty)/double(mand_trap_depth);
+      path.trap_colors.push_back( get_rgb_color(0.5,gamount,1) );
       cpx v = end_z-current_z;
       current_z = current_z + epsilon*(v/abs(v));
       
       //draw it to show what's happening
       mand_draw_ball(path.traps.back(), path.trap_colors.back());
       
-    } while ( abs(path.path.back().center - end_z) >= path.path.back.radius );
+    } while ( abs(path.traps.back().center - end_z) >= path.traps.back().radius );
   }
 }
 
@@ -1459,8 +1511,21 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_trap_depth_leftarrow, &W_mand_trap_depth_label);
     pack_widget_upper_right(&W_mand_trap_depth_label, &W_mand_trap_depth_rightarrow);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_label);
-    pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
-    pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);
+    if (currently_drawing_path) {
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_drawing_title);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_cancel_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_path_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_loop_button);
+    } else if (path.is_valid) {
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_tasks_title);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
+    } else {
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);
+    }
   }
   
   //put the IFS data on the bottom

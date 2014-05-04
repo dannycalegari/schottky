@@ -137,7 +137,8 @@ struct IFSGui {
   int mand_contains_half_depth;
   bool mand_trap;
   int mand_trap_depth;
-  cpx mand_pixel_group_to_cpx(const Point2d<int>& p); 
+  cpx mand_pixel_group_to_cpx(const Point2d<int>& p);
+  Point2d<int> mand_cpx_to_pixel_group(const cpx& c);
   cpx mand_pixel_to_cpx(const Point2d<int>& p);
   Point2d<int> mand_cpx_to_pixel(const cpx& c);
   int mand_get_color(const Point3d<int>& p);
@@ -177,8 +178,9 @@ struct IFSGui {
   void mand_zoom(double radius_multiplier);
   void mand_reset_mesh();
   void mand_recenter();
+  void mand_draw_ball(const Ball& b, int col);
   void recompute_point_data();
-  void find_traps_along_path();
+  void find_traps_along_path(int verbose);
   
   //graphics stuff
   Display* display;

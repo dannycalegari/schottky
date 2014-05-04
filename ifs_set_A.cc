@@ -1,10 +1,6 @@
 
 
 
-//return a path which is the boundary of the hole containing 
-//the point p (false if p isn't *in* a hole)
-//if the hole touches the boundary of the current window, 
-//the path is not a loop, otherwise, it is
 bool ifs::hole_boundary_containing_point(std::vector<cpx>& path, bool& closed, 
                                          cpx p, int verbose) {
   if (verbose>0) {
@@ -13,6 +9,7 @@ bool ifs::hole_boundary_containing_point(std::vector<cpx>& path, bool& closed,
   int num_pixels = drawing_width/mesh;
   std::vector<std::vector<bool> > grid(num_pixels, std::vector<bool>(num_pixels, false));
   cpx ll = center - cpx(wind, wind);
+  cpx ur = center + cpx(wind, wind);
   double wid = 2*wind;
   double pixel_width = wid/double(num_pixels);
   
@@ -47,6 +44,23 @@ bool ifs::hole_boundary_containing_point(std::vector<cpx>& path, bool& closed,
     }
   }
   
+  return hole_boundary_containing_point_from_grid(path, closed, grid, marked_pixel, ll, ur, verbose);
+}
+
+
+
+
+//return a path which is the boundary of the hole containing 
+//the point p (false if p isn't *in* a hole)
+//if the hole touches the boundary of the current window, 
+//the path is not a loop, otherwise, it is
+bool ifs::hole_boundary_containing_point_from_grid(std::vector<cpx>& path, bool& closed, 
+                                                   const std::vector<std::vector<bool> >& grid,
+                                                   const Point2d<int>& marked_pixel, 
+                                                   cpx ll, cpx ur, int verbose) {
+  int num_pixels = grid.size();
+  double w = (ur.real() - ll.real());
+  double pixel_width = w/double(grid.size());
   //follow the boundary
   //the direction records which way we're looking.  0 is down, going ccw around
   std::vector<Point2d<int> > pixel_boundary(0);

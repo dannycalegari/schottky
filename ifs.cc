@@ -553,7 +553,20 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
 
 
 
-
+void ifs::find_closest_uv_words_along_path(const std::vector<cpx>& path, 
+                                           bool closed_path, 
+                                           int word_len) {
+  std::vector<std::pair<Bitword,Bitword> > words;
+  for (int i=0; i<(int)path.size(); ++i) {
+    this->set_params(path[i], path[i]);
+    find_closest_uv_words(words, word_len);
+    for (int j=0; j<(int)words.size(); ++j) {
+      std::cout << "(" << words[j].first << " " << words[j].second << ") ";
+    }
+    std::cout << "\n";
+  }
+}
+  
 
 
 
