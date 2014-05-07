@@ -733,8 +733,24 @@ void IFSGui::S_mand_path_create_movie(XEvent* e) {
   if (e->type != ButtonPress || !path.is_valid) return;
   (void)ifs_movie_from_path(IFS, path.path, path.closed, "ifs_movie",
                             limit_ll, limit_ur, limit_depth, 
-                            W_limit_plot.width, W_limit_plot.height, 40, 6, 1);
+                            W_limit_plot.width, W_limit_plot.height, path.movie_fps, path.movie_length, 1);
 }
+
+void IFSGui::S_mand_path_movie_decrease_length(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  if (path.movie_length >= 1) {
+    --path.movie_length;
+    std::stringstream T; T.str(""); T << path.movie_length;
+    W_mand_path_movie_length_label.update_text(T.str());
+  }
+}
+void IFSGui::S_mand_path_movie_increase_length(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++path.movie_length;
+  std::stringstream T; T.str(""); T << path.movie_length;
+  W_mand_path_movie_length_label.update_text(T.str());
+}
+
 
 void IFSGui::S_mand_path_find_uv_words(XEvent* e) {
   if (e->type != ButtonPress || !path.is_valid) return;
@@ -770,11 +786,20 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_length_title);
+  pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);
+  pack_widget_upper_right(&W_mand_path_movie_decrease_length, &W_mand_path_movie_length_label);
+  pack_widget_upper_right(&W_mand_path_movie_length_label, &W_mand_path_movie_increase_length);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
   W_mand_path_tasks_title.initial_draw();
   W_mand_path_delete_button.initial_draw();
   W_mand_path_find_traps_button.initial_draw();
   W_mand_path_create_movie_button.initial_draw();
+  W_mand_path_movie_length_title.initial_draw();
+  W_mand_path_movie_decrease_length.initial_draw();
+  std::stringstream T; T.str(""); T << path.movie_length;
+  W_mand_path_movie_length_label.update_text(T.str());
+  W_mand_path_movie_increase_length.initial_draw();
   W_mand_path_find_uv_words_button.initial_draw();
 }
 
@@ -789,6 +814,10 @@ void IFSGui::make_path_creation_buttons(bool cancelling) {
     detach_widget(&W_mand_path_delete_button);
     detach_widget(&W_mand_path_find_traps_button);
     detach_widget(&W_mand_path_create_movie_button);
+    detach_widget(&W_mand_path_movie_length_title);
+    detach_widget(&W_mand_path_movie_decrease_length);
+    detach_widget(&W_mand_path_movie_length_label);
+    detach_widget(&W_mand_path_movie_increase_length);
     detach_widget(&W_mand_path_find_uv_words_button);
   }
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
@@ -1478,6 +1507,11 @@ void IFSGui::reset_and_pack_window() {
     W_mand_path_delete_button = WidgetButton(this, "Delete path", -2, 20, &IFSGui::S_mand_path_delete);
     W_mand_path_find_traps_button = WidgetButton(this, "Find traps along path", -1, 20, &IFSGui::S_mand_path_find_traps);
     W_mand_path_create_movie_button = WidgetButton(this, "Create movie along path", -1, 20, &IFSGui::S_mand_path_create_movie);
+    W_mand_path_movie_length_title = WidgetText(this, "Movie length: ", -1, 20);
+    W_mand_path_movie_decrease_length = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_path_movie_decrease_length);
+    T.str(""); T << path.movie_length;
+    W_mand_path_movie_length_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_path_movie_increase_length = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_path_movie_increase_length);
     W_mand_path_find_uv_words_button = WidgetButton(this, "Find uv words along path", -1, 20, &IFSGui::S_mand_path_find_uv_words);
     
     if (window_mode == MANDLEBROT) {
@@ -1521,6 +1555,10 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_length_title);
+      pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);
+      pack_widget_upper_right(&W_mand_path_movie_decrease_length, &W_mand_path_movie_length_label);
+      pack_widget_upper_right(&W_mand_path_movie_length_label, &W_mand_path_movie_increase_length);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
     } else {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
