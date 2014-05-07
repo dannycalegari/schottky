@@ -152,6 +152,7 @@ void ifs::user_interface() {
                     (void)ifs_movie_from_path(*this, path, false, "movie_test", 
                                               cpx(-1.0,-1.5), cpx(2.0,1.5), 
                                               -1, 
+                                              false, NULL, NULL, NULL,
                                               drawing_width/mesh, drawing_width/mesh,
                                               40, 5, 1); 
                     draw();

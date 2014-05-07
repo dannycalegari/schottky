@@ -93,6 +93,7 @@ struct IFSPath {
   std::vector<std::pair<Bitword,Bitword> > uv_words;
   int movie_length;
   int movie_fps;
+  bool movie_with_mandlebrot;
   IFSPath() {
     is_valid = false;
     path.resize(0);
@@ -102,6 +103,7 @@ struct IFSPath {
     uv_words.resize(0);
     movie_length = 10;
     movie_fps = 30;
+    movie_with_mandlebrot = false;
   }
 };
 
@@ -279,6 +281,7 @@ struct IFSGui {
   WidgetLeftArrow W_mand_path_movie_decrease_length;
   WidgetText W_mand_path_movie_length_label;
   WidgetRightArrow W_mand_path_movie_increase_length;
+  WidgetCheck W_mand_path_movie_with_mandlebrot;
   WidgetButton W_mand_path_find_uv_words_button;
   
   
@@ -335,6 +338,7 @@ struct IFSGui {
   void S_mand_path_create_movie(XEvent* e);
   void S_mand_path_movie_decrease_length(XEvent* e);
   void S_mand_path_movie_increase_length(XEvent* e);
+  void S_mand_path_movie_with_mandlebrot(XEvent* e);
   void S_mand_path_find_uv_words(XEvent* e);
   
   bool main_window_initialized;

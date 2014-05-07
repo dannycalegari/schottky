@@ -154,6 +154,10 @@ std::ostream& operator<<(std::ostream& os, const Point3d<T>& p) {
   return os << "(" << p.x << "," << p.y << "," << p.z << ")";
 }
 
+//std::ostream& operator<<(std::ostream& os, const unsigned char c) {
+//  return os << (unsigned int)c;
+//}
+
 template <class T>
 T dot(const Point3d<T>& a, const Point3d<T>& b) {
   return (a.x*b.x) + (a.y*b.y) + (a.z*b.z);

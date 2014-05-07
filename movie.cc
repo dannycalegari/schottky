@@ -100,6 +100,10 @@ bool ifs_movie_from_path(const ifs& IFS,
                          const cpx& region_ll,
                          const cpx& region_ur,
                          int depth,
+                         bool with_mandlebrot,
+                         cpx* mand_ll,
+                         cpx* mand_ur,
+                         std::vector<std::vector<bool> >* mand_connected_grid,
                          int pixel_w,
                          int pixel_h,
                          int fps, 
@@ -134,7 +138,15 @@ bool ifs_movie_from_path(const ifs& IFS,
   int path_edge = 0;
   int frame_num = 0;
   std::stringstream T;
-  std::vector<std::vector<Point3d<unsigned char> > > bmp(pixel_w, 
+  int total_width = (with_mandlebrot ? 2*pixel_w : pixel_w);
+  double mand_pixel_width = -1;
+  if (with_mandlebrot) {
+    mand_pixel_width = (mand_ur->real()-mand_ll->real()) / double(pixel_w);
+  }
+  std::vector<std::vector<Point3d<unsigned char> > > bmp(total_width, 
+                                                std::vector<Point3d<unsigned char> >(pixel_h, 
+                                                                            Point3d<unsigned char>(0,0,0)));
+  std::vector<std::vector<Point3d<unsigned char> > > limit_bmp(pixel_w, 
                                                 std::vector<Point3d<unsigned char> >(pixel_h, 
                                                                             Point3d<unsigned char>(0,0,0)));
   do {
@@ -144,7 +156,29 @@ bool ifs_movie_from_path(const ifs& IFS,
       std::cout.flush();
     }
     IFS2.set_params(z,z);
-    IFS2.draw_ifs_to_array(bmp, region_ll, region_ur, depth);
+    if (with_mandlebrot) {
+      IFS2.draw_ifs_to_array(limit_bmp, region_ll, region_ur, depth);
+      for (int i=0; i<pixel_w; ++i) {
+        int m_g_i = int( double(i)*double(mand_connected_grid->size())/double(pixel_w) );
+        for (int j=0; j<pixel_h; ++j) {
+          int m_g_j = int( double(j)*double(mand_connected_grid->size())/double(pixel_h) );
+          bmp[i][j] = limit_bmp[i][j];
+          bmp[pixel_w+i][j] = ((*mand_connected_grid)[m_g_i][m_g_j] ? Point3d<unsigned char>(0,0,0) : Point3d<unsigned char>(255,255,255));
+        }
+      }
+      //draw the red dot
+      int highlighted_i = int( (z.real() - mand_ll->real()) / mand_pixel_width );
+      int highlighted_j = int( (z.imag() - mand_ll->imag()) / mand_pixel_width );
+      for (int i=-3; i<=3; ++i) {
+        if (pixel_w+highlighted_i+i < 0 || pixel_w+highlighted_i+i >= 2*pixel_w) continue;
+        for (int j=-2; j<=2; ++j) {
+          if (highlighted_j+j < 0 || highlighted_j+j >= pixel_h) continue;
+          bmp[pixel_w+highlighted_i+i][highlighted_j+j] = Point3d<unsigned char>(255,0,0);
+        }
+      }
+    } else {
+      IFS2.draw_ifs_to_array(bmp, region_ll, region_ur, depth);
+    }
     T.str("");
     T << filename << frame_num << ".bmp";
     write_bitmap(bmp, T.str());
