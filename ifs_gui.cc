@@ -965,7 +965,10 @@ void IFSGui::draw_limit() {
   }
   
   //draw the uv graph
-  
+  //generate all the balls of the given depth
+  std::vector<Ball> uv_graph_balls;
+  std::vector<Point3d<int> > graph_edges; //(i,j,k) records an edge between i and j which swaps a suffix of length k
+  IFS.compute_uv_graph(graph_edges, uv_graph_balls, limit_uv_graph_depth, 0);
   
   
   

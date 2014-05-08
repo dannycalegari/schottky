@@ -143,6 +143,10 @@ class ifs{
     void find_closest_uv_words_along_path(const std::vector<cpx>& path, 
                                           bool closed_path, 
                                           int word_len);
+    void compute_uv_graph(std::vector<Point3d<int> >& uv_graph, 
+                          const std::vector<Ball>& balls, 
+                          int uv_depth, 
+                          int verbose);
     void set_params(cpx Z, cpx W);
     void draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
                            const cpx& region_ll, const cpx& region_ur, int depth);     

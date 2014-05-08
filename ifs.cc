@@ -569,7 +569,14 @@ void ifs::find_closest_uv_words_along_path(const std::vector<cpx>& path,
   
 
 
-
+void ifs::compute_uv_graph(std::vector<Point3d<int> >& uv_graph, 
+                           const std::vector<Ball>& balls, 
+                           int uv_depth, 
+                           int verbose) {
+  
+}
+  
+  
 
 
 
