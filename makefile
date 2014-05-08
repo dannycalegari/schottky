@@ -7,7 +7,7 @@ all: schottky
 graphics.o: graphics.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c graphics.cc
 
-schottky.o: schottky.cc
+schottky.o: schottky.cc ifs.cc ifs_gui.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c schottky.cc
 
 trap_grid.o: trap_grid.cc

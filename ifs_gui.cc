@@ -405,6 +405,32 @@ void IFSGui::S_limit_zoom_out(XEvent* e) {
   }
 }
 
+void IFSGui::S_limit_uv_graph(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  limit_uv_graph = !limit_uv_graph;
+  W_limit_uv_graph.checked = limit_uv_graph;
+  W_limit_uv_graph.redraw();
+}
+
+void IFSGui::S_limit_uv_graph_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  if (limit_uv_graph_depth == 1) return;
+  --limit_uv_graph_depth;
+  std::stringstream T; T.str(""); T << limit_uv_graph_depth;
+  W_limit_uv_graph_depth_label.update_text(T.str());
+  draw_limit();
+}
+
+void IFSGui::S_limit_uv_graph_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++limit_uv_graph_depth;
+  std::stringstream T; T.str(""); T << limit_uv_graph_depth;
+  W_limit_uv_graph_depth_label.update_text(T.str());
+  draw_limit();
+}
+
+
+
 //mandlebrot
 void IFSGui::S_mand_draw(XEvent* e) {
   if (e->type == KeyPress) return;
@@ -925,6 +951,7 @@ void IFSGui::draw_limit() {
       }
     }
   }
+  
   //draw the marked points 0, 1/2, 1
   for (int i=0; i<(int)limit_marked_points.size(); ++i) {
     cpx& c = limit_marked_points[i];
@@ -936,6 +963,11 @@ void IFSGui::draw_limit() {
       XFillArc(display, LW.p, LW.gc, p.x-3, p.y-3, 3, 3, 23040, 23040);
     }
   }
+  
+  //draw the uv graph
+  
+  
+  
   
   LW.redraw();
 }
@@ -1472,12 +1504,19 @@ void IFSGui::reset_and_pack_window() {
     W_limit_zoom_in = WidgetButton(this, "in", 30, 20, &IFSGui::S_limit_zoom_in);
     W_limit_zoom_out = WidgetButton(this, "out", 30, 20, &IFSGui::S_limit_zoom_out);
     W_limit_center_title = WidgetText(this, "(Click to center)", -1, 20);
+    W_limit_uv_graph = WidgetCheck(this, "Plot uv graph", -1, 20, limit_uv_graph, &IFSGui::S_limit_uv_graph);
+    W_limit_uv_graph_depth_title = WidgetText(this, "Depth:", -1, 20);
+    W_limit_uv_graph_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_limit_uv_graph_decrease_depth);
+    T.str(""); T << limit_uv_graph_depth;
+    W_limit_uv_graph_depth_label = WidgetText(this, T.str(), -1, 20);
+    W_limit_uv_graph_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_limit_uv_graph_increase_depth);
     
     pack_widget_upper_right(NULL, &W_limit_plot);
     if (window_mode == LIMIT) {
       pack_widget_upper_right(&W_limit_plot, &W_switch_to_mandlebrot);
       pack_widget_upper_right(&W_limit_plot, &W_switch_to_combined);
     }
+    pack_widget_upper_right(&W_limit_plot, &W_limit_center_title);
     pack_widget_upper_right(&W_limit_plot, &W_limit_depth_title);
     pack_widget_upper_right(&W_limit_depth_title, &W_limit_depth_leftarrow);
     pack_widget_upper_right(&W_limit_depth_leftarrow, &W_limit_depth_label);
@@ -1488,7 +1527,12 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_zoom_in, &W_limit_zoom_out);
     pack_widget_upper_right(&W_limit_plot, &W_limit_chunky);
     pack_widget_upper_right(&W_limit_plot, &W_limit_colors);
-    pack_widget_upper_right(&W_limit_plot, &W_limit_center_title);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_uv_graph);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_uv_graph_depth_title);
+    pack_widget_upper_right(&W_limit_uv_graph_depth_title, &W_limit_uv_graph_depth_leftarrow);
+    pack_widget_upper_right(&W_limit_uv_graph_depth_leftarrow, &W_limit_uv_graph_depth_label);
+    pack_widget_upper_right(&W_limit_uv_graph_depth_label, &W_limit_uv_graph_depth_rightarrow);
+    
   }
   
   //if the mandlebrot set is shown:
@@ -1544,7 +1588,7 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_limit);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_combined);
     } else {
-      pack_widget_upper_right(&W_limit_depth_rightarrow, &W_mand_plot);
+      pack_widget_upper_right(&W_limit_center_title, &W_mand_plot);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_limit);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_mandlebrot);
     }
@@ -1676,6 +1720,8 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   limit_auto_depth = false;
   limit_chunky = true;
   limit_colors = true;
+  limit_uv_graph = false;
+  limit_uv_graph_depth = 3;
   limit_marked_points.resize(3);
   limit_marked_points[0] = cpx(0,0);
   limit_marked_points[1] = cpx(0.5,0);
