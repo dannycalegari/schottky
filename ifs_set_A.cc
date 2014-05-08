@@ -68,6 +68,15 @@ bool ifs::hole_boundary_containing_point_from_grid(std::vector<cpx>& path, bool&
   int offset_j[4] = {-1,0,1,0};
   int i=marked_pixel.x;
   int j=marked_pixel.y;
+  
+  if (grid[i][j]) {
+    std::cout << "Marked pixel is not in a hole?\n";
+    path.resize(0);
+    closed = false;
+    return false;
+  }
+  
+  
   while (0 <= j && j < num_pixels && grid[i][j] == false) {
     j += 1;
   }
@@ -85,6 +94,11 @@ bool ifs::hole_boundary_containing_point_from_grid(std::vector<cpx>& path, bool&
   }
   start_dir =  (start_dir == 3 ? 0 : start_dir+1);
   int current_dir = start_dir;
+  
+  if (verbose>0) {
+    std::cout << "Marked pixel: " << marked_pixel << "\n";
+    std::cout << "Found the start pixel, dir " << i << " " << j << " " << start_dir << "\n";
+  }
   
   do {
     //push the current pixel

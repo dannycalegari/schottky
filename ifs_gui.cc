@@ -680,6 +680,7 @@ void IFSGui::S_mand_path_create_by_boundary(XEvent* e) {
     }
   }
   Point2d<int> p = mand_cpx_to_pixel_group(IFS.z);
+  p.y = mand_num_pixel_groups - p.y -1;
   path = IFSPath();
   IFS.hole_boundary_containing_point_from_grid(path.path, path.closed, grid, p, mand_ll, mand_ur, 0); 
   path.is_valid = true;
