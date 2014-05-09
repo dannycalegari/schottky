@@ -97,6 +97,12 @@ std::ostream& operator<<(std::ostream& os, const Ball& b) {
 }
 
 
+
+
+bool Bitword::operator<(const Bitword& b) const {
+  return w.to_ulong() < b.w.to_ulong();
+}
+
 std::ostream& operator<<(std::ostream& os, const Bitword& b) {
   std::string w = b.w.to_string();
   w = w.substr(64-b.len, b.len);

@@ -89,6 +89,7 @@ struct Bitword {
     w = W;
     len = L;
   }
+  bool operator<(const Bitword& b) const;
 };
 
 std::ostream& operator<<(std::ostream& os, const Bitword& b);

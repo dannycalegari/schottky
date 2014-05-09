@@ -1,3 +1,7 @@
+#include <map>
+#include <set>
+#include <cstdlib>
+
 #include "ifs_gui.h"
 
 
@@ -612,6 +616,39 @@ void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
   }
 }
 
+
+void IFSGui::S_mand_dirichlet(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  mand_dirichlet = !mand_dirichlet;
+  W_mand_dirichlet_check.checked = mand_dirichlet;
+  W_mand_dirichlet_check.redraw();
+  draw_mand();
+}
+
+void IFSGui::S_mand_dirichlet_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --mand_dirichlet_depth;
+  std::stringstream T;
+  T.str(""); T << mand_dirichlet_depth;
+  W_mand_dirichlet_depth_label.update_text(T.str());
+  draw_mand();
+}
+
+void IFSGui::S_mand_dirichlet_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++mand_dirichlet_depth;
+  std::stringstream T;
+  T.str(""); T << mand_dirichlet_depth;
+  W_mand_dirichlet_depth_label.update_text(T.str());
+  draw_mand();
+}
+
+
+
+
+
+
+
 //point
 void IFSGui::S_point_connected(XEvent* e) {
   if (e->type != ButtonPress) return;
@@ -1075,12 +1112,65 @@ void IFSGui::mand_draw_ball(const Ball& b, int col) {
   
   
   
+//this is a helper function which draws the dirichlet domain
+//into the mandlebrot window
+//
+//for each pixel, it finds the set of closest uv words; there is a different
+//color for every set
+void IFSGui::draw_dirichlet_domains() {
+  Widget& MW = W_mand_plot;
+  ifs temp_IFS;
+  std::vector<std::pair<Bitword,Bitword> > uv_words;
+  
+  //this is the map which takes a set to a color
+  std::map<std::set<std::pair<Bitword,Bitword> >, int> sets_to_colors;
+  std::map<std::set<std::pair<Bitword,Bitword> >, int>::iterator it;
+  
+  //for each pixel, find the set of bitwords, and see if it's already recorded
+  //if so, get the color there; otherwise, find the color, and draw it
+  for (int i=0; i<mand_num_pixel_groups; ++i) {
+    for (int j=0; j<mand_num_pixel_groups; ++j) {
+      cpx c = mand_pixel_group_to_cpx(Point2d<int>(i,j));
+      temp_IFS.set_params(c,c);
+      temp_IFS.find_closest_uv_words(uv_words, mand_dirichlet_depth, 0.00000001);
+      std::set<std::pair<Bitword,Bitword> > uv_words_set(uv_words.begin(), uv_words.end());
+      it = sets_to_colors.find(uv_words_set);
+      int col;
+      if (it == sets_to_colors.end()) { //need to add a new color
+        int new_col;
+        double r = 0.5*((double)rand()/(double)RAND_MAX) + 0.5;
+        new_col = (uv_words.size() == 1 ? get_rgb_color(0, r, r) : get_rgb_color(r, 0, 0) );
+        sets_to_colors[uv_words_set] = new_col;
+        col = new_col;
+      } else {
+        col = it->second;
+      }
+      XSetForeground(display, MW.gc, col);
+      XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
+                                           j*mand_pixel_group_size, 
+                                           mand_pixel_group_size, 
+                                           mand_pixel_group_size);
+      XCopyArea(display, MW.p, main_window, MW.gc, i*mand_pixel_group_size, 
+                                                   j*mand_pixel_group_size, 
+                                                   mand_pixel_group_size, 
+                                                   mand_pixel_group_size, 
+                                                   MW.ul.x + i*mand_pixel_group_size,
+                                                   MW.ul.y + j*mand_pixel_group_size);
+    }
+  }
+  
+}
+
   
 
+//draw the mandlebrot set
 void IFSGui::draw_mand() {
   ifs temp_IFS;
   Widget& MW = W_mand_plot;
 
+    //now draw the dirichlet domain
+  if (mand_dirichlet) draw_dirichlet_domains();  
+  
   std::vector<Ball> TLB;
   bool found_TLB = false;
   double TLB_neighborhood;
@@ -1115,6 +1205,7 @@ void IFSGui::draw_mand() {
       
       //draw the pixel for the impatient
       int col = mand_get_color(mand_data_grid[i][j]);
+      if (mand_dirichlet && col == WhitePixel(display, screen)) continue;
       XSetForeground(display, MW.gc, col);
       XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
                                            j*mand_pixel_group_size, 
@@ -1610,6 +1701,11 @@ void IFSGui::reset_and_pack_window() {
     T.str("");  T << mand_trap_depth;
     W_mand_trap_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_trap_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_trap_increase_depth);
+    W_mand_dirichlet_check = WidgetCheck(this, "Dirichlet:", 105, 20, mand_dirichlet, &IFSGui::S_mand_dirichlet);
+    W_mand_dirichlet_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_dirichlet_decrease_depth);
+    T.str(""); T << mand_dirichlet_depth;
+    W_mand_dirichlet_depth_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_dirichlet_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_dirichlet_increase_depth);
     W_mand_mouse_label = WidgetText(this, "Mouse: initializing", 200, 20);
     
     W_mand_path_create_by_drawing_button = WidgetButton(this, "Draw path", -1, 20, &IFSGui::S_mand_path_create_by_drawing_button);
@@ -1660,6 +1756,10 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_trap_check, &W_mand_trap_depth_leftarrow);
     pack_widget_upper_right(&W_mand_trap_depth_leftarrow, &W_mand_trap_depth_label);
     pack_widget_upper_right(&W_mand_trap_depth_label, &W_mand_trap_depth_rightarrow);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_dirichlet_check);
+    pack_widget_upper_right(&W_mand_dirichlet_check, &W_mand_dirichlet_depth_leftarrow);
+    pack_widget_upper_right(&W_mand_dirichlet_depth_leftarrow, &W_mand_dirichlet_depth_label);
+    pack_widget_upper_right(&W_mand_dirichlet_depth_label, &W_mand_dirichlet_depth_rightarrow);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_label);
     if (currently_drawing_path) {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_drawing_title);
@@ -1783,6 +1883,8 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_contains_half_depth = 16;
   mand_trap = false;
   mand_trap_depth = 20;
+  mand_dirichlet = false;
+  mand_dirichlet_depth = 3;
   
   point_connected_check = true;
   point_connected_depth = 18;

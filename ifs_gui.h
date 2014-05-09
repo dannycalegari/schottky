@@ -145,6 +145,8 @@ struct IFSGui {
   int mand_contains_half_depth;
   bool mand_trap;
   int mand_trap_depth;
+  bool mand_dirichlet;
+  int mand_dirichlet_depth;
   cpx mand_pixel_group_to_cpx(const Point2d<int>& p);
   Point2d<int> mand_cpx_to_pixel_group(const cpx& c);
   cpx mand_pixel_to_cpx(const Point2d<int>& p);
@@ -181,6 +183,7 @@ struct IFSGui {
   //computation functions
   void draw_limit();
   void recenter_limit(cpx c);
+  void draw_dirichlet_domains();
   void draw_mand();
   void change_highlighted_ifs(cpx c);
   void mand_zoom(double radius_multiplier);
@@ -272,6 +275,10 @@ struct IFSGui {
   WidgetLeftArrow W_mand_trap_depth_leftarrow;
   WidgetText W_mand_trap_depth_label;
   WidgetRightArrow W_mand_trap_depth_rightarrow;
+  WidgetCheck W_mand_dirichlet_check;
+  WidgetLeftArrow W_mand_dirichlet_depth_leftarrow;
+  WidgetText W_mand_dirichlet_depth_label;
+  WidgetRightArrow W_mand_dirichlet_depth_rightarrow;
   WidgetText W_mand_mouse_label;
   
   WidgetText W_mand_path_drawing_title;
@@ -324,6 +331,10 @@ struct IFSGui {
   void S_mand_trap(XEvent* e);
   void S_mand_trap_increase_depth(XEvent* e);
   void S_mand_trap_decrease_depth(XEvent* e);
+  void S_mand_dirichlet(XEvent* e);
+  void S_mand_dirichlet_decrease_depth(XEvent* e);
+  void S_mand_dirichlet_increase_depth(XEvent* e);
+  
   
   void S_point_connected(XEvent* e);
   void S_point_connected_increase_depth(XEvent* e);
