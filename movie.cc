@@ -213,14 +213,20 @@ bool ifs_movie_from_path(const ifs& IFS,
   command << PATH_TO_FFMPEG << "ffmpeg -loglevel error -f image2 -r " << fps << " -i " << 
                                 filename << "%d.bmp -c:v mpeg4 -qscale:v 8 " << 
                                 filename << ".mp4";
-  (void)system(command.str().c_str());
-  if (verbose>0) std::cout << "done\nErasing frame files...";
+  if (system(command.str().c_str()) != 0) {
+    std::cout << "Error running movie encoder\n";
+  } else if (verbose>0) {
+    std::cout << "done\nErasing frame files...";
+  }
   
   //erase the frame files
   command.str("");
   command << "rm " << filename << "*.bmp";
-  (void)system(command.str().c_str());
-  if (verbose>0) std::cout << "done\n";
+  if (system(command.str().c_str()) != 0) {
+    std::cout << "Error erasing frame files\n";
+  } else if (verbose>0) {
+    std::cout << "done\n";
+  }
   
   return true;
   
