@@ -269,8 +269,8 @@ void ifs::compute_next_ball_depth_right(std::vector<Ball>& balls, int current_de
     //for each j, we want to append on the right both a 0 and a 1
     //(the lowest bit position is the last function we applied)
     Ball parent_ball = balls_temp[j];
-    balls[j] = act_on_right(0, parent_ball);
-    balls[(j | (1<<current_depth))] = act_on_right(1, parent_ball);
+    balls[j << 1] = act_on_right(0, parent_ball);
+    balls[(j << 1) | 1] = act_on_right(1, parent_ball);
   }
 }
 void ifs::compute_balls_right(std::vector<Ball>& balls, const Ball& ball_seed, int compute_depth) {
@@ -499,7 +499,8 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
 //pair it finds in each length.  If a pair under consideration
 //move necessarily result in a farther pair, it can be discarded
 void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
-                                int uv_depth) {
+                                int uv_depth,
+                                double last_step_tolerance) {
   words.resize(0);
   std::vector<double> distances(0);
   double min_r;
@@ -510,7 +511,7 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
   std::vector<std::pair<Ball, Ball> > next_pairs;
   pairs[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
 
-  for (int i=2; i<uv_depth; ++i) {
+  for (int i=2; i<=uv_depth; ++i) {
     //make all possible next pairs
     next_pairs.resize(4*pairs.size());
     for (int j=0; j<(int)pairs.size(); ++j) {
@@ -531,7 +532,7 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
     //make up the next pairs
     //we want all possibilities, so we allow duplicate lengths
     //(for safety, take a little range)
-    double cutoff_dist = (i==uv_depth-1 ? min_d : min_d + pow(az, i)*2*min_r);
+    double cutoff_dist = (i==uv_depth ? min_d+last_step_tolerance : min_d + pow(az, i)*2*min_r);
     //std::cout << "Cutoff for i=" << i << ": " << cutoff_dist << "\n";
     pairs.resize(0);
     for (int j=0; j<(int)next_pairs.size(); ++j) {
@@ -573,12 +574,65 @@ void ifs::compute_uv_graph(std::vector<Point3d<int> >& uv_graph,
                            std::vector<Ball>& balls, 
                            int uv_depth, 
                            int verbose) {
+  //make all the balls
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return;
   Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
-  
   compute_balls_right(balls, initial_ball, uv_depth);
   
+  //find the closest uv words
+  std::vector<std::pair<Bitword,Bitword> > words;
+  find_closest_uv_words(words, uv_depth, 0.000000001);
+  if (verbose > 0) {
+    std::cout << "Found the closest bitwords (depth " << uv_depth << "):\n";
+    for (int i=0; i<(int)words.size(); ++i) {
+      std::cout << words[i].first << " " << words[i].second << "\n";
+    }
+  }
+  std::vector<Point2d<int> > closest_balls(0);
+  std::vector<std::string> closest_ball_strs(0); //records the words starting with 0
+  std::stringstream T;
+  for (int i=0; i<(int)words.size(); ++i) {
+    int bi1 = (int)words[i].first.w.to_ulong();
+    int bi2 = (int)words[i].second.w.to_ulong();
+    closest_balls.push_back(Point2d<int>(bi1,bi2));
+    closest_ball_strs.push_back( words[i].first.w.to_string().substr(64-uv_depth, uv_depth) );
+  }
+  
+  if (verbose>0) {
+    std::cout << "Closest ball list:\n";
+    for (int i=0; i<(int)closest_balls.size(); ++i) {
+      std::cout << closest_balls[i] << " " << closest_ball_strs[i] << "\n";
+    }
+  }
+  
+  //go through and find all the edges
+  //only draw an edge if it goes between i->j with i<j (to avoid double edges)
+  //note that i (the ball index) *is* the ball word
+  uv_graph.resize(0);
+  for (int i=0; i<(int)balls.size(); ++i) {
+    std::string bs = balls[i].word.to_string().substr(64-uv_depth, uv_depth);
+    //std::cout << "Finding edges from ball " << i << " with name " << bs << "\n";
+    for (int j=0; j<uv_depth; ++j) {
+      int suf_len = uv_depth-j;
+      //get the suffix; if it doesn't begin with a zero, continue
+      std::string suf = bs.substr(j, suf_len);
+      int suf_mask = 0;
+      for (int k=0; k<suf_len; ++k) suf_mask |= (1 << k);
+      //std::cout << "Looking for suffix " << suf << " with mask " << suf_mask << "\n";
+      if (suf[0] != '0') continue; 
+      for (int k=0; k<(int)closest_ball_strs.size(); ++k) {
+        if (closest_ball_strs[k].substr(0, suf_len) == suf) {
+          //get the first suf_len digits from the *other* ball
+          int matching_closest_ball = closest_balls[k].y;
+          int shifted_digits = matching_closest_ball >> j;
+          int other_ball = (i ^ (i & suf_mask)) | shifted_digits;
+          uv_graph.push_back(Point3d<int>(i,other_ball,suf_len));
+          //std::cout << "Added the edge " << uv_graph.back() << " suffix: " << suf << " matching ball: " << matching_closest_ball <<"\n";
+        }
+      } 
+    }
+  }
 }
   
   

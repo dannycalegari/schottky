@@ -37,6 +37,11 @@ Point2d<T> operator*(T sf, Point2d<T> a) {
 }
 
 template <class T>
+Point2d<T> operator/(const Point2d<T>& a, T f) {
+  return Point2d<T>(a.x/f, a.y/f);
+}
+
+template <class T>
 bool operator==(const Point2d<T>& a, const Point2d<T>& b) {
   return a.x == b.x && a.y == b.y;
 }

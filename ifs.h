@@ -139,7 +139,8 @@ class ifs{
     double when_ray_hits_ball(cpx p, cpx v, const Ball& b);
     double when_ray_hits_ball(cpx p, cpx v, const std::vector<Ball>& balls);
     void find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
-                               int uv_depth);
+                               int uv_depth,
+                               double last_step_tolerance=0.0);
     void find_closest_uv_words_along_path(const std::vector<cpx>& path, 
                                           bool closed_path, 
                                           int word_len);

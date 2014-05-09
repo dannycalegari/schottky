@@ -970,8 +970,8 @@ void IFSGui::draw_limit() {
     //generate all the balls of the given depth
     std::stringstream T; T.str("");
     std::vector<Ball> uv_graph_balls;
-    std::vector<Point3d<int> > graph_edges; //(i,j,k) records an edge between i and j which swaps a suffix of length k
-    IFS.compute_uv_graph(graph_edges, uv_graph_balls, limit_uv_graph_depth, 0);
+    std::vector<Point3d<int> > uv_graph_edges; //(i,j,k) records an edge between i and j which swaps a suffix of length k
+    IFS.compute_uv_graph(uv_graph_edges, uv_graph_balls, limit_uv_graph_depth, 0);
   
     //get the size of a text string of this length
     XFontStruct* font = XLoadQueryFont(display, "fixed");
@@ -984,12 +984,35 @@ void IFSGui::draw_limit() {
   
     //draw the balls
     XSetForeground(display, LW.gc, BlackPixel(display, screen));
+    double r = 15;
     for (int i=0; i<(int)uv_graph_balls.size(); ++i) {
       Point2d<int> p = limit_cpx_to_pixel(uv_graph_balls[i].center);
-      double r = uv_graph_balls[i].radius / limit_pixel_width;
+      //double r = uv_graph_balls[i].radius / limit_pixel_width;
       T.str(""); T << Bitword(uv_graph_balls[i].word, uv_graph_balls[i].word_len);
       XDrawArc(display, LW.p, LW.gc, p.x-r, p.y-r, int(2*r), int(2*r), 23040, 23040);
       XDrawString(display, LW.p, LW.gc, p.x-text_width_offset, p.y+text_height_offset, T.str().c_str(), T.str().size()); 
+    }
+    
+    //draw the edges
+    T.str("8");
+    XTextExtents(font, T.str().c_str(), T.str().size(), &fdir, &fascent, &fdescent, &te);
+    text_width_offset = (te.rbearing - te.lbearing)/2;
+    text_height_offset = (te.ascent - te.descent)/2; 
+    XSetLineAttributes(display, LW.gc, 1.5, LineSolid, 1, 1);
+    for (int i=0; i<(int)uv_graph_edges.size(); ++i){
+      Point3d<int>& e = uv_graph_edges[i];
+      Point2d<int> c1 = limit_cpx_to_pixel(uv_graph_balls[e.x].center);
+      Point2d<int> c2 = limit_cpx_to_pixel(uv_graph_balls[e.y].center);
+      Point2d<float> v(c2.x-c1.x, c2.y-c1.y);
+      v = v/(float)sqrt(dot(v,v));
+      Point2d<float> c1p(c1.x + r*v.x, c1.y + r*v.y);
+      Point2d<float> c2p(c2.x - r*v.x, c2.y - r*v.y);
+      Point2d<float> perp(-10*v.y, 10*v.x);
+      Point2d<float> text_center = Point2d<float>((c1p.x + c2p.x)/2.0, (c1p.y + c2p.y)/2.03);
+      text_center = text_center + perp;
+      T.str(""); T << e.z;
+      XDrawString(display, LW.p, LW.gc, text_center.x-text_width_offset, text_center.y+text_height_offset, T.str().c_str(), T.str().size());
+      XDrawLine(display, LW.p, LW.gc, c1p.x, c1p.y, c2p.x, c2p.y);
     }
   }
   
