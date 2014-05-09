@@ -184,7 +184,6 @@ struct IFSGui {
   //computation functions
   void draw_limit();
   void recenter_limit(cpx c);
-  void draw_dirichlet_domains();
   void draw_mand();
   void change_highlighted_ifs(cpx c);
   void mand_zoom(double radius_multiplier);

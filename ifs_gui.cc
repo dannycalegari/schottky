@@ -1092,11 +1092,13 @@ Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
 
 int IFSGui::mand_get_color(const Point4d<int>& p) {
   if (mand_trap && p.z > 0) { //use the trap color
-    return get_rgb_color(0, double(p.z)/100, 1.0);
+    return p.z;
   } else if (mand_contains_half && p.y > 0) {
-    return get_rgb_color(0.5, double(p.y)/100, 0.5);
+    return p.y;
   } else if (mand_connected && p.x >= 0) {
     return p.x*0x000001;
+  } else if (mand_dirichlet && p.w >= 0) {
+    return p.w;
   } else {
     return WhitePixel(display, screen);
   }
@@ -1113,66 +1115,13 @@ void IFSGui::mand_draw_ball(const Ball& b, int col) {
 }
   
   
-  
-//this is a helper function which draws the dirichlet domain
-//into the mandlebrot window
-//
-//for each pixel, it finds the set of closest uv words; there is a different
-//color for every set
-void IFSGui::draw_dirichlet_domains() {
-  Widget& MW = W_mand_plot;
-  ifs temp_IFS;
-  std::vector<std::pair<Bitword,Bitword> > uv_words;
-  
-  //this is the map which takes a set to a color
-  std::map<std::set<std::pair<Bitword,Bitword> >, int> sets_to_colors;
-  std::map<std::set<std::pair<Bitword,Bitword> >, int>::iterator it;
-  
-  //for each pixel, find the set of bitwords, and see if it's already recorded
-  //if so, get the color there; otherwise, find the color, and draw it
-  for (int i=0; i<mand_num_pixel_groups; ++i) {
-    for (int j=0; j<mand_num_pixel_groups; ++j) {
-      cpx c = mand_pixel_group_to_cpx(Point2d<int>(i,j));
-      temp_IFS.set_params(c,c);
-      temp_IFS.find_closest_uv_words(uv_words, mand_dirichlet_depth, 0.00000001);
-      std::set<std::pair<Bitword,Bitword> > uv_words_set(uv_words.begin(), uv_words.end());
-      it = sets_to_colors.find(uv_words_set);
-      int col;
-      if (it == sets_to_colors.end()) { //need to add a new color
-        int new_col;
-        double r = 0.5*((double)rand()/(double)RAND_MAX) + 0.5;
-        new_col = (uv_words.size() == 1 ? get_rgb_color(0, r, r) : get_rgb_color(r, 0, 0) );
-        sets_to_colors[uv_words_set] = new_col;
-        col = new_col;
-      } else {
-        col = it->second;
-      }
-      XSetForeground(display, MW.gc, col);
-      XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
-                                           j*mand_pixel_group_size, 
-                                           mand_pixel_group_size, 
-                                           mand_pixel_group_size);
-      XCopyArea(display, MW.p, main_window, MW.gc, i*mand_pixel_group_size, 
-                                                   j*mand_pixel_group_size, 
-                                                   mand_pixel_group_size, 
-                                                   mand_pixel_group_size, 
-                                                   MW.ul.x + i*mand_pixel_group_size,
-                                                   MW.ul.y + j*mand_pixel_group_size);
-    }
-  }
-  
-}
-
-  
 
 //draw the mandlebrot set
 void IFSGui::draw_mand() {
   ifs temp_IFS;
   Widget& MW = W_mand_plot;
-
-    //now draw the dirichlet domain
-  if (mand_dirichlet) draw_dirichlet_domains();  
   
+  //set up the TLB
   std::vector<Ball> TLB;
   bool found_TLB = false;
   double TLB_neighborhood;
@@ -1182,6 +1131,10 @@ void IFSGui::draw_mand() {
     temp_IFS.TLB_for_region(TLB, TLB_neighborhood, mand_ll, mand_ur, 15, 0);
     found_TLB = (TLB.size() != 0);
   }
+  
+  //set up the dirichlet stuff
+  std::map<std::set<std::pair<Bitword,Bitword> >, int> sets_to_colors;
+  std::map<std::set<std::pair<Bitword,Bitword> >, int>::iterator it;
   
   for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
     for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
@@ -1195,19 +1148,38 @@ void IFSGui::draw_mand() {
         }
       }
       if (mand_contains_half && !mand_grid_contains_half_valid) {
-        if (!temp_IFS.contains_half(mand_contains_half_depth, mand_data_grid[i][j].y)) {
+        if (temp_IFS.contains_half(mand_contains_half_depth, mand_data_grid[i][j].y)) {
+          mand_data_grid[i][j].y = get_rgb_color(0.5, double(mand_data_grid[i][j].y)/100, 0.5);
+        } else {
           mand_data_grid[i][j].y = -1;
         }
       }
       if (mand_trap && !mand_grid_trap_valid && found_TLB) {
         double trap_radius;
         int multiplier = 100/mand_trap_depth;
-        mand_data_grid[i][j].z = multiplier*temp_IFS.check_TLB(TLB,trap_radius,TLB_neighborhood,mand_trap_depth);
+        int diff = multiplier*temp_IFS.check_TLB(TLB,trap_radius,TLB_neighborhood,mand_trap_depth);
+        mand_data_grid[i][j].z = get_rgb_color(0, double(diff)/100, 1.0);
+      }
+      if (mand_dirichlet && 
+          (!mand_connected || mand_data_grid[i][j].x == -1) && 
+          (!mand_grid_dirichlet_valid || mand_data_grid[i][j].z == -1)) {
+        std::vector<std::pair<Bitword,Bitword> > uv_words;
+        temp_IFS.find_closest_uv_words(uv_words, mand_dirichlet_depth, 0.00000001);
+        std::set<std::pair<Bitword,Bitword> > uv_words_set(uv_words.begin(), uv_words.end());
+        it = sets_to_colors.find(uv_words_set);
+        if (it == sets_to_colors.end()) { //need to add a new color
+          //double r = 0.5*((double)rand()/(double)RAND_MAX) + 0.5;
+          //mand_data_grid[i][j].w = (uv_words.size() == 1 ? get_rgb_color(0, r, r) : get_rgb_color(r, 0, 0) );
+          double r = 1.0/(double)uv_words.size();
+          mand_data_grid[i][j].w = get_rgb_color(r, r, r);
+          sets_to_colors[uv_words_set] = mand_data_grid[i][j].w;
+        } else {
+          mand_data_grid[i][j].w = it->second;
+        }
       }
       
       //draw the pixel for the impatient
       int col = mand_get_color(mand_data_grid[i][j]);
-      if (mand_dirichlet && col == WhitePixel(display, screen)) continue;
       XSetForeground(display, MW.gc, col);
       XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
                                            j*mand_pixel_group_size, 
