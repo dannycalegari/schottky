@@ -151,14 +151,15 @@ struct IFSGui {
   Point2d<int> mand_cpx_to_pixel_group(const cpx& c);
   cpx mand_pixel_to_cpx(const Point2d<int>& p);
   Point2d<int> mand_cpx_to_pixel(const cpx& c);
-  int mand_get_color(const Point3d<int>& p);
+  int mand_get_color(const Point4d<int>& p);
   
 
   //data for mandlebrot
-  std::vector<std::vector<Point3d<int> > > mand_data_grid;
+  std::vector<std::vector<Point4d<int> > > mand_data_grid;
   bool mand_grid_connected_valid;
   bool mand_grid_contains_half_valid;
   bool mand_grid_trap_valid;
+  bool mand_grid_dirichlet_valid;
   
   //data about highlighted point
   bool point_connected_check;

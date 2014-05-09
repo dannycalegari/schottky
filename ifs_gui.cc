@@ -631,6 +631,7 @@ void IFSGui::S_mand_dirichlet_decrease_depth(XEvent* e) {
   std::stringstream T;
   T.str(""); T << mand_dirichlet_depth;
   W_mand_dirichlet_depth_label.update_text(T.str());
+  mand_grid_dirichlet_valid = false;
   draw_mand();
 }
 
@@ -640,6 +641,7 @@ void IFSGui::S_mand_dirichlet_increase_depth(XEvent* e) {
   std::stringstream T;
   T.str(""); T << mand_dirichlet_depth;
   W_mand_dirichlet_depth_label.update_text(T.str());
+  mand_grid_dirichlet_valid = false;
   draw_mand();
 }
 
@@ -1088,7 +1090,7 @@ Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
                        W_mand_plot.height - ((c.imag() - mand_ll.imag()) / mand_pixel_width) );
 }
 
-int IFSGui::mand_get_color(const Point3d<int>& p) {
+int IFSGui::mand_get_color(const Point4d<int>& p) {
   if (mand_trap && p.z > 0) { //use the trap color
     return get_rgb_color(0, double(p.z)/100, 1.0);
   } else if (mand_contains_half && p.y > 0) {
@@ -1222,6 +1224,7 @@ void IFSGui::draw_mand() {
   if (mand_connected && !mand_grid_connected_valid) mand_grid_connected_valid = true;
   if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_contains_half_valid = true;
   if (mand_trap && !mand_grid_trap_valid) mand_grid_trap_valid = true;
+  if (mand_dirichlet && !mand_grid_dirichlet_valid) mand_grid_dirichlet_valid = true;
   
   //now draw the highlighted point
   Point2d<int> h = mand_cpx_to_pixel(IFS.z);
@@ -1326,6 +1329,7 @@ void IFSGui::mand_recenter() {
   mand_grid_connected_valid = false;
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
+  mand_grid_dirichlet_valid = false;
   draw_mand();
 }
 
@@ -1335,11 +1339,12 @@ void IFSGui::mand_reset_mesh() {
   mand_num_pixel_groups = W_mand_plot.width / mand_pixel_group_size;
   mand_data_grid.resize(mand_num_pixel_groups);
   for (int i=0; i<mand_num_pixel_groups; ++i) {
-    mand_data_grid[i] = std::vector<Point3d<int> >(mand_num_pixel_groups, Point3d<int>(-1,-1,-1));
+    mand_data_grid[i] = std::vector<Point4d<int> >(mand_num_pixel_groups, Point4d<int>(-1,-1,-1,-1));
   }
   mand_grid_connected_valid = false;
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
+  mand_grid_dirichlet_valid = false;
 }
 
 

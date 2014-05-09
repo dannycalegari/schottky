@@ -169,10 +169,66 @@ T dot(const Point3d<T>& a, const Point3d<T>& b) {
 }
 
 
+//4d I guess why not
+template <class T>
+struct Point4d {
+        T x,y,z,w;
+  Point4d(T X, T Y, T Z, T W);
+  Point4d();
+};
+
+template <class T>
+Point4d<T>::Point4d() {
+  x = y = z = w = 0;
+}
+
+template <class T>
+Point4d<T>::Point4d(T X, T Y, T Z, T W) {
+  x = X;
+  y = Y;
+  z = Z;
+  w = W;
+}
+
+template <class T>
+Point4d<T> operator+(const Point4d<T>& a, const Point4d<T>& b) {
+  return Point4d<T>(a.x+b.x, a.y+b.y, a.z+b.z, a.w+b.w);
+}
+
+template <class T>
+Point4d<T> operator-(const Point4d<T>& a, const Point4d<T>& b) {
+  return Point2d<T>(a.x-b.x, a.y-b.y, a.z-b.z, a.w-b.w);
+}
+
+template <class T>
+Point4d<T> operator*(T sf, const Point4d<T>& a) {
+  return Point4d<T>(sf*a.x, sf*a.y, sf*a.z, sf*a.w);
+}
+
+template <class T>
+bool operator==(const Point4d<T>& a, const Point4d<T>& b) {
+  return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
+}
+
+template <class T>
+bool operator!=(const Point4d<T>& a, const Point4d<T>& b) {
+  return a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w;
+}
 
 
+template <class T>
+std::ostream& operator<<(std::ostream& os, const Point4d<T>& p) {
+  return os << "(" << p.x << "," << p.y << "," << p.z << "," << p.w << ")";
+}
 
+//std::ostream& operator<<(std::ostream& os, const unsigned char c) {
+//  return os << (unsigned int)c;
+//}
 
+template <class T>
+T dot(const Point4d<T>& a, const Point4d<T>& b) {
+  return (a.x*b.x) + (a.y*b.y) + (a.z*b.z) + (a.w*b.w);
+}
 
 
 
