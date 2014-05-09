@@ -570,9 +570,14 @@ void ifs::find_closest_uv_words_along_path(const std::vector<cpx>& path,
 
 
 void ifs::compute_uv_graph(std::vector<Point3d<int> >& uv_graph, 
-                           const std::vector<Ball>& balls, 
+                           std::vector<Ball>& balls, 
                            int uv_depth, 
                            int verbose) {
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return;
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  
+  compute_balls_right(balls, initial_ball, uv_depth);
   
 }
   

@@ -410,6 +410,7 @@ void IFSGui::S_limit_uv_graph(XEvent* e) {
   limit_uv_graph = !limit_uv_graph;
   W_limit_uv_graph.checked = limit_uv_graph;
   W_limit_uv_graph.redraw();
+  draw_limit();
 }
 
 void IFSGui::S_limit_uv_graph_decrease_depth(XEvent* e) {
@@ -908,8 +909,8 @@ void IFSGui::draw_limit() {
   XDrawRectangle(display, LW.p, LW.gc, 0, 0, LW.width-1, LW.height-1);
   XSetFillStyle(display, LW.gc, FillSolid);
   
-  int blue_color = get_rgb_color(0,0.6,1.0);
-  int yellow_color = get_rgb_color(1.0,0.6,0);
+  int blue_color = (limit_uv_graph ? get_rgb_color(0.5,0.9,1) : get_rgb_color(0,0.6,1.0));
+  int yellow_color = (limit_uv_graph ? get_rgb_color(1,0.8,0.5) : get_rgb_color(1.0,0.6,0));
   
   Ball initial_ball(0.5,(IFS.z-1.0)/2.0,(1.0-IFS.w)/2.0,min_r);
   std::vector<std::pair<bool,Ball> > stack(0);
@@ -965,12 +966,32 @@ void IFSGui::draw_limit() {
   }
   
   //draw the uv graph
-  //generate all the balls of the given depth
-  std::vector<Ball> uv_graph_balls;
-  std::vector<Point3d<int> > graph_edges; //(i,j,k) records an edge between i and j which swaps a suffix of length k
-  IFS.compute_uv_graph(graph_edges, uv_graph_balls, limit_uv_graph_depth, 0);
+  if (limit_uv_graph) {
+    //generate all the balls of the given depth
+    std::stringstream T; T.str("");
+    std::vector<Ball> uv_graph_balls;
+    std::vector<Point3d<int> > graph_edges; //(i,j,k) records an edge between i and j which swaps a suffix of length k
+    IFS.compute_uv_graph(graph_edges, uv_graph_balls, limit_uv_graph_depth, 0);
   
+    //get the size of a text string of this length
+    XFontStruct* font = XLoadQueryFont(display, "fixed");
+    XCharStruct te;
+    int fdir, fdescent, fascent;
+    T << Bitword(uv_graph_balls[0].word, uv_graph_balls[0].word_len);
+    XTextExtents(font, T.str().c_str(), T.str().size(), &fdir, &fascent, &fdescent, &te);
+    int text_width_offset = (te.rbearing - te.lbearing)/2;
+    int text_height_offset = (te.ascent - te.descent)/2; 
   
+    //draw the balls
+    XSetForeground(display, LW.gc, BlackPixel(display, screen));
+    for (int i=0; i<(int)uv_graph_balls.size(); ++i) {
+      Point2d<int> p = limit_cpx_to_pixel(uv_graph_balls[i].center);
+      double r = uv_graph_balls[i].radius / limit_pixel_width;
+      T.str(""); T << Bitword(uv_graph_balls[i].word, uv_graph_balls[i].word_len);
+      XDrawArc(display, LW.p, LW.gc, p.x-r, p.y-r, int(2*r), int(2*r), 23040, 23040);
+      XDrawString(display, LW.p, LW.gc, p.x-text_width_offset, p.y+text_height_offset, T.str().c_str(), T.str().size()); 
+    }
+  }
   
   LW.redraw();
 }

@@ -144,7 +144,7 @@ class ifs{
                                           bool closed_path, 
                                           int word_len);
     void compute_uv_graph(std::vector<Point3d<int> >& uv_graph, 
-                          const std::vector<Ball>& balls, 
+                          std::vector<Ball>& balls, 
                           int uv_depth, 
                           int verbose);
     void set_params(cpx Z, cpx W);
