@@ -1164,13 +1164,13 @@ void IFSGui::draw_mand() {
           (!mand_connected || mand_data_grid[i][j].x == -1) && 
           (!mand_grid_dirichlet_valid || mand_data_grid[i][j].w == -1)) {
         std::vector<std::pair<Bitword,Bitword> > uv_words;
-        temp_IFS.find_closest_uv_words(uv_words, mand_dirichlet_depth, 0.00000001,1000);
+        temp_IFS.find_closest_uv_words(uv_words, mand_dirichlet_depth, 0.00000001,4097);
         std::set<std::pair<Bitword,Bitword> > uv_words_set(uv_words.begin(), uv_words.end());
         it = sets_to_colors.find(uv_words_set);
         if (it == sets_to_colors.end()) { //need to add a new color
           //double r = 0.5*((double)rand()/(double)RAND_MAX) + 0.5;
           //mand_data_grid[i][j].w = (uv_words.size() == 1 ? get_rgb_color(0, r, r) : get_rgb_color(r, 0, 0) );
-          double r = 1.0/(double)uv_words.size();
+          double r = 1.0/(1+2*log2((double)uv_words.size()));
           mand_data_grid[i][j].w = get_rgb_color(r, r, r);
           sets_to_colors[uv_words_set] = mand_data_grid[i][j].w;
         } else {
