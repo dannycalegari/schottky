@@ -506,7 +506,8 @@ void ifs::find_aligned_images_with_distinct_first_letters(const Ball& initial_ba
 //move necessarily result in a farther pair, it can be discarded
 void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words, 
                                 int uv_depth,
-                                double last_step_tolerance) {
+                                double last_step_tolerance,
+                                int list_size_max) {
   words.resize(0);
   std::vector<double> distances(0);
   double min_r;
@@ -543,7 +544,7 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
     pairs.resize(0);
     for (int j=0; j<(int)next_pairs.size(); ++j) {
       double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
-      if (d <= cutoff_dist) {
+      if (d <= cutoff_dist && (list_size_max < 0 ||(int)pairs.size() < list_size_max)) {
         pairs.push_back(next_pairs[j]);
       }
     }  
