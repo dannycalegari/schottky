@@ -1158,7 +1158,7 @@ void IFSGui::draw_mand() {
         double trap_radius;
         int multiplier = 100/mand_trap_depth;
         int diff = multiplier*temp_IFS.check_TLB(TLB,trap_radius,TLB_neighborhood,mand_trap_depth);
-        mand_data_grid[i][j].z = get_rgb_color(0, double(diff)/100, 1.0);
+        mand_data_grid[i][j].z = (diff < 0 ? -1 : get_rgb_color(0, double(diff)/100, 1.0));
       }
       if (mand_dirichlet && 
           (!mand_connected || mand_data_grid[i][j].x == -1) && 
