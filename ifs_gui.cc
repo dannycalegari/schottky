@@ -646,6 +646,33 @@ void IFSGui::S_mand_dirichlet_increase_depth(XEvent* e) {
 }
 
 
+void IFSGui::S_mand_set_C(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  mand_set_C = !mand_set_C;
+  W_mand_set_C_check.checked = mand_set_C;
+  W_mand_set_C_check.redraw();
+  draw_mand();
+}
+
+void IFSGui::S_mand_set_C_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --mand_set_C_depth;
+  std::stringstream T;
+  T.str(""); T << mand_set_C_depth;
+  W_mand_set_C_depth_label.update_text(T.str());
+  mand_grid_set_C_valid = false;
+  draw_mand();
+}
+
+void IFSGui::S_mand_set_C_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++mand_set_C_depth;
+  std::stringstream T;
+  T.str(""); T << mand_set_C_depth;
+  W_mand_set_C_depth_label.update_text(T.str());
+  mand_grid_set_C_valid = false;
+  draw_mand();
+}
 
 
 
@@ -1090,9 +1117,11 @@ Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
                        W_mand_plot.height - ((c.imag() - mand_ll.imag()) / mand_pixel_width) );
 }
 
-int IFSGui::mand_get_color(const Point4d<int>& p) {
+int IFSGui::mand_get_color(PointNd<5,int>& p) {
   if (mand_trap && p.z > 0) { //use the trap color
     return p.z;
+  } else if (mand_set_C && p[4] > 0) {
+    return p[4];
   } else if (mand_contains_half && p.y > 0) {
     return p.y;
   } else if (mand_connected && p.x >= 0) {
@@ -1177,6 +1206,12 @@ void IFSGui::draw_mand() {
           mand_data_grid[i][j].w = it->second;
         }
       }
+      if (mand_set_C && !mand_grid_set_C_valid) {
+        if (temp_IFS.close_to_set_C(mand_set_C_depth, 
+                                    0.707107*mand_pixel_group_width)) {
+          mand_data_grid[i][j][4] = get_rgb_color(1.0,0.0,1.0);
+        }
+      }
       
       //draw the pixel for the impatient
       int col = mand_get_color(mand_data_grid[i][j]);
@@ -1197,6 +1232,7 @@ void IFSGui::draw_mand() {
   if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_contains_half_valid = true;
   if (mand_trap && !mand_grid_trap_valid) mand_grid_trap_valid = true;
   if (mand_dirichlet && !mand_grid_dirichlet_valid) mand_grid_dirichlet_valid = true;
+  if (mand_set_C && !mand_grid_set_C_valid) mand_grid_set_C_valid = true;
   
   //now draw the highlighted point
   Point2d<int> h = mand_cpx_to_pixel(IFS.z);
@@ -1302,6 +1338,7 @@ void IFSGui::mand_recenter() {
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
   mand_grid_dirichlet_valid = false;
+  mand_grid_set_C_valid = false;
   draw_mand();
 }
 
@@ -1311,12 +1348,13 @@ void IFSGui::mand_reset_mesh() {
   mand_num_pixel_groups = W_mand_plot.width / mand_pixel_group_size;
   mand_data_grid.resize(mand_num_pixel_groups);
   for (int i=0; i<mand_num_pixel_groups; ++i) {
-    mand_data_grid[i] = std::vector<Point4d<int> >(mand_num_pixel_groups, Point4d<int>(-1,-1,-1,-1));
+    mand_data_grid[i] = std::vector<PointNd<5,int> >(mand_num_pixel_groups, PointNd<5,int>(-1));
   }
   mand_grid_connected_valid = false;
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
   mand_grid_dirichlet_valid = false;
+  mand_grid_set_C_valid = false;
 }
 
 
@@ -1353,7 +1391,12 @@ void IFSGui::recompute_point_data() {
   }
   W_point_uv_words_status.update_text(T.str());
   
-  
+  //std::cout << "Close to set C: ";
+  //if (IFS.close_to_set_C(mand_set_C_depth, 0.707107*mand_pixel_group_width)) {
+  //  std::cout << "yes\n";
+  //} else {
+  //  std::cout << "no\n";
+  //}
 }
 
 
@@ -1683,6 +1726,11 @@ void IFSGui::reset_and_pack_window() {
     T.str(""); T << mand_dirichlet_depth;
     W_mand_dirichlet_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_dirichlet_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_dirichlet_increase_depth);
+    W_mand_set_C_check = WidgetCheck(this, "Set C:", 105, 20, mand_set_C, &IFSGui::S_mand_set_C);
+    W_mand_set_C_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_set_C_decrease_depth);
+    T.str(""); T << mand_set_C_depth;
+    W_mand_set_C_depth_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_set_C_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_set_C_increase_depth);
     W_mand_mouse_label = WidgetText(this, "Mouse: initializing", 200, 20);
     
     W_mand_path_create_by_drawing_button = WidgetButton(this, "Draw path", -1, 20, &IFSGui::S_mand_path_create_by_drawing_button);
@@ -1737,6 +1785,10 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_dirichlet_check, &W_mand_dirichlet_depth_leftarrow);
     pack_widget_upper_right(&W_mand_dirichlet_depth_leftarrow, &W_mand_dirichlet_depth_label);
     pack_widget_upper_right(&W_mand_dirichlet_depth_label, &W_mand_dirichlet_depth_rightarrow);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_set_C_check);
+    pack_widget_upper_right(&W_mand_set_C_check, &W_mand_set_C_depth_leftarrow);
+    pack_widget_upper_right(&W_mand_set_C_depth_leftarrow, &W_mand_set_C_depth_label);
+    pack_widget_upper_right(&W_mand_set_C_depth_label, &W_mand_set_C_depth_rightarrow);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_label);
     if (currently_drawing_path) {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_drawing_title);
@@ -1862,6 +1914,8 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_trap_depth = 20;
   mand_dirichlet = false;
   mand_dirichlet_depth = 3;
+  mand_set_C = false;
+  mand_set_C_depth = 10;
   
   point_connected_check = true;
   point_connected_depth = 18;

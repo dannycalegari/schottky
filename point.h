@@ -2,6 +2,7 @@
 #define __POINT_H__
 
 #include <iostream>
+#include <algorithm>
 
 template <class T>
 struct Point2d {
@@ -231,8 +232,62 @@ T dot(const Point4d<T>& a, const Point4d<T>& b) {
 }
 
 
+//Nd -- it's made to generalize 4d, so it has x,y,z,w, then the rest
+//it's an error if n<
+template <int n, class T>
+struct PointNd {
+  T x,y,z,w;
+  std::vector<T> the_rest;
+        
+  PointNd(const T& val);
+  PointNd(const std::vector<T>& v);
+  PointNd();
+  T& operator[](int i);
+};
+
+template <int n, class T>
+PointNd<n,T>::PointNd() {
+  the_rest.resize(n-4);
+  x = y = z = w = 0;
+  for (int i=0; i<n-4; ++i) {
+    the_rest[i] = 0;
+  }
+}
+
+template <int n, class T>
+PointNd<n,T>::PointNd(const T& val) {
+  the_rest.resize(n-4);
+  x = y = z = w = val;
+  for (int i=0; i<n-4; ++i) {
+    the_rest[i] = val;
+  }
+}
+
+template <int n, class T>
+PointNd<n,T>::PointNd(const std::vector<T>& v) {
+  the_rest.resize(n-4);
+  x = v[0]; y = v[1]; z = v[2]; w = v[3];
+  std::copy(v.begin()+4, v.end(), the_rest.begin());
+}
 
 
+template <int n, class T>
+std::ostream& operator<<(std::ostream& os, const PointNd<n,T>& p) {
+  os << "(" << p.x << "," << p.y << "," << p.z << "," << p.w;
+  for (int i=0; i<n-4; ++i) {
+    os << "," << p.the_rest[i];
+  }
+  return os << ")";
+}
+
+template <int n, class T>
+T& PointNd<n,T>::operator[](int i) {
+  if (i<4) {
+    return (i==0 ? x : (i==1 ? y : (i==2 ? z : w)));
+  } else {
+    return the_rest[i-4];
+  }
+}
 
 
 

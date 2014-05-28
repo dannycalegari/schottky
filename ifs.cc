@@ -560,7 +560,6 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
 }
 
 
-
 void ifs::find_closest_uv_words_along_path(const std::vector<cpx>& path, 
                                            bool closed_path, 
                                            int word_len) {
@@ -575,6 +574,81 @@ void ifs::find_closest_uv_words_along_path(const std::vector<cpx>& path,
   }
 }
   
+
+
+//this tries to find 
+//(1) a pair of balls of depth n such that |u1/2-v1/2| < epsilon
+//(2) that every other pair of balls of depth n is (recursively)
+//at least 12*epsilon far away
+bool ifs::close_to_set_C(int n_depth, double epsilon) {
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return false;
+  
+  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
+  std::vector<std::pair<Ball, Ball> > pairs(1);
+  std::vector<std::pair<Ball, Ball> > next_pairs;
+  pairs[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
+
+  bool found_good_pair = false;
+
+  int list_size_max = 1000;
+  
+  if (abs(z) > 1.0/sqrt(2.0)) return false;
+  
+  //std::cout << "Epsilon: " << epsilon << "\n";
+
+  for (int i=2; i<=n_depth; ++i) {
+  
+    //check if any pair is close enough
+    for (int j=0; j<(int)pairs.size(); ++j) {
+      if ( abs(pairs[j].first.center - pairs[j].second.center) < 6*epsilon ) {
+        found_good_pair = true;
+        cpx c0 = pairs[j].first.center;
+        cpx c1 = pairs[j].second.center;
+        //std::cout << "Found the good pair: " << pairs[j].first << " " << pairs[j].second << "\n";
+        //get rid of *all* pairs that involve either disk
+        int k = 0;
+        while (k < (int)pairs.size()) {
+          if ( abs(pairs[k].first.center - c0) < 0.000001 ||
+               abs(pairs[k].second.center - c1) < 0.000001 ) {
+            pairs.erase(pairs.begin() + k);
+          } else {
+            ++k;
+          }
+        }
+        break;
+      }
+    }
+  
+    //make all possible next pairs
+    next_pairs.resize(4*pairs.size());
+    for (int j=0; j<(int)pairs.size(); ++j) {
+      Ball& bz = pairs[j].first;
+      Ball& bw = pairs[j].second;
+      Ball bzs[2] = {act_on_right(0, bz), act_on_right(1, bz)};
+      Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
+      for (int k=0; k<4; ++k) {
+        next_pairs[4*j + k] = std::make_pair( bzs[k>>1], bws[k&1] );
+      }
+    }
+    pairs.resize(0);
+    for (int j=0; j<(int)next_pairs.size(); ++j) {
+      double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
+      double r = next_pairs[j].first.radius;
+      //make sure we don't carry around an absurd number
+      if ( (d < 12*epsilon + 2*r) && ((int)pairs.size() < list_size_max)) {
+        pairs.push_back(next_pairs[j]);
+      }
+      if (found_good_pair && d < 10*epsilon) return false;
+    }  
+  }
+  
+  //std::cout << "pairs left: " << pairs.size();
+  
+  //now, if found_good_pair and pairs is *empty*, then we're good
+  return found_good_pair && (pairs.size() == 0);
+}
+
 
 
 void ifs::compute_uv_graph(std::vector<Point3d<int> >& uv_graph, 

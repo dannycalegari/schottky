@@ -146,6 +146,7 @@ class ifs{
     void find_closest_uv_words_along_path(const std::vector<cpx>& path, 
                                           bool closed_path, 
                                           int word_len);
+    bool close_to_set_C(int n_depth, double epsilon);
     void compute_uv_graph(std::vector<Point3d<int> >& uv_graph, 
                           std::vector<Ball>& balls, 
                           int uv_depth, 
@@ -153,7 +154,7 @@ class ifs{
     void set_params(cpx Z, cpx W);
     void draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
                            const cpx& region_ll, const cpx& region_ur, int depth);     
-                
+        
     //IFS drawing
     bool color_ifs;        // draw fL and gL in different colors
     bool chunky_ifs;       //draw the ifs with chunky balls
