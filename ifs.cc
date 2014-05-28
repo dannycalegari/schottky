@@ -601,7 +601,7 @@ bool ifs::close_to_set_C(int n_depth, double epsilon) {
   
     //check if any pair is close enough
     for (int j=0; j<(int)pairs.size(); ++j) {
-      if ( abs(pairs[j].first.center - pairs[j].second.center) < 6*epsilon ) {
+      if ( abs(pairs[j].first.center - pairs[j].second.center) < 10*epsilon ) {
         found_good_pair = true;
         cpx c0 = pairs[j].first.center;
         cpx c1 = pairs[j].second.center;
