@@ -1052,7 +1052,14 @@ void IFSGui::draw_limit() {
     XSetForeground(display, LW.gc, BlackPixel(display, screen));
     double r = 15;
     for (int i=0; i<(int)uv_graph_balls.size(); ++i) {
-      Point2d<int> p = limit_cpx_to_pixel(uv_graph_balls[i].center);
+      cpx& c = uv_graph_balls[i].center;
+      if (c.real() < limit_ll.real() || 
+          c.real() > limit_ur.real() || 
+          c.imag() < limit_ll.imag() || 
+          c.imag() > limit_ur.imag()) {
+        continue;
+      }
+      Point2d<int> p = limit_cpx_to_pixel(c);
       //double r = uv_graph_balls[i].radius / limit_pixel_width;
       T.str(""); T << Bitword(uv_graph_balls[i].word, uv_graph_balls[i].word_len);
       XDrawArc(display, LW.p, LW.gc, p.x-r, p.y-r, int(2*r), int(2*r), 23040, 23040);
@@ -1067,8 +1074,20 @@ void IFSGui::draw_limit() {
     XSetLineAttributes(display, LW.gc, 1.5, LineSolid, 1, 1);
     for (int i=0; i<(int)uv_graph_edges.size(); ++i){
       Point3d<int>& e = uv_graph_edges[i];
-      Point2d<int> c1 = limit_cpx_to_pixel(uv_graph_balls[e.x].center);
-      Point2d<int> c2 = limit_cpx_to_pixel(uv_graph_balls[e.y].center);
+      cpx& cc1 = uv_graph_balls[e.x].center;
+      cpx& cc2 = uv_graph_balls[e.y].center;
+      if ((cc1.real() < limit_ll.real() || 
+           cc1.real() > limit_ur.real() || 
+           cc1.imag() < limit_ll.imag() || 
+           cc1.imag() > limit_ur.imag()) &&
+          (cc2.real() < limit_ll.real() || 
+           cc2.real() > limit_ur.real() || 
+           cc2.imag() < limit_ll.imag() || 
+           cc2.imag() > limit_ur.imag())) {
+        continue;
+      }
+      Point2d<int> c1 = limit_cpx_to_pixel(cc1);
+      Point2d<int> c2 = limit_cpx_to_pixel(cc2);
       Point2d<float> v(c2.x-c1.x, c2.y-c1.y);
       v = v/(float)sqrt(dot(v,v));
       Point2d<float> c1p(c1.x + r*v.x, c1.y + r*v.y);
