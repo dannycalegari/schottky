@@ -91,7 +91,7 @@ void ifs::draw_limit_set(){
   if (find_trap_like_vectors) {
     T << "on";
     std::vector<Ball> TLB;
-    trap_like_balls(TLB, 0, depth, 1);
+    trap_like_balls(TLB, 0, 0, depth, 1);
   } else {
     T << "off";
   }
@@ -263,10 +263,9 @@ void ifs::draw_mandelbrot_set(){
   std::vector<Ball> TLB;
   int tlb_result;
   bool found_TLB = false;
-  double TLB_neighborhood;
   double trap_radius;
   if (find_trap_like_vectors) {
-    TLB_for_region(TLB, TLB_neighborhood,
+    TLB_for_region(TLB,
                     center-wind-(wind*I), center+wind+(wind*I),
                     15, 0);
     if (TLB.size() > 0) {
@@ -312,7 +311,7 @@ void ifs::draw_mandelbrot_set(){
               X.draw_box(q, mesh, gcol*exit_depth);
           } else if (find_trap_like_vectors && 
                       found_TLB &&
-                      (tlb_result = check_TLB(TLB,trap_radius,TLB_neighborhood,depth)) >= 0) {
+                      (tlb_result = check_TLB(TLB,trap_radius,depth)) >= 0) {
               double amount = double(tlb_result)/double(depth);
               int c = X.get_rgb_color(0,amount,1);
               X.draw_box(q,mesh,c);

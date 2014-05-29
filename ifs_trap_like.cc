@@ -369,6 +369,7 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
                                      int num_TL_balls, 
                                      int num_ball_trials,
                                      const std::vector<Ball>& balls,
+                                     double radius_subtraction,
                                      int verbose) {
   //get the convex hull of the balls
   std::vector<int> ch;
@@ -390,7 +391,7 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
   TLB.resize(0);
   std::vector<Ball> TLB_untranslated(0);
   while (true) {
-    if ((int)TLB_untranslated.size() >= num_TL_balls || current_gap_ind > (int)ch.size()) {
+    if ((int)TLB_untranslated.size() >= num_TL_balls || current_gap_ind >= (int)ch.size()) {
       break;
     }
     int i = ch_gap_pairs[current_gap_ind].second;
@@ -411,10 +412,18 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
         best_center = p+t*v;
       }
     }
+    //subtract off what we need to
+    double alpha = best_radius - radius_subtraction;
+    if (verbose>0) {
+      std::cout << "Found ball of radius " << best_radius << 
+                   " which gives a TLB of radius " << alpha << "\n";
+    }
     //std::cout << "Found best ball " << best_center << " " << best_radius << "\n";
-    TLB_untranslated.push_back(Ball(best_center, best_radius));
-    TLB.push_back(Ball(best_center-x1, best_radius));
-    TLB.push_back(Ball(best_center-x2, best_radius));
+    if (alpha > 0) {
+      TLB_untranslated.push_back(Ball(best_center, alpha));
+      TLB.push_back(Ball(best_center-x1, alpha));
+      TLB.push_back(Ball(best_center-x2, alpha));
+    }
     ++current_gap_ind;
   }
   if (verbose > 0) {
@@ -460,19 +469,21 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
       X2.draw_dot(p, bcol);
     }
     (void)X2.wait_for_key();
-    box_containing_balls(TLB, ll, ur);
-    drawing_width = ur.real() - ll.real();
-    num_drawing_pixels = 512;
-    pixel_diameter = drawing_width / double(num_drawing_pixels);
-    XGraphics X3(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
-    for (int i=0; i<(int)TLB.size(); ++i) {
-      Point2d<int> p( (TLB[i].center.real() - ll.real())/pixel_diameter, 
-                      (TLB[i].center.imag() - ll.imag())/pixel_diameter );
-      double r = TLB[i].radius/pixel_diameter;
-      X3.draw_disk(p, r, red_color);
-      X3.draw_dot(p, bcol);
+    if (TLB.size() > 0) {
+      box_containing_balls(TLB, ll, ur);
+      drawing_width = ur.real() - ll.real();
+      num_drawing_pixels = 512;
+      pixel_diameter = drawing_width / double(num_drawing_pixels);
+      XGraphics X3(num_drawing_pixels, num_drawing_pixels, 1, Point2d<float>(0,0));
+      for (int i=0; i<(int)TLB.size(); ++i) {
+        Point2d<int> p( (TLB[i].center.real() - ll.real())/pixel_diameter, 
+                        (TLB[i].center.imag() - ll.imag())/pixel_diameter );
+        double r = TLB[i].radius/pixel_diameter;
+        X3.draw_disk(p, r, red_color);
+        X3.draw_dot(p, bcol);
+      }
+      X3.wait_for_key();
     }
-    X3.wait_for_key();
   }
 }
     
@@ -481,16 +492,14 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
     
 
 bool ifs::trap_like_balls(std::vector<Ball>& TLB, 
-                          double initial_radius_increase, 
+                          double initial_radius, 
+                          double radius_subtraction,
                           int n_depth,
                           int verbose) {
   
-  double min_r;
-  if (!minimal_enclosing_radius(min_r)) return false;
-  
   int old_depth = depth;
   depth = n_depth;
-  if (!circ_connected(min_r+initial_radius_increase)) {
+  if (!circ_connected(initial_radius)) {
     if (verbose>0) {
       std::cout << "Not even connected\n";
     }
@@ -498,25 +507,48 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
     return false;
   }
   
-  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r + initial_radius_increase);
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,initial_radius);
   std::vector<Ball> balls(0);
   compute_balls_right(balls, initial_ball, n_depth);
   
   if (verbose>0) {
-    std::cout << "Computed balls\n";
+    std::cout << "Computed all balls\n";
   }
   
-  trap_like_balls_from_balls(TLB, 5, 3, balls, verbose);
+  trap_like_balls_from_balls(TLB, 5, 3, balls, radius_subtraction, verbose);
+ 
+  if (verbose>0) {
+    std::cout << "Found trap like balls\n";
+  }
  
   depth = old_depth;
   return true;
   
 }
-  
+
+
+
+
+void ifs::get_TLB_constants(cpx ll, cpx ur, double& K, double& C, double& A) {
+  cpx z0 = 0.5*(ur+ll);
+  double dr = ur.real() - z0.real();
+  double di = ur.imag() - z0.imag();
+  K=C=A=0;
+  for (int i=0; i<4; ++i) {
+    cpx z( z0.real() + (i&1 == 1 ? -1 : 1)*dr, 
+           z0.imag() + ((i>>1)&1 == 1 ? -1 : 1)*di );
+    double a = abs(z)/abs(z0);
+    if (a > A) A = a;
+    double c = 1.0/((abs(z)-1)*(abs(z)-1));
+    if (c > C) C = c;
+    double k = abs(z-1.0)/(2.0*(1.0-abs(z)));
+    if (k > K) K = k;
+  }  
+}
+
 //for the current z value, produce a bunch of promising uv words, 
 //plus some trap like balls for this value
 bool ifs::TLB_for_region(std::vector<Ball>& TLB, 
-                        double& guaranteed_neighborhood,
                         cpx ll, cpx ur, int n_depth, int verbose) {
   
   cpx backup_z = z;
@@ -525,27 +557,45 @@ bool ifs::TLB_for_region(std::vector<Ball>& TLB,
   az = abs(z);
   w = z; aw = az;
   
-  //we want to choose epsilon such that 
-  //any z in the box can use any of the trap balls
-  //i.e. we need the limit set to always be inside our balls
-  //so we need (R-r)|z|^n_depth > Cz*(center-corners)
-  //i.e. R-r > (Cz*(center-corners))/|z|^n_depth
-  //however, we also need there to be a little epsilon neighborhood
-  //even at the edges.  Therefore, we'll double this radius increase
-  //then every point in this region will have an epsilon neighborhood
-  //of at least Cz*box_diag_rad
-  double Cz = 3.42;
-  double box_diag_rad = abs(ll-ur)/2.0;
-  double initial_radius_increase = 2*Cz*box_diag_rad / pow(az, n_depth);
-  guaranteed_neighborhood = Cz*box_diag_rad;
-  if (initial_radius_increase > 100) return false;
+  //see the paper for a description of the constants
+  double K,C,A;
+  get_TLB_constants(ll,ur,K,C,A);
+  double dr = 0.5*(ur.real() - ll.real());
+  double di = 0.5*(ur.real() - ll.real());
+  double d = (di > dr ? di : dr);
+  cpx z0 = 0.5*(ll+ur);
+  double Rz0 = pow(A, (double)n_depth)*K + 4*K + 3.0*(1.0/pow(abs(z0), n_depth))*C*sqrt(2)*d;
+  double radius_subtraction = pow(abs(z0), n_depth)*Rz0 + 2*C*sqrt(2)*d;
+  
+  if (Rz0 > 100000) return false;
   
   if (verbose>0) {
     std::cout << "Finding TLB in box " << ll << " " << ur << " to depth " << n_depth << "\n";
-    std::cout << "Initial radius increase: " << initial_radius_increase << "\n";
+    std::cout << "A=" << A << " K=" << K << " C=" << C << "\n";
+    std::cout << "Rz0: " << pow(A, (double)n_depth)*K << " + " 
+              << 4*K << " + " << 3.0*(1.0/pow(abs(z0), n_depth))*C*sqrt(2)*d << " = " << Rz0 << "\n";
   }
   
-  if (!trap_like_balls(TLB, initial_radius_increase, n_depth, verbose)) {
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) {
+    if (verbose>0) {
+      std::cout << "No minimal radius\n";
+    }
+    return false;
+  }
+  if (verbose>0) std::cout << "Minimal radius: " << min_r << "\n";
+  int old_depth = depth;
+  depth = n_depth;
+  if (!circ_connected(min_r)) {
+    if (verbose>0) {
+      std::cout << "Not connected at\n";
+    }
+    depth = old_depth;
+    return false;
+  }
+  depth = old_depth;
+  
+  if (!trap_like_balls(TLB, Rz0, radius_subtraction, n_depth, verbose)) {
     z = backup_z; az = abs(z);
     w = backup_w; aw = abs(w);
     return false;
@@ -557,9 +607,8 @@ bool ifs::TLB_for_region(std::vector<Ball>& TLB,
   //find_close_uv_words(words, TLB, Cz*box_diag_rad, 10000, uv_depth);
   //words.resize(0);
   if (verbose>0) {
-    std::cout << "Box radius: " << box_diag_rad << "\n";
-    std::cout << "Initial radius increase: " << initial_radius_increase << "\n";
-    std::cout << "Finding uv words that land within " << Cz*box_diag_rad << "\n";
+    std::cout << "Box radius: " << d << "\n";
+    std::cout << "Rz0: " << Rz0 << "\n";
     std::cout << "Found the TLB: \n";
     for (int i=0; i<(int)TLB.size(); ++i) {
       std::cout << TLB[i] << "\n";
@@ -593,29 +642,31 @@ int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB,
 }
 
 
-int ifs::check_TLB(const std::vector<Ball>& TLB, double& trap_radius, 
-                   double guaranteed_neighborhood, int uv_depth) {
+int ifs::check_TLB(const std::vector<Ball>& TLB, double& trap_radius, int uv_depth) {
   double min_r;
-  double Cz = 3.42;
   if (!minimal_enclosing_radius(min_r)) return -1;
   Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
   std::deque<std::pair<Ball, Ball> > stack(1);
   stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
   if (stack[0].first.is_disjoint(stack[0].second)) return -1;
-  //check that there are points within guaranteed_neighborhood
-  //we need to make depth temporarily such that min_r*|z|^depth < guaranteed_neighborhood/4
-  //(the /4 is so there's a little neighborhood about this trap)
-  int old_depth = depth;
-  depth = int( log(guaranteed_neighborhood/(4.0*min_r))/log(az) + 1 );
-  if (!circ_connected(min_r)) {
-    depth = old_depth;
-    return -1;
-  }
-  depth = old_depth;
+
+  double C = 11.67;
+  int current_looking_depth = stack[0].first.word_len;
+  bool found_one = false;
+  double best_radius = 0;
   while (stack.size() > 0) {
     Ball bz = stack.back().first;
     Ball bw = stack.back().second;
     stack.pop_back();
+    
+    if (current_looking_depth < bz.word_len) {
+      if (found_one) {
+        trap_radius = best_radius;
+        return current_looking_depth;
+      } else {
+        current_looking_depth = bz.word_len;
+      }
+    }
     //we are assuming they are not disjoint if they got pushed on
     //so check the displacement vector
     cpx d = bz.center - bw.center;
@@ -623,16 +674,9 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, double& trap_radius,
     for (int i=0; i<(int)TLB.size(); ++i) {
       double dist = abs(TLB[i].center - d) - TLB[i].radius;
       if (dist < -0.001) {
-        //if we wiggle z, it can change the trap vector image by 2*Cz
-        //and it can change the limit set by Cz
-        //and it can separate the points by 2*Cz
-        //so we have the min of (-dist)*|z|^m and (guaranteed_neighborhood/4)
-        //divided by 2*Cz
-        double m1 = ((-dist)*pow(az, bz.word_len))/(2.0*Cz);
-        double m2 = guaranteed_neighborhood/(8.0*Cz);
-        //std::cout << "Found min of " << m1 << " " << m2 << " (raised " << az << " to length " << bz.word_len << " with dist " << dist << "\n";
-        trap_radius = (m1 < m2 ? m1 : m2);
-        return bz.word_len;
+        double ep = (pow(abs(z),bz.word_len)/(2.0*C))*(TLB[i].radius - abs(TLB[i].center - d));
+        if (ep > best_radius) best_radius = ep;
+        found_one = true;
       }
     }
     
@@ -640,7 +684,7 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, double& trap_radius,
     if (bz.word_len >= uv_depth) continue;
     
     //now push on any children
-    //if they are disjoint, put them on the stack
+    //if they are not disjoint, put them on the stack
     Ball bzs[2] = {act_on_right(0, bz), act_on_right(1, bz)};
     Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
     for (int i=0; i<4; ++i) {
@@ -683,10 +727,8 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
   
   //find the TLB and stuff
   std::vector<Ball> TLB;
-  double TLB_neighborhood;
   cpx center = z;
-  TLB_for_region(TLB, TLB_neighborhood,
-                  center-cpx(wind,wind), center+cpx(wind,wind),
+  TLB_for_region(TLB, center-cpx(wind,wind), center+cpx(wind,wind),
                   15, 0);
   
   //get the traps at the vertices
@@ -695,7 +737,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
     z = loop[i]; az = abs(z);
     w = z; aw = az;
     double epsilon;
-    if ( (difficulty = check_TLB(TLB,epsilon,TLB_neighborhood,depth)) < 0 ) {
+    if ( (difficulty = check_TLB(TLB,epsilon,depth)) < 0 ) {
       if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
       return false;
     }
@@ -736,8 +778,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
       //run it
       trap_list[i].resize(trap_list[i].size()+1);
       trap_list[i].back().first = z;
-      if ( (difficulty = check_TLB(TLB, trap_list[i].back().second,
-                                   TLB_neighborhood, depth)) < 0 ) {
+      if ( (difficulty = check_TLB(TLB, trap_list[i].back().second, depth)) < 0 ) {
         if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
         return false;
       }

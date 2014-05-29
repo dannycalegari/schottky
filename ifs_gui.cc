@@ -820,7 +820,7 @@ void IFSGui::S_mand_path_delete(XEvent* e) {
 
 void IFSGui::S_mand_path_find_traps(XEvent* e) {
   if (e->type != ButtonPress) return;
-  find_traps_along_path(0);
+  find_traps_along_path(1);
 }
 
 void IFSGui::S_mand_path_create_movie(XEvent* e) {
@@ -1153,11 +1153,10 @@ void IFSGui::draw_mand() {
   //set up the TLB
   std::vector<Ball> TLB;
   bool found_TLB = false;
-  double TLB_neighborhood;
   if (mand_trap && !mand_grid_trap_valid) {
     //std::cout << "About to find TLB\n";
     temp_IFS.set_params(IFS.z, IFS.z);
-    temp_IFS.TLB_for_region(TLB, TLB_neighborhood, mand_ll, mand_ur, 15, 0);
+    temp_IFS.TLB_for_region(TLB, mand_ll, mand_ur, 16, 1);
     found_TLB = (TLB.size() != 0);
   }
   
@@ -1186,7 +1185,7 @@ void IFSGui::draw_mand() {
       if (mand_trap && !mand_grid_trap_valid && found_TLB) {
         double trap_radius;
         int multiplier = 100/mand_trap_depth;
-        int diff = multiplier*temp_IFS.check_TLB(TLB,trap_radius,TLB_neighborhood,mand_trap_depth);
+        int diff = multiplier*temp_IFS.check_TLB(TLB,trap_radius,mand_trap_depth);
         mand_data_grid[i][j].z = (diff < 0 ? -1 : get_rgb_color(0, double(diff)/100, 1.0));
       }
       if (mand_dirichlet && 
@@ -1428,10 +1427,9 @@ void IFSGui::find_traps_along_path(int verbose) {
   
   //find the TLB for this region
   std::vector<Ball> TLB;
-  double TLB_neighborhood;
   ifs temp_IFS;
   temp_IFS.set_params(av, av);
-  if (!temp_IFS.TLB_for_region(TLB, TLB_neighborhood, box_ll, box_ur, 15, verbose)) {
+  if (!temp_IFS.TLB_for_region(TLB, box_ll, box_ur, 15, verbose)) {
     std::cout << "Couldn't find TLB for box " << box_ll << " " << box_ur << " at depth " << mand_trap_depth << "\n";
     return;
   }
@@ -1452,7 +1450,7 @@ void IFSGui::find_traps_along_path(int verbose) {
       double epsilon = -1;
       int difficulty = -1;
       temp_IFS.set_params(current_z, current_z);
-      if ( (difficulty = temp_IFS.check_TLB(TLB, epsilon, TLB_neighborhood, mand_trap_depth)) < 0 ) {
+      if ( (difficulty = temp_IFS.check_TLB(TLB, epsilon, mand_trap_depth)) < 0 ) {
         std::cout << "Failed to find trap at " << current_z << "\n";
         return;
       }
