@@ -267,7 +267,7 @@ void ifs::draw_mandelbrot_set(){
   if (find_trap_like_vectors) {
     TLB_for_region(TLB,
                     center-wind-(wind*I), center+wind+(wind*I),
-                    15, 0);
+                    15, NULL,NULL, 0);
     if (TLB.size() > 0) {
       found_TLB = true;
     }
@@ -311,7 +311,7 @@ void ifs::draw_mandelbrot_set(){
               X.draw_box(q, mesh, gcol*exit_depth);
           } else if (find_trap_like_vectors && 
                       found_TLB &&
-                      (tlb_result = check_TLB(TLB,trap_radius,depth)) >= 0) {
+                      (tlb_result = check_TLB(TLB,NULL,NULL,trap_radius,depth)) >= 0) {
               double amount = double(tlb_result)/double(depth);
               int c = X.get_rgb_color(0,amount,1);
               X.draw_box(q,mesh,c);

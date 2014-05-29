@@ -215,7 +215,7 @@ class ifs{
     void draw_trap();	
     
     //trap-like vectors
-    void get_TLB_constants(cpx ll, cpx ur, double& K, double& C, double& A);
+    void get_TLB_constants(cpx ll, cpx ur, double& K, double& C, double& A, double& Z);
     bool trap_like_balls(std::vector<Ball>& TLB, 
                           double initial_radius, 
                           double radius_subtraction,
@@ -228,10 +228,10 @@ class ifs{
                         double radius_subtraction,
                         int verbose);
     bool TLB_for_region(std::vector<Ball>& TLB,
-                        cpx ll, cpx ur, int n_depth, int verbose);
+                        cpx ll, cpx ur, int n_depth, double* TLB_C, double* TLB_Z, int verbose);
     int check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
                                const std::vector<std::pair<Bitword,Bitword> >& words);
-    int check_TLB(const std::vector<Ball>& TLB, double& trap_radius, int uv_depth) ;
+    int check_TLB(const std::vector<Ball>& TLB, double* TLB_C, double* TLB_Z, double& trap_radius, int uv_depth) ;
     bool find_TLB_along_loop(const std::vector<cpx>& loop, 
                              bool draw_it, 
                              int verbose);

@@ -529,11 +529,12 @@ bool ifs::trap_like_balls(std::vector<Ball>& TLB,
 
 
 
-void ifs::get_TLB_constants(cpx ll, cpx ur, double& K, double& C, double& A) {
+void ifs::get_TLB_constants(cpx ll, cpx ur, double& K, double& C, double& A, double& Z) {
   cpx z0 = 0.5*(ur+ll);
   double dr = ur.real() - z0.real();
   double di = ur.imag() - z0.imag();
   K=C=A=0;
+  Z = 5;
   for (int i=0; i<4; ++i) {
     cpx z( z0.real() + (i&1 == 1 ? -1 : 1)*dr, 
            z0.imag() + ((i>>1)&1 == 1 ? -1 : 1)*di );
@@ -543,13 +544,15 @@ void ifs::get_TLB_constants(cpx ll, cpx ur, double& K, double& C, double& A) {
     if (c > C) C = c;
     double k = abs(z-1.0)/(2.0*(1.0-abs(z)));
     if (k > K) K = k;
+    double ZZ = abs(z);
+    if (ZZ < Z) Z = ZZ;
   }  
 }
 
 //for the current z value, produce a bunch of promising uv words, 
 //plus some trap like balls for this value
 bool ifs::TLB_for_region(std::vector<Ball>& TLB, 
-                        cpx ll, cpx ur, int n_depth, int verbose) {
+                        cpx ll, cpx ur, int n_depth, double* TLB_C, double* TLB_Z, int verbose) {
   
   cpx backup_z = z;
   cpx backup_w = w;
@@ -558,8 +561,10 @@ bool ifs::TLB_for_region(std::vector<Ball>& TLB,
   w = z; aw = az;
   
   //see the paper for a description of the constants
-  double K,C,A;
-  get_TLB_constants(ll,ur,K,C,A);
+  double K,C,A,Z;
+  get_TLB_constants(ll,ur,K,C,A,Z);
+  if (TLB_C != NULL) *TLB_C = C;
+  if (TLB_Z != NULL) *TLB_Z = Z;
   double dr = 0.5*(ur.real() - ll.real());
   double di = 0.5*(ur.real() - ll.real());
   double d = (di > dr ? di : dr);
@@ -642,15 +647,14 @@ int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB,
 }
 
 
-int ifs::check_TLB(const std::vector<Ball>& TLB, double& trap_radius, int uv_depth) {
+int ifs::check_TLB(const std::vector<Ball>& TLB, double* TLB_C, double* TLB_Z, double& trap_radius, int uv_depth) {
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return -1;
   Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
   std::deque<std::pair<Ball, Ball> > stack(1);
   stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
   if (stack[0].first.is_disjoint(stack[0].second)) return -1;
-
-  double C = 11.67;
+  
   int current_looking_depth = stack[0].first.word_len;
   bool found_one = false;
   double best_radius = 0;
@@ -674,7 +678,8 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, double& trap_radius, int uv_dep
     for (int i=0; i<(int)TLB.size(); ++i) {
       double dist = abs(TLB[i].center - d) - TLB[i].radius;
       if (dist < -0.001) {
-        double ep = (pow(abs(z),bz.word_len)/(2.0*C))*(TLB[i].radius - abs(TLB[i].center - d));
+        if (TLB_C == NULL) return bz.word_len;
+        double ep = (pow(*TLB_Z, bz.word_len)/(2.0*(*TLB_C)))*(TLB[i].radius - abs(TLB[i].center - d));
         if (ep > best_radius) best_radius = ep;
         found_one = true;
       }
@@ -728,8 +733,13 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
   //find the TLB and stuff
   std::vector<Ball> TLB;
   cpx center = z;
+  double TLB_Z, TLB_C;
   TLB_for_region(TLB, center-cpx(wind,wind), center+cpx(wind,wind),
-                  15, 0);
+                  15, &TLB_C, &TLB_Z, 0);
+  
+  if (verbose>0) {
+    std::cout << "Got the TLB constants: " << TLB_C << " " << TLB_Z << "\n";
+  }
   
   //get the traps at the vertices
   for (int i=0; i<nL; ++i) {
@@ -737,7 +747,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
     z = loop[i]; az = abs(z);
     w = z; aw = az;
     double epsilon;
-    if ( (difficulty = check_TLB(TLB,epsilon,depth)) < 0 ) {
+    if ( (difficulty = check_TLB(TLB,&TLB_C, &TLB_Z,epsilon,depth)) < 0 ) {
       if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
       return false;
     }
@@ -778,7 +788,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
       //run it
       trap_list[i].resize(trap_list[i].size()+1);
       trap_list[i].back().first = z;
-      if ( (difficulty = check_TLB(TLB, trap_list[i].back().second, depth)) < 0 ) {
+      if ( (difficulty = check_TLB(TLB, &TLB_C, &TLB_Z, trap_list[i].back().second, depth)) < 0 ) {
         if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
         return false;
       }
