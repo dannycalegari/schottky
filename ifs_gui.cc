@@ -1137,6 +1137,21 @@ Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
 }
 
 int IFSGui::mand_get_color(PointNd<5,int>& p) {
+/*
+  if (mand_trap && p.z > 0) { //use the trap color
+    return p.z;
+  } else if (mand_set_C && p[4] > 0) {
+    return p[4];  
+  } else if (mand_connected && p.x >= 0) {
+    return p.x*0x000001;
+  } else if (mand_contains_half && p.y > 0) {
+    return p.y;
+  } else if (mand_dirichlet && p.w >= 0) {
+    return p.w;
+  } else {
+    return WhitePixel(display, screen);
+  }
+*/
   if (mand_trap && p.z > 0) { //use the trap color
     return p.z;
   } else if (mand_set_C && p[4] > 0) {
@@ -1189,17 +1204,22 @@ void IFSGui::draw_mand() {
       //do the necessary computations
       cpx c = mand_pixel_group_to_cpx(Point2d<int>(i,j));
       temp_IFS.set_params(c,c);
+      
       if (mand_connected && !mand_grid_connected_valid) {
+        //temp_IFS.set_params(c*c,c*c);
         if (!temp_IFS.is_connected(mand_connected_depth, mand_data_grid[i][j].x) ) {
           mand_data_grid[i][j].x = -1;
         }
+        //temp_IFS.set_params(c,c);
       }
       if (mand_contains_half && !mand_grid_contains_half_valid) {
+        //temp_IFS.set_params(sqrt(c), sqrt(c));
         if (temp_IFS.contains_half(mand_contains_half_depth, mand_data_grid[i][j].y)) {
           mand_data_grid[i][j].y = get_rgb_color(0.5, double(mand_data_grid[i][j].y)/100, 0.5);
         } else {
           mand_data_grid[i][j].y = -1;
         }
+        //temp_IFS.set_params(c,c);
       }
       if (mand_trap && !mand_grid_trap_valid && found_TLB) {
         double trap_radius;
