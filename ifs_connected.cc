@@ -92,7 +92,16 @@ bool ifs::circles_intersect(cpx center_1, cpx z_img_1, cpx w_img_1, double R1,
   //the images inside a single disk, because those will always be connected
   //to a higher level than we're checking here, so we check all 4 possible
   //pairs across the disks
-  if (circles_intersect( c1z, zi1z, wi1z, R1z, c2z, zi2z, wi2z, R2z, d-1 ) ||
+  
+  /* Danny June 7: actually the two pairs c1z,c2z and c1w,c2w differ from each
+  other by a translation, so it would be redundant to check both of them. Thus
+  just by commenting out the first test:
+  
+  	 circles_intersect( c1z, zi1z, wi1z, R1z, c2z, zi2z, wi2z, R2z, d-1 ) ||
+  
+  we get a dramatic speed-up. This is especially good near the negative real axis.  */
+  
+  if ( 	// here is where commented out line went
       circles_intersect( c1z, zi1z, wi1z, R1z, c2w, zi2w, wi2w, R2w, d-1 ) ||
       circles_intersect( c1w, zi1w, wi1w, R1w, c2z, zi2z, wi2z, R2z, d-1 ) ||
       circles_intersect( c1w, zi1w, wi1w, R1w, c2w, zi2w, wi2w, R2w, d-1 ) ){
