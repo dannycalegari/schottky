@@ -734,6 +734,7 @@ void IFSGui::S_point_uv_words(XEvent* e) {
   W_point_uv_words_check.redraw();
   recompute_point_data();
 }
+
 void IFSGui::S_point_uv_words_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
   ++point_uv_words_depth;
@@ -751,6 +752,29 @@ void IFSGui::S_point_uv_words_decrease_depth(XEvent* e) {
 }
 
 
+void IFSGui::S_point_trap(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  point_trap_check = !point_trap_check;
+  W_point_trap_check.checked = point_trap_check;
+  W_point_trap_check.redraw();
+  recompute_point_data();
+}
+
+void IFSGui::S_point_trap_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++point_trap_depth;
+  std::stringstream T; T.str(""); T << point_trap_depth;
+  W_point_trap_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+void IFSGui::S_point_trap_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --point_trap_depth;
+  std::stringstream T; T.str(""); T << point_trap_depth;
+  W_point_trap_depth_label.update_text(T.str());
+  recompute_point_data();
+}
 
 
 
@@ -1224,7 +1248,7 @@ void IFSGui::draw_mand() {
       if (mand_trap && !mand_grid_trap_valid && found_TLB) {
         double trap_radius;
         int multiplier = 100/mand_trap_depth;
-        int diff = multiplier*temp_IFS.check_TLB(TLB,NULL,NULL,trap_radius,mand_trap_depth);
+        int diff = multiplier*temp_IFS.check_TLB(TLB,NULL,NULL,trap_radius,NULL,mand_trap_depth);
         mand_data_grid[i][j].z = (diff < 0 ? -1 : get_rgb_color(0, double(diff)/100, 1.0));
       }
       if (mand_dirichlet && 
@@ -1429,6 +1453,31 @@ void IFSGui::recompute_point_data() {
   }
   W_point_uv_words_status.update_text(T.str());
   
+  if (!point_trap_check) {
+    T.str(""); T << "(disabled)";
+  } else {
+    std::vector<Ball> TLB;
+    cpx box_ll = IFS.z - cpx(0.0000001, 0.0000001);
+    cpx box_ur = IFS.z + cpx(0.0000001, 0.0000001);
+    double TLB_Z,TLB_C;
+    T.str("");
+    if (!IFS.TLB_for_region(TLB, box_ll, box_ur, 15, &TLB_C, &TLB_Z, 0)) {
+      T << "Couldn't find TLB for box " << box_ll << " " << box_ur << " at depth " << 15;
+    } else {        
+      double trap_radius;
+      std::pair<Bitword,Bitword> tw;
+      point_trap_words.resize(1);
+      int diff = IFS.check_TLB(TLB, &TLB_C, &TLB_Z,trap_radius,&tw,point_trap_depth);
+      point_trap_words[0] = tw;
+      if (diff < 0) {
+        T << "not found";
+      } else {
+        T << point_trap_words[0].first << " " << point_trap_words[0].second;
+      }
+    }
+  }
+  W_point_trap_status.update_text(T.str());
+  
   //std::cout << "Close to set C: ";
   //if (IFS.close_to_set_C(mand_set_C_depth, 0.707107*mand_pixel_group_width)) {
   //  std::cout << "yes\n";
@@ -1494,7 +1543,7 @@ void IFSGui::find_traps_along_path(int verbose) {
       double epsilon = -1;
       int difficulty = -1;
       temp_IFS.set_params(current_z, current_z);
-      if ( (difficulty = temp_IFS.check_TLB(TLB, &TLB_C, &TLB_Z, epsilon, mand_trap_depth)) < 0 ) {
+      if ( (difficulty = temp_IFS.check_TLB(TLB, &TLB_C, &TLB_Z, epsilon, NULL, mand_trap_depth)) < 0 ) {
         std::cout << "Failed to find trap at " << current_z << "\n";
         return;
       }
@@ -1622,13 +1671,13 @@ void IFSGui::reset_and_pack_window() {
   int x = (width_rest > height_rest ? height_rest : width_rest);
   
   if (window_mode == MANDLEBROT) {
-    main_window_height = x + 100;
+    main_window_height = x + 120;
     main_window_width = x + mand_sidebar_size;
   } else if (window_mode == LIMIT) {
-    main_window_height = x + 100;
+    main_window_height = x + 120;
     main_window_width = x + limit_sidebar_size;
   } else {
-    main_window_height = x + 100;
+    main_window_height = x + 120;
     main_window_width = 2*x + mand_sidebar_size + limit_sidebar_size;
   }
   
@@ -1688,6 +1737,12 @@ void IFSGui::reset_and_pack_window() {
   W_point_uv_words_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_uv_words_increase_depth);
   W_point_uv_words_status = WidgetText(this, "initializing", x, 20);
   
+  W_point_trap_check = WidgetCheck(this, "Trap", 105, 20, point_trap_check, &IFSGui::S_point_trap);
+  W_point_trap_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_trap_decrease_depth);
+  T.str(""); T << point_trap_depth;
+  W_point_trap_depth_label = WidgetText(this, T.str(), -1, 20);
+  W_point_trap_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_trap_increase_depth);
+  W_point_trap_status = WidgetText(this, "initializing", x, 20);
   
   //if the limit set is shown:
   if (window_mode != MANDLEBROT) {
@@ -1872,6 +1927,11 @@ void IFSGui::reset_and_pack_window() {
   pack_widget_upper_right(&W_point_uv_words_leftarrow, &W_point_uv_words_depth_label);
   pack_widget_upper_right(&W_point_uv_words_depth_label, &W_point_uv_words_rightarrow);
   pack_widget_upper_right(&W_point_uv_words_rightarrow, &W_point_uv_words_status);
+  pack_widget_upper_right(NULL, &W_point_trap_check);
+  pack_widget_upper_right(&W_point_trap_check, &W_point_trap_leftarrow);
+  pack_widget_upper_right(&W_point_trap_leftarrow, &W_point_trap_depth_label);
+  pack_widget_upper_right(&W_point_trap_depth_label, &W_point_trap_rightarrow);
+  pack_widget_upper_right(&W_point_trap_rightarrow, &W_point_trap_status);
   
   
   
@@ -1965,10 +2025,12 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   point_contains_half_check = true;
   point_contains_half_depth = 18;
   point_is_contains_half = false;
-  //point_trap = false;
   point_uv_words_check = false;
   point_uv_words_depth = 18;
   point_uv_words.resize(0);
+  point_trap_check = false;
+  point_trap_depth = 12;
+  point_trap_words.resize(0);
   
   currently_drawing_path = false;
   

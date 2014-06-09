@@ -231,7 +231,10 @@ class ifs{
                         cpx ll, cpx ur, int n_depth, double* TLB_C, double* TLB_Z, int verbose);
     int check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
                                const std::vector<std::pair<Bitword,Bitword> >& words);
-    int check_TLB(const std::vector<Ball>& TLB, double* TLB_C, double* TLB_Z, double& trap_radius, int uv_depth) ;
+    int check_TLB(const std::vector<Ball>& TLB, 
+                  double* TLB_C, double* TLB_Z, 
+                  double& trap_radius, std::pair<Bitword,Bitword>* trap_w, 
+                  int uv_depth) ;
     bool find_TLB_along_loop(const std::vector<cpx>& loop, 
                              bool draw_it, 
                              int verbose);

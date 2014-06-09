@@ -171,11 +171,13 @@ struct IFSGui {
   bool point_contains_half_check;
   int point_contains_half_depth;
   bool point_is_contains_half;
-  //bool point_trap_check;
   bool point_uv_words_check;
   int point_uv_words_depth;
-  //bool point_is_trap;
   std::vector<std::pair<Bitword,Bitword> > point_uv_words;
+  bool point_trap_check;
+  int point_trap_depth;
+  std::vector<std::pair<Bitword,Bitword> > point_trap_words;
+  
   
   //data about path
   IFSPath path;
@@ -224,11 +226,11 @@ struct IFSGui {
   WidgetRightArrow W_point_contains_half_rightarrow;
   WidgetText W_point_contains_half_status;
   
-  //WidgetCheck W_point_trap_check;
-  //WidgetLeftArrow W_point_trap_decrease_depth;
-  //WidgetText W_point_trap_depth_label;
-  //WidgetRightArrow W_point_trap_increase_depth;
-  //WidgetText W_point_trap_status;
+  WidgetCheck W_point_trap_check;
+  WidgetLeftArrow W_point_trap_leftarrow;
+  WidgetText W_point_trap_depth_label;
+  WidgetRightArrow W_point_trap_rightarrow;
+  WidgetText W_point_trap_status;
   
   WidgetCheck W_point_uv_words_check;
   WidgetLeftArrow W_point_uv_words_leftarrow;
@@ -352,9 +354,9 @@ struct IFSGui {
   void S_point_contains_half(XEvent* e);
   void S_point_contains_half_increase_depth(XEvent* e);
   void S_point_contains_half_decrease_depth(XEvent* e);
-  //void S_point_trap(XEvent* e);
-  //void S_point_connected_increase_depth(XEvent* e);
-  //void S_point_connected_decrease_depth(XEvent* e);
+  void S_point_trap(XEvent* e);
+  void S_point_trap_increase_depth(XEvent* e);
+  void S_point_trap_decrease_depth(XEvent* e);
   void S_point_uv_words(XEvent* e);
   void S_point_uv_words_increase_depth(XEvent* e);
   void S_point_uv_words_decrease_depth(XEvent* e);

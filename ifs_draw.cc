@@ -311,7 +311,7 @@ void ifs::draw_mandelbrot_set(){
               X.draw_box(q, mesh, gcol*exit_depth);
           } else if (find_trap_like_vectors && 
                       found_TLB &&
-                      (tlb_result = check_TLB(TLB,NULL,NULL,trap_radius,depth)) >= 0) {
+                      (tlb_result = check_TLB(TLB,NULL,NULL,trap_radius,NULL,depth)) >= 0) {
               double amount = double(tlb_result)/double(depth);
               int c = X.get_rgb_color(0,amount,1);
               X.draw_box(q,mesh,c);

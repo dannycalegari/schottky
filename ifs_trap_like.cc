@@ -647,7 +647,10 @@ int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB,
 }
 
 
-int ifs::check_TLB(const std::vector<Ball>& TLB, double* TLB_C, double* TLB_Z, double& trap_radius, int uv_depth) {
+int ifs::check_TLB(const std::vector<Ball>& TLB, 
+                   double* TLB_C, double* TLB_Z, 
+                   double& trap_radius, std::pair<Bitword,Bitword>* trap_w, 
+                   int uv_depth) {
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return -1;
   Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
@@ -658,6 +661,7 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, double* TLB_C, double* TLB_Z, d
   int current_looking_depth = stack[0].first.word_len;
   bool found_one = false;
   double best_radius = 0;
+  std::pair<Bitword,Bitword> best_pair;
   while (stack.size() > 0) {
     Ball bz = stack.back().first;
     Ball bw = stack.back().second;
@@ -666,6 +670,9 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, double* TLB_C, double* TLB_Z, d
     if (current_looking_depth < bz.word_len) {
       if (found_one) {
         trap_radius = best_radius;
+        if (trap_w != NULL) {
+          *trap_w = best_pair;
+        }
         return current_looking_depth;
       } else {
         current_looking_depth = bz.word_len;
@@ -680,7 +687,13 @@ int ifs::check_TLB(const std::vector<Ball>& TLB, double* TLB_C, double* TLB_Z, d
       if (dist < -0.001) {
         if (TLB_C == NULL) return bz.word_len;
         double ep = (pow(*TLB_Z, bz.word_len)/(2.0*(*TLB_C)))*(TLB[i].radius - abs(TLB[i].center - d));
-        if (ep > best_radius) best_radius = ep;
+        if (ep > best_radius) {
+          best_radius = ep;
+          if (trap_w != NULL) {
+            best_pair = std::make_pair(Bitword(bz.word, bz.word_len),
+                                       Bitword(bw.word, bw.word_len));
+          }
+        }
         found_one = true;
       }
     }
@@ -747,7 +760,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
     z = loop[i]; az = abs(z);
     w = z; aw = az;
     double epsilon;
-    if ( (difficulty = check_TLB(TLB,&TLB_C, &TLB_Z,epsilon,depth)) < 0 ) {
+    if ( (difficulty = check_TLB(TLB,&TLB_C, &TLB_Z,epsilon,NULL,depth)) < 0 ) {
       if (verbose>0) std::cout << "Failed to find a trap at vertex " << i << "\n";
       return false;
     }
@@ -788,7 +801,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
       //run it
       trap_list[i].resize(trap_list[i].size()+1);
       trap_list[i].back().first = z;
-      if ( (difficulty = check_TLB(TLB, &TLB_C, &TLB_Z, trap_list[i].back().second, depth)) < 0 ) {
+      if ( (difficulty = check_TLB(TLB, &TLB_C, &TLB_Z, trap_list[i].back().second, NULL, depth)) < 0 ) {
         if (verbose>0) std::cout << "Failed to find trap at " << z << "\n";
         return false;
       }
