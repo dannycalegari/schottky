@@ -248,6 +248,11 @@ class ifs{
                         double& trap_radius, 
                         std::vector<std::pair<Bitword,Bitword> >* trap_w,
                         int n_limit);
+    int check_limit_TLB_recursive(const std::vector<Ball>& TLB, 
+                                  double* TLB_C, double* TLB_Z, 
+                                  double& trap_radius, 
+                                  std::vector<std::pair<Bitword,Bitword> >* trap_w, 
+                                  int uv_depth);
     bool find_trap_like_vectors;
     
     //hole boundary finding functions

@@ -622,7 +622,8 @@ void IFSGui::S_mand_limit_trap(XEvent* e) {
     mand_limit_trap = !mand_limit_trap;
     W_mand_limit_trap_check.checked = mand_limit_trap;
     W_mand_limit_trap_check.redraw();
-    draw_mand();
+    mand_grid_trap_valid = false;
+    if (mand_trap) draw_mand();
   }
 }
 
@@ -854,7 +855,7 @@ void IFSGui::S_mand_path_delete(XEvent* e) {
 
 void IFSGui::S_mand_path_find_traps(XEvent* e) {
   if (e->type != ButtonPress) return;
-  find_traps_along_path(0);
+  find_traps_along_path(1);
 }
 
 void IFSGui::S_mand_path_create_movie(XEvent* e) {
@@ -1261,7 +1262,7 @@ void IFSGui::draw_mand() {
         int multiplier = 100/mand_trap_depth;
         int diff;
         if (mand_limit_trap) {
-          diff = multiplier*temp_IFS.check_limit_TLB(TLB, &TLB_C, &TLB_Z, trap_radius, NULL, mand_trap_depth);
+          diff = multiplier*temp_IFS.check_limit_TLB_recursive(TLB, &TLB_C, &TLB_Z, trap_radius, NULL, mand_trap_depth);
         } else {
           diff = multiplier*temp_IFS.check_TLB(TLB,NULL,NULL,trap_radius,NULL,mand_trap_depth);
         }
@@ -1483,7 +1484,12 @@ void IFSGui::recompute_point_data() {
       double trap_radius;
       std::vector<std::pair<Bitword,Bitword> > tw;
       point_trap_words.resize(1);
-      int diff = IFS.check_TLB(TLB, &TLB_C, &TLB_Z,trap_radius,&tw,point_trap_depth);
+      int diff;
+      if (mand_limit_trap) {
+        diff = IFS.check_limit_TLB_recursive(TLB, &TLB_C, &TLB_Z,trap_radius,&tw,point_trap_depth);
+      } else {
+        diff = IFS.check_TLB(TLB, &TLB_C, &TLB_Z,trap_radius,&tw,point_trap_depth);
+      }
       point_trap_words = tw;
       if (diff < 0) {
         T << "not found";
@@ -1559,7 +1565,12 @@ void IFSGui::find_traps_along_path(int verbose) {
       double epsilon = -1;
       int difficulty = -1;
       temp_IFS.set_params(current_z, current_z);
-      if ( (difficulty = temp_IFS.check_TLB(TLB, &TLB_C, &TLB_Z, epsilon, NULL, mand_trap_depth)) < 0 ) {
+      if (mand_limit_trap) {
+        difficulty = temp_IFS.check_limit_TLB_recursive(TLB, &TLB_C, &TLB_Z, epsilon, NULL, mand_trap_depth);
+      } else {
+        difficulty = temp_IFS.check_TLB(TLB, &TLB_C, &TLB_Z, epsilon, NULL, mand_trap_depth);
+      }
+      if ( difficulty < 0 ) {
         std::cout << "Failed to find trap at " << current_z << "\n";
         return;
       }

@@ -536,8 +536,8 @@ void ifs::get_TLB_constants(cpx ll, cpx ur, double& K, double& C, double& A, dou
   K=C=A=0;
   Z = 5;
   for (int i=0; i<4; ++i) {
-    cpx z( z0.real() + (i&1 == 1 ? -1 : 1)*dr, 
-           z0.imag() + ((i>>1)&1 == 1 ? -1 : 1)*di );
+    cpx z( z0.real() + ((i&1) == 1 ? -1 : 1)*dr, 
+           z0.imag() + (((i>>1)&1) == 1 ? -1 : 1)*di );
     double a = abs(z)/abs(z0);
     if (a > A) A = a;
     double c = 1.0/((abs(z)-1)*(abs(z)-1));
@@ -728,7 +728,10 @@ int ifs::check_limit_TLB(const std::vector<Ball>& TLB,
   //first, find the trap vectors
   std::vector<std::pair<Bitword,Bitword> > trap_pairs(0);
   int diff = check_TLB(TLB, TLB_C, TLB_Z, trap_radius, &trap_pairs, n_limit);
+  if (diff < 0) return -1;
+  
   int n;
+  int trap_word_len;
   int old_n = 0;
   if (trap_w != NULL) trap_w->resize(0);
   bool found_one = false;
@@ -739,37 +742,70 @@ int ifs::check_limit_TLB(const std::vector<Ball>& TLB,
   cpx ep = old_z - omega;
   set_params(omega, omega);
   
+  int verbose = 0;
+  
+  if (verbose>0) {
+    std::cout << "Trap balls: \n";
+    for (int i=0; i<(int)TLB.size(); ++i) {
+      std::cout << TLB[i] << "\n";
+    }
+    std::cout << "Got " << trap_pairs.size() << " trap pairs\n";
+  }
+  
+  double best_trap_radius = 0;
+  
   //for each one, see whether it is a limit vector:
   for (int i=0; i<(int)trap_pairs.size(); ++i) {
     std::pair<Bitword,Bitword> p = trap_pairs[i];
-    n = p.first.len;
-    if (n > old_n && found_one ) break;
+    trap_word_len = p.first.len;
+    
+    if (verbose>0) std::cout << "Checking trap word pair: " << p.first << " " << p.second << "\n";
   
     //first, pick off the prefixes from the words
     if (p.first.prefix(8).str() != std::string("01000111") ||
         p.second.prefix(8).str() != std::string("10111000")) {
       continue;
     }
+    
     //get the suffixes -- these are u and v
-    Bitword u = p.first.suffix(n-8);
-    Bitword v = p.second.suffix(n-8);
+    n = trap_word_len-8;
+    Bitword u = p.first.suffix(n);
+    Bitword v = p.second.suffix(n);
+    if (n > old_n && found_one ) break;
+    
+    if (verbose>0) std::cout << "Got the suffixes: " << u << "  " << v << "\n";
     
     //compute p_u(omega)-p_v(omega)
     cpx puzpvz = apply_bitword(u,0.5)-apply_bitword(v,0.5);
     
     //put it together into the sum
     cpx right_summand = pow(omega, -n)*( puzpvz + 1.0 );
-    cpx left_summand = 2.0*ep*pow(omega, -n-8)*(1.0-2.0*omega+5.0*pow(omega,4)+8.0*pow(omega,7));
+    cpx left_summand = 2.0*ep*pow(omega, -n-8)*(1.0-2.0*omega+5.0*pow(omega,4)-8.0*pow(omega,7));
     cpx putative_vector = left_summand + right_summand;
+    
+    if (verbose>0) {
+      std::cout << "n: " << n << "\n";
+      std::cout << "u(1/2): " << apply_bitword(u,0.5) << "\nv(1/2): " << apply_bitword(u,0.5) << "\n";
+      std::cout << "puzpvz: " << puzpvz << "\n";
+      std::cout << "epsilon: " << ep << "\n";
+      std::cout << "w^(-n-8): " << pow(omega, -n-8) << "\n";
+      std::cout << "w^(-n): " << pow(omega, -n) << "\n";
+      std::cout << "Left summand: " << left_summand << "\n";
+      std::cout << "Right summand: " << right_summand << "\n";
+      std::cout << "Putative vector: " << putative_vector << "\n";
+    }
     
     //check the vector
     for (int j=0; j<(int)TLB.size(); ++j) {
-      if (abs(putative_vector - TLB[i].center) > TLB[i].radius) continue;
+      double dist = TLB[j].radius - abs(putative_vector - TLB[j].center);
+      if (dist < 0) continue;
+      if (dist > best_trap_radius) best_trap_radius = dist / abs(left_summand/ep);
       found_one = true;
+      if (verbose>0) std::cout << "Vector " << putative_vector << " is inside " << TLB[j] << "\n";
       if (trap_w != NULL) {
         trap_w->push_back(p);
       } else {
-        goto BREAKALL;
+        //goto BREAKALL;
       }
     }
     old_n = n;
@@ -778,8 +814,133 @@ int ifs::check_limit_TLB(const std::vector<Ball>& TLB,
   BREAKALL:
   
   set_params(old_z, old_w);
-  return n+8;
+  trap_radius = best_trap_radius;
+  if (trap_radius < 1e-12) return -1;
+  
+  return (found_one ? n+8 : -1);
 }
+
+
+int ifs::check_limit_TLB_recursive(const std::vector<Ball>& TLB, 
+                                   double* TLB_C, double* TLB_Z, 
+                                   double& trap_radius, 
+                                   std::vector<std::pair<Bitword,Bitword> >* trap_w, 
+                                   int uv_depth) {
+  
+  cpx old_z = z;
+  cpx old_w = w;
+  cpx omega = cpx(0.3718586800741364, 0.5194111537479428);
+  cpx ep = old_z - omega;
+  set_params(omega, omega);
+  int verbose = 0;
+  
+  
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return -1;
+  bool found_one = false;
+  double best_radius;
+  int n=10;
+  if (trap_w != NULL) trap_w->resize(0);
+  for (n = 10; n < uv_depth; ++n) {
+    Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
+    std::deque<std::pair<Ball, Ball> > stack(1);
+    stack[0] = std::make_pair(act_on_right(0,b), act_on_right(1,b));
+    if (stack[0].first.is_disjoint(stack[0].second)) return -1;
+  
+    std::vector<Ball> target_list(TLB.size());
+    cpx left_summand = 2.0*ep*pow(omega, -n-8)*(1.0-2.0*omega+5.0*pow(omega,4)-8.0*pow(omega,7));
+    for (int i=0; i<(int)TLB.size(); ++i) {
+      target_list[i] = Ball(pow(omega, n)*(TLB[i].center - left_summand) - 1.0,
+                            abs(pow(omega, n))*TLB[i].radius);
+    }    
+
+    while (stack.size() > 0) {
+      Ball bz = stack.back().first;
+      if (bz.word_len == n) break;
+      Ball bw = stack.back().second;
+      stack.pop_back();
+      
+      //so check the displacement vector
+      cpx d = bz.center - bw.center;
+      bool potentially_good_pair = false;
+      for (int i=0; i<(int)target_list.size(); ++i) {
+        if (abs(d-target_list[i].center) < 2*bz.radius + 2*target_list[i].radius) {
+          potentially_good_pair = true;
+          break;
+        }
+      }
+      //if there might be the possibility that it works, push on the children
+      if (potentially_good_pair) {
+        Ball bzs[2] = {act_on_right(0, bz), act_on_right(1, bz)};
+        Ball bws[2] = {act_on_right(0, bw), act_on_right(1, bw)};
+        for (int i=0; i<4; ++i) {
+          stack.push_front(std::make_pair(bzs[i>>1], bws[i&1]));
+        }
+      }
+    }
+    
+    //the remaining balls should be checked
+    best_radius = 0;
+    for (int i=0; i<(int)stack.size(); ++i) {
+      Ball bz = stack[i].first;  Ball bw = stack[i].second;
+      cpx puzpvz = bz.center - bw.center;
+      cpx right_summand = pow(omega, -n)*( puzpvz + 1.0 );
+      cpx putative_vector = left_summand + right_summand;
+      for (int j=0; j<(int)TLB.size(); ++j) {
+        double dist = TLB[j].radius - abs(putative_vector - TLB[j].center);
+        if (dist < 0) continue;
+        double this_radius = dist / abs(left_summand/ep);
+        std::cout << "Found limit trap with radius " << this_radius << " compared to best radius " << best_radius << "\n";
+        if (this_radius > best_radius) {
+          best_radius = this_radius;
+          if (trap_w != NULL) {
+            trap_w->insert(trap_w->begin(), std::make_pair(Bitword(bz.word, bz.word_len),
+                                                          Bitword(bw.word, bw.word_len)) );
+          }
+        } else if (trap_w != NULL) {
+          trap_w->push_back(std::make_pair(Bitword(bz.word, bz.word_len),
+                                           Bitword(bw.word, bw.word_len)) );
+        }
+        if (best_radius > 1e-13) {
+          std::cout << "Our best radius is good enough\n";
+          found_one = true;
+        } else {
+          std::cout << "Found one, but it's not good enough\n";
+        }
+      }
+    }
+    if (found_one) break;
+  }
+  
+  set_params(old_z, old_w);
+  
+  if (found_one) {
+    std::cout << "Returning radius " << best_radius << "\n";
+    trap_radius = best_radius;
+    return n+8;
+  } else {
+    std::cout << "Found no trap\n";
+    return -1;
+  }
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
