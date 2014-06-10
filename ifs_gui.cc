@@ -546,7 +546,7 @@ void IFSGui::S_mand_connected_increase_depth(XEvent* e) {
     std::stringstream T; T.str(""); T << mand_connected_depth;
     W_mand_connected_depth_label.update_text(T.str());
     mand_grid_connected_valid = false;
-    draw_mand();
+    if (mand_connected) draw_mand();
   }
 }
 
@@ -556,7 +556,7 @@ void IFSGui::S_mand_connected_decrease_depth(XEvent* e) {
     std::stringstream T; T.str(""); T << mand_connected_depth;
     W_mand_connected_depth_label.update_text(T.str());
     mand_grid_connected_valid = false;
-    draw_mand();
+    if (mand_connected) draw_mand();
   }
 }
 
@@ -575,7 +575,7 @@ void IFSGui::S_mand_contains_half_increase_depth(XEvent* e) {
     std::stringstream T; T.str(""); T << mand_contains_half_depth;
     W_mand_contains_half_depth_label.update_text(T.str());
     mand_grid_contains_half_valid = false;
-    draw_mand();
+    if (mand_contains_half) draw_mand();
   }
 }
 
@@ -585,7 +585,7 @@ void IFSGui::S_mand_contains_half_decrease_depth(XEvent* e) {
     std::stringstream T; T.str(""); T << mand_contains_half_depth;
     W_mand_contains_half_depth_label.update_text(T.str());
     mand_grid_contains_half_valid = false;
-    draw_mand();
+    if (mand_contains_half) draw_mand();
   }
 }
 
@@ -597,13 +597,14 @@ void IFSGui::S_mand_trap(XEvent* e) {
     draw_mand();
   }
 }
+
 void IFSGui::S_mand_trap_increase_depth(XEvent* e) {
   if (e->type == ButtonPress) {
     ++mand_trap_depth;
     std::stringstream T; T.str(""); T << mand_trap_depth;
     W_mand_trap_depth_label.update_text(T.str());
     mand_grid_trap_valid = false;
-    draw_mand();
+    if (mand_trap) draw_mand();
   }
 }
 void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
@@ -612,6 +613,15 @@ void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
     std::stringstream T; T.str(""); T << mand_trap_depth;
     W_mand_trap_depth_label.update_text(T.str());
     mand_grid_trap_valid = false;
+    if (mand_trap) draw_mand();
+  }
+}
+
+void IFSGui::S_mand_limit_trap(XEvent* e) {
+  if (e->type == ButtonPress) {
+    mand_limit_trap = !mand_limit_trap;
+    W_mand_limit_trap_check.checked = mand_limit_trap;
+    W_mand_limit_trap_check.redraw();
     draw_mand();
   }
 }
@@ -632,7 +642,7 @@ void IFSGui::S_mand_dirichlet_decrease_depth(XEvent* e) {
   T.str(""); T << mand_dirichlet_depth;
   W_mand_dirichlet_depth_label.update_text(T.str());
   mand_grid_dirichlet_valid = false;
-  draw_mand();
+  if (mand_dirichlet) draw_mand();
 }
 
 void IFSGui::S_mand_dirichlet_increase_depth(XEvent* e) {
@@ -642,7 +652,7 @@ void IFSGui::S_mand_dirichlet_increase_depth(XEvent* e) {
   T.str(""); T << mand_dirichlet_depth;
   W_mand_dirichlet_depth_label.update_text(T.str());
   mand_grid_dirichlet_valid = false;
-  draw_mand();
+  if (mand_dirichlet) draw_mand();
 }
 
 
@@ -661,7 +671,7 @@ void IFSGui::S_mand_set_C_decrease_depth(XEvent* e) {
   T.str(""); T << mand_set_C_depth;
   W_mand_set_C_depth_label.update_text(T.str());
   mand_grid_set_C_valid = false;
-  draw_mand();
+  if (mand_set_C) draw_mand();
 }
 
 void IFSGui::S_mand_set_C_increase_depth(XEvent* e) {
@@ -671,7 +681,7 @@ void IFSGui::S_mand_set_C_increase_depth(XEvent* e) {
   T.str(""); T << mand_set_C_depth;
   W_mand_set_C_depth_label.update_text(T.str());
   mand_grid_set_C_valid = false;
-  draw_mand();
+  if (mand_set_C) draw_mand();
 }
 
 
@@ -1210,11 +1220,12 @@ void IFSGui::draw_mand() {
   
   //set up the TLB
   std::vector<Ball> TLB;
+  double TLB_C,TLB_Z;
   bool found_TLB = false;
   if (mand_trap && !mand_grid_trap_valid) {
     //std::cout << "About to find TLB\n";
     temp_IFS.set_params(IFS.z, IFS.z);
-    temp_IFS.TLB_for_region(TLB, mand_ll, mand_ur, 16, NULL, NULL, 0);
+    temp_IFS.TLB_for_region(TLB, mand_ll, mand_ur, 16, &TLB_C, &TLB_Z, 0);
     found_TLB = (TLB.size() != 0);
   }
   
@@ -1248,7 +1259,12 @@ void IFSGui::draw_mand() {
       if (mand_trap && !mand_grid_trap_valid && found_TLB) {
         double trap_radius;
         int multiplier = 100/mand_trap_depth;
-        int diff = multiplier*temp_IFS.check_TLB(TLB,NULL,NULL,trap_radius,NULL,mand_trap_depth);
+        int diff;
+        if (mand_limit_trap) {
+          diff = multiplier*temp_IFS.check_limit_TLB(TLB, &TLB_C, &TLB_Z, trap_radius, NULL, mand_trap_depth);
+        } else {
+          diff = multiplier*temp_IFS.check_TLB(TLB,NULL,NULL,trap_radius,NULL,mand_trap_depth);
+        }
         mand_data_grid[i][j].z = (diff < 0 ? -1 : get_rgb_color(0, double(diff)/100, 1.0));
       }
       if (mand_dirichlet && 
@@ -1465,10 +1481,10 @@ void IFSGui::recompute_point_data() {
       T << "Couldn't find TLB for box " << box_ll << " " << box_ur << " at depth " << 15;
     } else {        
       double trap_radius;
-      std::pair<Bitword,Bitword> tw;
+      std::vector<std::pair<Bitword,Bitword> > tw;
       point_trap_words.resize(1);
       int diff = IFS.check_TLB(TLB, &TLB_C, &TLB_Z,trap_radius,&tw,point_trap_depth);
-      point_trap_words[0] = tw;
+      point_trap_words = tw;
       if (diff < 0) {
         T << "not found";
       } else {
@@ -1667,7 +1683,7 @@ void IFSGui::reset_and_pack_window() {
   int ss = (limit_sidebar_size > mand_sidebar_size ? limit_sidebar_size : mand_sidebar_size);
   int width_rest = (window_mode == BOTH ? (display_width-2*ss)/2 :
                                                  display_width - ss );
-  int height_rest = display_height - 150;
+  int height_rest = display_height - 170;
   int x = (width_rest > height_rest ? height_rest : width_rest);
   
   if (window_mode == MANDLEBROT) {
@@ -1818,6 +1834,7 @@ void IFSGui::reset_and_pack_window() {
     T.str("");  T << mand_trap_depth;
     W_mand_trap_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_trap_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_trap_increase_depth);
+    W_mand_limit_trap_check = WidgetCheck(this, "Limit traps", 105, 20, (mand_limit_trap ? 1 : 0), &IFSGui::S_mand_limit_trap);
     W_mand_dirichlet_check = WidgetCheck(this, "Dirichlet:", 105, 20, mand_dirichlet, &IFSGui::S_mand_dirichlet);
     W_mand_dirichlet_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_dirichlet_decrease_depth);
     T.str(""); T << mand_dirichlet_depth;
@@ -1878,6 +1895,7 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_trap_check, &W_mand_trap_depth_leftarrow);
     pack_widget_upper_right(&W_mand_trap_depth_leftarrow, &W_mand_trap_depth_label);
     pack_widget_upper_right(&W_mand_trap_depth_label, &W_mand_trap_depth_rightarrow);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_limit_trap_check);
     pack_widget_upper_right(&W_mand_plot, &W_mand_dirichlet_check);
     pack_widget_upper_right(&W_mand_dirichlet_check, &W_mand_dirichlet_depth_leftarrow);
     pack_widget_upper_right(&W_mand_dirichlet_depth_leftarrow, &W_mand_dirichlet_depth_label);
@@ -2014,6 +2032,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_contains_half_depth = 16;
   mand_trap = false;
   mand_trap_depth = 20;
+  mand_limit_trap = false;
   mand_dirichlet = false;
   mand_dirichlet_depth = 3;
   mand_set_C = false;

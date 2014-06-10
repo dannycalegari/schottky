@@ -90,6 +90,9 @@ struct Bitword {
     len = L;
   }
   bool operator<(const Bitword& b) const;
+  Bitword prefix(int n) const;
+  Bitword suffix(int n) const;
+  std::string str() const;
 };
 
 std::ostream& operator<<(std::ostream& os, const Bitword& b);
@@ -233,11 +236,18 @@ class ifs{
                                const std::vector<std::pair<Bitword,Bitword> >& words);
     int check_TLB(const std::vector<Ball>& TLB, 
                   double* TLB_C, double* TLB_Z, 
-                  double& trap_radius, std::pair<Bitword,Bitword>* trap_w, 
+                  double& trap_radius, 
+                  std::vector<std::pair<Bitword,Bitword> >* trap_w, 
                   int uv_depth) ;
     bool find_TLB_along_loop(const std::vector<cpx>& loop, 
                              bool draw_it, 
                              int verbose);
+    //hardcoded spiral traps
+    int check_limit_TLB(const std::vector<Ball>& TLB, 
+                        double* TLB_C, double* TLB_Z, 
+                        double& trap_radius, 
+                        std::vector<std::pair<Bitword,Bitword> >* trap_w,
+                        int n_limit);
     bool find_trap_like_vectors;
     
     //hole boundary finding functions

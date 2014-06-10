@@ -649,7 +649,8 @@ int ifs::check_TLB_and_uv_words(const std::vector<Ball>& TLB,
 
 int ifs::check_TLB(const std::vector<Ball>& TLB, 
                    double* TLB_C, double* TLB_Z, 
-                   double& trap_radius, std::pair<Bitword,Bitword>* trap_w, 
+                   double& trap_radius, 
+                   std::vector<std::pair<Bitword,Bitword> >* trap_w, 
                    int uv_depth) {
   double min_r;
   if (!minimal_enclosing_radius(min_r)) return -1;
@@ -661,7 +662,7 @@ int ifs::check_TLB(const std::vector<Ball>& TLB,
   int current_looking_depth = stack[0].first.word_len;
   bool found_one = false;
   double best_radius = 0;
-  std::pair<Bitword,Bitword> best_pair;
+  if (trap_w != NULL) trap_w->resize(0);
   while (stack.size() > 0) {
     Ball bz = stack.back().first;
     Ball bw = stack.back().second;
@@ -670,14 +671,12 @@ int ifs::check_TLB(const std::vector<Ball>& TLB,
     if (current_looking_depth < bz.word_len) {
       if (found_one) {
         trap_radius = best_radius;
-        if (trap_w != NULL) {
-          *trap_w = best_pair;
-        }
         return current_looking_depth;
       } else {
         current_looking_depth = bz.word_len;
       }
     }
+    
     //we are assuming they are not disjoint if they got pushed on
     //so check the displacement vector
     cpx d = bz.center - bw.center;
@@ -689,9 +688,14 @@ int ifs::check_TLB(const std::vector<Ball>& TLB,
         double ep = (pow(*TLB_Z, bz.word_len)/(2.0*(*TLB_C)))*(TLB[i].radius - abs(TLB[i].center - d));
         if (ep > best_radius) {
           best_radius = ep;
-          if (trap_w != NULL) {
-            best_pair = std::make_pair(Bitword(bz.word, bz.word_len),
-                                       Bitword(bw.word, bw.word_len));
+        }
+        if (trap_w != NULL) {
+          if (ep > best_radius) {
+            trap_w->insert(trap_w->begin(), std::make_pair(Bitword(bz.word, bz.word_len),
+                                                           Bitword(bw.word, bw.word_len)));
+          } else {
+            trap_w->push_back(std::make_pair(Bitword(bz.word, bz.word_len),
+                                             Bitword(bw.word, bw.word_len)));
           }
         }
         found_one = true;
@@ -714,6 +718,69 @@ int ifs::check_TLB(const std::vector<Ball>& TLB,
   return -1;
   
 }
+
+
+int ifs::check_limit_TLB(const std::vector<Ball>& TLB, 
+                         double* TLB_C, double* TLB_Z, 
+                         double& trap_radius, 
+                         std::vector<std::pair<Bitword,Bitword> >* trap_w,
+                         int n_limit) {
+  //first, find the trap vectors
+  std::vector<std::pair<Bitword,Bitword> > trap_pairs(0);
+  int diff = check_TLB(TLB, TLB_C, TLB_Z, trap_radius, &trap_pairs, n_limit);
+  int n;
+  int old_n = 0;
+  if (trap_w != NULL) trap_w->resize(0);
+  bool found_one = false;
+  
+  cpx old_z = z;
+  cpx old_w = w;
+  cpx omega = cpx(0.3718586800741364, 0.5194111537479428);
+  cpx ep = old_z - omega;
+  set_params(omega, omega);
+  
+  //for each one, see whether it is a limit vector:
+  for (int i=0; i<(int)trap_pairs.size(); ++i) {
+    std::pair<Bitword,Bitword> p = trap_pairs[i];
+    n = p.first.len;
+    if (n > old_n && found_one ) break;
+  
+    //first, pick off the prefixes from the words
+    if (p.first.prefix(8).str() != std::string("01000111") ||
+        p.second.prefix(8).str() != std::string("10111000")) {
+      continue;
+    }
+    //get the suffixes -- these are u and v
+    Bitword u = p.first.suffix(n-8);
+    Bitword v = p.second.suffix(n-8);
+    
+    //compute p_u(omega)-p_v(omega)
+    cpx puzpvz = apply_bitword(u,0.5)-apply_bitword(v,0.5);
+    
+    //put it together into the sum
+    cpx right_summand = pow(omega, -n)*( puzpvz + 1.0 );
+    cpx left_summand = 2.0*ep*pow(omega, -n-8)*(1.0-2.0*omega+5.0*pow(omega,4)+8.0*pow(omega,7));
+    cpx putative_vector = left_summand + right_summand;
+    
+    //check the vector
+    for (int j=0; j<(int)TLB.size(); ++j) {
+      if (abs(putative_vector - TLB[i].center) > TLB[i].radius) continue;
+      found_one = true;
+      if (trap_w != NULL) {
+        trap_w->push_back(p);
+      } else {
+        goto BREAKALL;
+      }
+    }
+    old_n = n;
+  }
+  
+  BREAKALL:
+  
+  set_params(old_z, old_w);
+  return n+8;
+}
+
 
 
 

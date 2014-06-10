@@ -103,6 +103,24 @@ bool Bitword::operator<(const Bitword& b) const {
   return w.to_ulong() < b.w.to_ulong();
 }
 
+Bitword Bitword::prefix(int n) const {
+  std::string s = w.to_string();
+  s = s.substr(64-len, n);
+  std::bitset<64> b(s);
+  return Bitword(b, n);
+}
+
+Bitword Bitword::suffix(int n) const {
+  std::string s = w.to_string();
+  s = s.substr(64-n, n);
+  std::bitset<64> b(s);
+  return Bitword(b, n);
+}
+  
+std::string Bitword::str() const {
+  return w.to_string().substr(64-len, len);
+}
+
 std::ostream& operator<<(std::ostream& os, const Bitword& b) {
   std::string w = b.w.to_string();
   w = w.substr(64-b.len, b.len);

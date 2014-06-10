@@ -145,6 +145,7 @@ struct IFSGui {
   int mand_contains_half_depth;
   bool mand_trap;
   int mand_trap_depth;
+  bool mand_limit_trap;
   bool mand_dirichlet;
   int mand_dirichlet_depth;
   bool mand_set_C;
@@ -280,6 +281,7 @@ struct IFSGui {
   WidgetLeftArrow W_mand_trap_depth_leftarrow;
   WidgetText W_mand_trap_depth_label;
   WidgetRightArrow W_mand_trap_depth_rightarrow;
+  WidgetCheck W_mand_limit_trap_check;
   WidgetCheck W_mand_dirichlet_check;
   WidgetLeftArrow W_mand_dirichlet_depth_leftarrow;
   WidgetText W_mand_dirichlet_depth_label;
@@ -340,6 +342,7 @@ struct IFSGui {
   void S_mand_trap(XEvent* e);
   void S_mand_trap_increase_depth(XEvent* e);
   void S_mand_trap_decrease_depth(XEvent* e);
+  void S_mand_limit_trap(XEvent* e);
   void S_mand_dirichlet(XEvent* e);
   void S_mand_dirichlet_decrease_depth(XEvent* e);
   void S_mand_dirichlet_increase_depth(XEvent* e);
