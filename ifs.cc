@@ -1,4 +1,5 @@
 #include <deque>
+#include <set>
 
 #include "ifs.h"
 
@@ -862,7 +863,38 @@ void ifs::draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& 
 }
 
 
-
+ 
+void ifs::half_balls(std::vector<Bitword>& half_words, 
+                     int first_depth, int second_depth) {
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return;
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  std::deque<Ball> stack(1);
+  stack[0] = initial_ball;
+  std::vector<Ball> found_balls(0);
+  while (stack.size() > 0) {
+    Ball b = stack.back();
+    stack.pop_back();
+    if (abs(0.5-b.center) > b.radius) continue;
+    if ( b.word_len == first_depth+second_depth) {
+      found_balls.push_back(b);
+    } else {
+      Ball bz = act_on_right(0, b);
+      Ball bw = act_on_right(1, b);
+      stack.push_front(bz);
+      if (b.word_len > 0) stack.push_front(bw);
+    }
+  }
+  std::set<Bitword> found_words;
+  for (int i=0; i<(int)found_balls.size(); ++i) {
+    found_words.insert(Bitword(found_balls[i].word, found_balls[i].word_len).prefix(first_depth));
+  }
+  half_words.resize(0);
+  std::set<Bitword>::iterator it;
+  for (it = found_words.begin(); it != found_words.end(); ++it) {
+    half_words.push_back(*it);
+  }
+}
 
 
 

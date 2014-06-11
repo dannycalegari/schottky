@@ -157,7 +157,10 @@ class ifs{
     void set_params(cpx Z, cpx W);
     void draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
                            const cpx& region_ll, const cpx& region_ur, int depth);     
-        
+    void half_balls(std::vector<Bitword>& half_words, 
+                    int first_depth, int second_depth);
+    
+    
     //IFS drawing
     bool color_ifs;        // draw fL and gL in different colors
     bool chunky_ifs;       //draw the ifs with chunky balls

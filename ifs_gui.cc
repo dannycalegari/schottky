@@ -1458,6 +1458,12 @@ void IFSGui::recompute_point_data() {
   } else {
     T.str("");
     T << ( (point_is_contains_half = IFS.contains_half(point_contains_half_depth, difficulty)) ? "yes" : "no" );
+    std::vector<Bitword> half_words;
+    IFS.half_balls(half_words, point_contains_half_depth, 4);
+    for (int i=0; i<(int)half_words.size(); ++i) {
+      std::cout << half_words[i] << "\n";
+    }
+    if (half_words.size() > 0) std::cout << "\n";
   }
   W_point_contains_half_status.update_text(T.str());
   
@@ -2052,7 +2058,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   point_connected_check = true;
   point_connected_depth = 18;
   point_is_connected = false;
-  point_contains_half_check = true;
+  point_contains_half_check = false;
   point_contains_half_depth = 18;
   point_is_contains_half = false;
   point_uv_words_check = false;
