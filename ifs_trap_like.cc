@@ -890,7 +890,7 @@ int ifs::check_limit_TLB_recursive(const std::vector<Ball>& TLB,
         double dist = TLB[j].radius - abs(putative_vector - TLB[j].center);
         if (dist < 0) continue;
         double this_radius = dist / abs(left_summand/ep);
-        std::cout << "Found limit trap with radius " << this_radius << " compared to best radius " << best_radius << "\n";
+        //std::cout << "Found limit trap with radius " << this_radius << " compared to best radius " << best_radius << "\n";
         if (this_radius > best_radius) {
           best_radius = this_radius;
           if (trap_w != NULL) {
@@ -902,10 +902,10 @@ int ifs::check_limit_TLB_recursive(const std::vector<Ball>& TLB,
                                            Bitword(bw.word, bw.word_len)) );
         }
         if (best_radius > 1e-13) {
-          std::cout << "Our best radius is good enough\n";
+          //std::cout << "Our best radius is good enough\n";
           found_one = true;
         } else {
-          std::cout << "Found one, but it's not good enough\n";
+          //std::cout << "Found one, but it's not good enough\n";
         }
       }
     }
@@ -915,11 +915,11 @@ int ifs::check_limit_TLB_recursive(const std::vector<Ball>& TLB,
   set_params(old_z, old_w);
   
   if (found_one) {
-    std::cout << "Returning radius " << best_radius << "\n";
+    //std::cout << "Returning radius " << best_radius << "\n";
     trap_radius = best_radius;
     return n+8;
   } else {
-    std::cout << "Found no trap\n";
+    //std::cout << "Found no trap\n";
     return -1;
   }
   

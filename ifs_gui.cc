@@ -855,7 +855,7 @@ void IFSGui::S_mand_path_delete(XEvent* e) {
 
 void IFSGui::S_mand_path_find_traps(XEvent* e) {
   if (e->type != ButtonPress) return;
-  find_traps_along_path(1);
+  find_traps_along_path(0);
 }
 
 void IFSGui::S_mand_path_create_movie(XEvent* e) {
