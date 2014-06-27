@@ -1461,7 +1461,13 @@ void IFSGui::recompute_point_data() {
     std::vector<Bitword> half_words;
     IFS.half_balls(half_words, point_contains_half_depth, 4);
     for (int i=0; i<(int)half_words.size(); ++i) {
-      std::cout << half_words[i] << "\n";
+      std::cout << half_words[i];
+      double epsilon;
+      if (IFS.certify_set_B_point(half_words[i], epsilon)) {
+        std::cout << " (certified within " << epsilon << ")\n";
+      } else {
+        std::cout << " (not certified)\n";
+      }
     }
     if (half_words.size() > 0) std::cout << "\n";
   }

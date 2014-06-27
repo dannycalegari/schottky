@@ -16,6 +16,7 @@
 #include "ifs_trap.cc"         //functions to build a trap
 #include "ifs_trap_like.cc"    //functions to find trap balls via u,v words
 #include "ifs_set_A.cc"        //function to find the boundary of holes in set A
+#include "ifs_set_B.cc"        //functions about set B
 
 //first some ball functions
 Ball::Ball() { 
@@ -128,6 +129,9 @@ std::ostream& operator<<(std::ostream& os, const Bitword& b) {
   return os << w;
 }
 
+int Bitword::reverse_get(int n) const {
+  return w[len-n-1];
+}
 
 
 
@@ -898,13 +902,106 @@ void ifs::half_balls(std::vector<Bitword>& half_words,
 
 
 
+std::vector<int> ifs::coefficient_list(const Bitword& u) {
+  std::vector<int> ans(0);
+  
+  std::cout << "Finding coefficients for the word " << u << "\n";
+  
+  enum {TOP0, ONE, NONE, BOT0} state;
+  state = TOP0;
+  for (int i=0; i<u.len; ++i) {
+    switch (state) {
+      case TOP0:
+        if (u.reverse_get(i) == 0) {
+          ans.push_back(0);
+        } else {
+          ans.push_back(1);
+          state = ONE;
+        }
+        break;
+      case BOT0:
+        if (u.reverse_get(i) == 0) {
+          ans.push_back(-1);
+          state = NONE;
+        } else {
+          ans.push_back(0);
+        }
+        break;
+      case ONE:
+        if (u.reverse_get(i) == 0) {
+          ans.push_back(-1);
+          state = NONE;
+        } else {
+          ans.push_back(0);
+          state = BOT0;
+        }
+        break;
+      case NONE:
+        if (u.reverse_get(i) == 0) {
+          ans.push_back(0);
+          state = TOP0;
+        } else {
+          ans.push_back(1);
+          state = ONE;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return ans;
+}
 
 
 
 
-
-
-
+void ifs::word_deriv(const Bitword& u, const cpx& z0, cpx& deriv, double& err) {
+  std::vector<int> coefs = coefficient_list(u);
+  
+  std::cout << "Coefficient list (" << coefs.size() << "): \n";
+  for (int i=0; i<(int)coefs.size(); ++i) {
+    std::cout << coefs[i] << " ";
+  }
+  std::cout << "\n";
+  
+  //differentiate it
+  std::vector<int> deriv_coefs(coefs.size()-1);
+  for (int i=1; i<(int)coefs.size(); ++i) {
+    deriv_coefs[i-1] = coefs[i]*i;
+  }
+  cpx current_z = 1.0;
+  deriv = 0;
+  for (int i=0; i<(int)deriv_coefs.size(); ++i) {
+    deriv += (cpx)(deriv_coefs[i])*current_z;
+    current_z *= z0;
+  }
+  int n = deriv_coefs.size();
+  double az0 = abs(z0);
+  err  = pow(az0,n)*(1.0 + n - n*az0) / pow(1-az0, 2);
+  return;
+}
+  
+/*
+void ifs::word_deriv2(const Bitword& u, const cpx& z0, cpx& deriv, double& err) {
+  std::vector<int> coefs = coefficient_list(u);
+  
+  //differentiate it (twice)
+  std::vector<int> deriv_coefs(coefs.size()-2);
+  for (int i=2; i<(int)coefs.size(); ++i) {
+    deriv_coefs[i-2] = coefs[i]*i*(i-1);
+  }
+  cpx current_z = 1.0;
+  deriv = 0;
+  for (int i=0; i<(int)deriv_coefs.size(); ++i) {
+    deriv += (cpx)(deriv_coefs[i])*current_z;
+    current_z *= z0;
+  }
+  int n = deriv_coefs.size();
+  double az0 = abs(z0);
+  err  = pow(az0,n)*(1.0 + n - n*az0) / pow(1-az0, 2);
+  return;
+}
+*/
 
 
 

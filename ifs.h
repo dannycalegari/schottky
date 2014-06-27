@@ -93,6 +93,7 @@ struct Bitword {
   Bitword prefix(int n) const;
   Bitword suffix(int n) const;
   std::string str() const;
+  int reverse_get(int n) const;
 };
 
 std::ostream& operator<<(std::ostream& os, const Bitword& b);
@@ -159,6 +160,8 @@ class ifs{
                            const cpx& region_ll, const cpx& region_ur, int depth);     
     void half_balls(std::vector<Bitword>& half_words, 
                     int first_depth, int second_depth);
+    std::vector<int> coefficient_list(const Bitword& u); 
+    void word_deriv(const Bitword& u, const cpx& z0, cpx& deriv, double& err);
     
     
     //IFS drawing
@@ -258,6 +261,12 @@ class ifs{
                                   int uv_depth);
     bool find_trap_like_vectors;
     
+    
+    //set B
+    bool certify_set_B_point(const Bitword& u, double& within);
+    
+    
+    
     //hole boundary finding functions
     bool hole_boundary_containing_point(std::vector<cpx>& path, bool& closed, 
                                         cpx p, int verbose);
@@ -265,6 +274,7 @@ class ifs{
                                                   const std::vector<std::vector<bool> >& grid,
                                                   const Point2d<int>& marked_pixel, 
                                                   cpx ll, cpx ur, int verbose) ;
+    
     
     //Main interface and drawing functions
     XGraphics X;
