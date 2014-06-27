@@ -263,6 +263,11 @@ class ifs{
     
     
     //set B
+    void deriv_bounds_around_ball(const Bitword& u, 
+                                  cpx z0, 
+                                  double r, 
+                                  double& max,
+                                  double& min);
     bool certify_set_B_point(const Bitword& u, double& within);
     
     

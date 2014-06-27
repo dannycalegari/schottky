@@ -905,7 +905,7 @@ void ifs::half_balls(std::vector<Bitword>& half_words,
 std::vector<int> ifs::coefficient_list(const Bitword& u) {
   std::vector<int> ans(0);
   
-  std::cout << "Finding coefficients for the word " << u << "\n";
+  //std::cout << "Finding coefficients for the word " << u << "\n";
   
   enum {TOP0, ONE, NONE, BOT0} state;
   state = TOP0;
@@ -958,11 +958,11 @@ std::vector<int> ifs::coefficient_list(const Bitword& u) {
 void ifs::word_deriv(const Bitword& u, const cpx& z0, cpx& deriv, double& err) {
   std::vector<int> coefs = coefficient_list(u);
   
-  std::cout << "Coefficient list (" << coefs.size() << "): \n";
-  for (int i=0; i<(int)coefs.size(); ++i) {
-    std::cout << coefs[i] << " ";
-  }
-  std::cout << "\n";
+  //std::cout << "Coefficient list (" << coefs.size() << "): \n";
+  //for (int i=0; i<(int)coefs.size(); ++i) {
+  //  std::cout << coefs[i] << " ";
+  //}
+  //std::cout << "\n";
   
   //differentiate it
   std::vector<int> deriv_coefs(coefs.size()-1);
@@ -981,27 +981,6 @@ void ifs::word_deriv(const Bitword& u, const cpx& z0, cpx& deriv, double& err) {
   return;
 }
   
-/*
-void ifs::word_deriv2(const Bitword& u, const cpx& z0, cpx& deriv, double& err) {
-  std::vector<int> coefs = coefficient_list(u);
-  
-  //differentiate it (twice)
-  std::vector<int> deriv_coefs(coefs.size()-2);
-  for (int i=2; i<(int)coefs.size(); ++i) {
-    deriv_coefs[i-2] = coefs[i]*i*(i-1);
-  }
-  cpx current_z = 1.0;
-  deriv = 0;
-  for (int i=0; i<(int)deriv_coefs.size(); ++i) {
-    deriv += (cpx)(deriv_coefs[i])*current_z;
-    current_z *= z0;
-  }
-  int n = deriv_coefs.size();
-  double az0 = abs(z0);
-  err  = pow(az0,n)*(1.0 + n - n*az0) / pow(1-az0, 2);
-  return;
-}
-*/
 
 
 
