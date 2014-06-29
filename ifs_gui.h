@@ -91,13 +91,15 @@ struct IFSPath {
   std::vector<int> trap_colors;
   bool has_uv_words;
   std::vector<std::pair<Bitword,Bitword> > uv_words;
+  bool has_half_words;
+  std::vector<Bitword> half_words;
   int movie_length;
   int movie_fps;
   bool movie_with_mandlebrot;
   IFSPath() {
     is_valid = false;
     path.resize(0);
-    closed = has_traps = has_uv_words = false;
+    closed = has_traps = has_uv_words = has_half_words = false;
     traps.resize(0);
     trap_colors.resize(0);
     uv_words.resize(0);
@@ -308,6 +310,7 @@ struct IFSGui {
   WidgetRightArrow W_mand_path_movie_increase_length;
   WidgetCheck W_mand_path_movie_with_mandlebrot;
   WidgetButton W_mand_path_find_uv_words_button;
+  WidgetButton W_mand_path_find_half_words_button;
   
   
   //signal functions
@@ -376,6 +379,7 @@ struct IFSGui {
   void S_mand_path_movie_increase_length(XEvent* e);
   void S_mand_path_movie_with_mandlebrot(XEvent* e);
   void S_mand_path_find_uv_words(XEvent* e);
+  void S_mand_path_find_half_words(XEvent* e);
   
   bool main_window_initialized;
   int main_window_height;

@@ -905,6 +905,16 @@ void IFSGui::S_mand_path_find_uv_words(XEvent* e) {
   temp_IFS.find_closest_uv_words_along_path(path.path, path.closed, point_uv_words_depth); 
 }
 
+
+void IFSGui::S_mand_path_find_half_words(XEvent* e) {
+  if (e->type != ButtonPress || !path.is_valid) return;
+  ifs temp_IFS;
+  temp_IFS.certify_set_B_path(path.path, limit_depth, 1);
+}
+
+
+
+
 void IFSGui::make_path_drawing_buttons() {
   detach_widget(&W_mand_path_create_by_drawing_button);
   detach_widget(&W_mand_path_create_by_boundary_button);
@@ -939,6 +949,7 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   pack_widget_upper_right(&W_mand_path_movie_length_label, &W_mand_path_movie_increase_length);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandlebrot);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_half_words_button);
   W_mand_path_tasks_title.initial_draw();
   W_mand_path_delete_button.initial_draw();
   W_mand_path_find_traps_button.initial_draw();
@@ -952,6 +963,7 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   W_mand_path_movie_with_mandlebrot.redraw();
   W_mand_path_movie_increase_length.initial_draw();
   W_mand_path_find_uv_words_button.initial_draw();
+  W_mand_path_find_half_words_button.initial_draw();
 }
 
 void IFSGui::make_path_creation_buttons(bool cancelling) {
@@ -971,6 +983,7 @@ void IFSGui::make_path_creation_buttons(bool cancelling) {
     detach_widget(&W_mand_path_movie_increase_length);
     detach_widget(&W_mand_path_movie_with_mandlebrot);
     detach_widget(&W_mand_path_find_uv_words_button);
+    detach_widget(&W_mand_path_find_half_words_button);
   }
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);
@@ -1463,8 +1476,8 @@ void IFSGui::recompute_point_data() {
     for (int i=0; i<(int)half_words.size(); ++i) {
       std::cout << half_words[i];
       double epsilon;
-      if (IFS.certify_set_B_point(half_words[i], epsilon)) {
-        std::cout << " (certified within " << epsilon << ")\n";
+      if (IFS.certify_set_B_point(half_words[i], true, epsilon)) {
+        std::cout << " (certified all within " << epsilon << ")\n";
       } else {
         std::cout << " (not certified)\n";
       }
@@ -1887,7 +1900,8 @@ void IFSGui::reset_and_pack_window() {
     W_mand_path_movie_increase_length = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_path_movie_increase_length);
     W_mand_path_movie_with_mandlebrot = WidgetCheck(this, "Movie with mandlebrot", -1, 20, path.movie_with_mandlebrot, &IFSGui::S_mand_path_movie_with_mandlebrot);
     W_mand_path_find_uv_words_button = WidgetButton(this, "Find uv words along path", -1, 20, &IFSGui::S_mand_path_find_uv_words);
-    
+    W_mand_path_find_half_words_button = WidgetButton(this, "Find half words along path", -1, 20, &IFSGui::S_mand_path_find_half_words);
+
     if (window_mode == MANDLEBROT) {
       pack_widget_upper_right(NULL, &W_mand_plot);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_limit);
@@ -1944,6 +1958,7 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_path_movie_length_label, &W_mand_path_movie_increase_length);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandlebrot);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_half_words_button);
     } else {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);

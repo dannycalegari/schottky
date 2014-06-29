@@ -268,8 +268,11 @@ class ifs{
                                   double r, 
                                   double& max,
                                   double& min);
-    bool certify_set_B_point(const Bitword& u, double& within);
-    
+    bool certify_set_B_point(const Bitword& u, bool certify_all, double& within);
+    std::vector<Bitword> get_half_balls_along_path(const std::vector<cpx>& path,
+                                                   int d,
+                                                   int verbose);
+    bool certify_set_B_path(const std::vector<cpx>& path, int initial_depth, int verbose);
     
     
     //hole boundary finding functions
