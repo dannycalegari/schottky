@@ -134,6 +134,39 @@ int Bitword::reverse_get(int n) const {
 }
 
 
+cpx Bitword::apply(cpx z, cpx x) const {
+  cpx ans = x;
+  for (int i=0; i<(int)len; ++i) {
+    if (w[i] == 0) {
+      ans = z*ans;
+    } else {
+      ans = z*(ans-1.0)+1.0;
+    }
+  }
+  return ans;
+}
+
+
+Bitword Bitword::pow(int n) const {
+  int new_len = len*n;
+  if (new_len > 64) new_len = 64;
+  Bitword ans;
+  ans.len = new_len;
+  for (int i=0; i<new_len; ++i) {
+    ans.w[i] = w[i%len];
+  }
+  return ans;
+}
+
+
+Bitword Bitword::append(int n, int L) const {
+  std::bitset<64> new_w = w;
+  new_w = new_w << L;
+  for (int i=0; i<L; ++i) {
+    new_w[i] = (n>>i)&1;
+  }
+  return Bitword(new_w, len+L);
+}
 
 
 /****************  IFS functions ****************************/

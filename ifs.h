@@ -94,6 +94,9 @@ struct Bitword {
   Bitword suffix(int n) const;
   std::string str() const;
   int reverse_get(int n) const;
+  cpx apply(cpx z, cpx x) const;
+  Bitword pow(int n) const;
+  Bitword append(int n, int L) const;
 };
 
 std::ostream& operator<<(std::ostream& os, const Bitword& b);
@@ -273,7 +276,12 @@ class ifs{
                                                    int d,
                                                    int verbose);
     bool certify_set_B_path(const std::vector<cpx>& path, int initial_depth, int verbose);
-    
+    //balls
+    void draw_set_B_balls(const std::vector<Bitword>& balls, 
+                          cpx initial_point, 
+                          int d, 
+                         int verbose);
+    cpx solve_for_half(const Bitword& u, cpx start, double tol);
     
     //hole boundary finding functions
     bool hole_boundary_containing_point(std::vector<cpx>& path, bool& closed, 

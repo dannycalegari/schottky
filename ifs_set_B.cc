@@ -240,7 +240,21 @@ std::vector<Bitword> ifs::get_half_balls_along_path(const std::vector<cpx>& path
 }
 
 
-
+//find a parameter taking the infinite word u^inf to 1/2
+cpx ifs::solve_for_half(const Bitword& u, cpx start, double tol) {
+  cpx current_z = start;
+  Bitword upow = u.pow(64/u.len);
+  cpx current_output = upow.apply(current_z, 0.5);
+  cpx deriv, step;
+  double err;
+  while (abs(current_output - 0.5) > tol) {
+    word_deriv(upow, current_z, deriv, err);
+    step = (0.5-current_output)/deriv;
+    current_z += step;
+    current_output =  upow.apply(current_z, 0.5);
+  }
+  return current_z;
+}
 
 
 //open a separate window with a picture of the set B contained inside the 
@@ -271,7 +285,7 @@ void ifs::draw_set_B_balls(const std::vector<Bitword>& balls,
       return;
     }
     if (verbose>0) {
-      std::cout << "Certified " << ball[i] << " within " << ball_rads[i] << "\n";
+      std::cout << "Certified " << balls[i] << " within " << ball_rads[i] << "\n";
     }
   }
   
@@ -291,20 +305,60 @@ void ifs::draw_set_B_balls(const std::vector<Bitword>& balls,
   cpx center = 0.5*(ur+ll);
   double height_res = (ur-center).imag();
   double width_res = (ur-center).real();
-  double d = (height_res > width_res ? height_res : width_res);
-  ll = center - cpx(d,d);
-  ur = center + cpx(d,d);
+  double box_rad = (height_res > width_res ? height_res : width_res);
+  ll = center - cpx(box_rad,box_rad);
+  ur = center + cpx(box_rad,box_rad);
   
-  int num_pix = 512;
-  double pixel_width = 2.0*d/(double)num_pix;
+  //get the pixel data
+  int num_pix = 800;
+  double pixel_width = 2.0*box_rad/(double)num_pix;
   
+  if (verbose>0) {
+    std::cout << "ll: " << ll << "\nur: " << ur << "\n";
+    std::cout << "Pixel width: " << pixel_width << "\n";
+  }
   
-  
-  
+  //draw the circles
   XGraphics X2(num_pix, num_pix, 1, Point2d<float>(0,0));
+  int bcol = X2.get_rgb_color(0,0,1);
+  for (int i=0; i<(int)balls.size(); ++i) {
+    Point2d<int> c( (ball_zs[i].real() - ll.real())/pixel_width,
+                    (ball_zs[i].imag() - ll.imag())/pixel_width );
+    double r = ball_rads[i]/pixel_width;
+    X2.draw_circle(c, r, bcol);
+    if (verbose>0) {
+      std::cout << "Drew circle " << c << " radius " << r << "\n";
+    }
+  }
+  
+  //now draw the little disks inside
+  for (int i=0; i<(int)balls.size(); ++i) {
+    int blcol = X2.get_rgb_color(0,
+                                 (double)i/(double)balls.size(), 
+                                 (double)(balls.size()-i)/(double)balls.size());
+    if (d==0) break;
+    for (int j=0; j<1<<d; ++j) {
+      Bitword u_added = balls[i].append(j, d);
+      cpx little_z = solve_for_half(u_added, ball_zs[i], 0.01*approx_radius*pow(abs(ball_zs[i]), u_added.len));
+      set_params(little_z, little_z);
+      double little_radius;
+      if (!certify_set_B_point(u_added, true, little_radius)) {
+        std::cout << "Couldn't certify disk\n";
+        return;
+      }
+      if (i==0 && verbose>0) {
+        std::cout << "Did " << u_added << " at " << little_z << " radius " << little_radius << "\n";
+      }
+      Point2d<int> c( (little_z.real() - ll.real())/pixel_width,
+                      (little_z.imag() - ll.imag())/pixel_width );
+      double r = little_radius/pixel_width;
+      X2.draw_disk(c, r, blcol);
+    }
+  }
+  
   
   X2.wait_for_key();
-  
+  set_params(old_z, old_w);
 }
 
 
@@ -322,7 +376,7 @@ bool ifs::certify_set_B_path(const std::vector<cpx>& path, int initial_depth, in
     }
   }
   
-  draw_set_B_balls(initial_balls, path[0], 4, verbose);
+  draw_set_B_balls(initial_balls, path[0], 8, verbose);
   
   
   return true;
