@@ -910,14 +910,16 @@ void IFSGui::S_mand_path_find_half_words(XEvent* e) {
   if (e->type != ButtonPress || !path.is_valid) return;
   ifs temp_IFS;
   path.half_words = temp_IFS.get_certified_half_balls_along_path(path.path, limit_depth, 1);
-  path.has_half_words = true;
-  path.half_start = 0;
-  std::stringstream T; T.str(""); T << path.half_start;
-  W_mand_path_half_start_label.update_text(T.str());
-  path.half_end = path.half_words.size()-1;
-  T.str(""); T << path.half_end;
-  W_mand_path_half_end_label.update_text(T.str());
-  draw_mand();
+  path.has_half_words = (path.half_words.size() > 0);
+  if (path.has_half_words) {
+    path.half_start = 0;
+    std::stringstream T; T.str(""); T << path.half_start;
+    W_mand_path_half_start_label.update_text(T.str());
+    path.half_end = path.half_words.size()-1;
+    T.str(""); T << path.half_end;
+    W_mand_path_half_end_label.update_text(T.str());
+    draw_mand();
+  }
 }
 
 
@@ -1464,30 +1466,48 @@ void IFSGui::draw_mand() {
       }
     }
     //if the path has half balls, draw them
+    //if (path.has_half_words) {
+    //  IFS.certify_set_B_path(path.path, limit_depth, 1);
+    //}
     if (path.has_half_words) {
       std::vector<std::vector<Ball> > subdivided_balls(0);
       int i=path.half_start;
+      int num_done = 0;
+      int num_to_do = (path.half_end >= path.half_start ? 
+                            path.half_end - path.half_start+1 : 
+                            (path.half_end+1) + (path.half_words.size()-path.half_start));
+      std::cout << "Num to do: " << num_to_do << "\n";
       do {
+        //find the balls
         subdivided_balls.push_back( IFS.subdivide_half_prefix(path.half_words[i], 
                                                               path.path[0],
                                                               path.half_depth,
                                                               mand_ll, mand_ur) );
-        ++i;
-        if (i == path.half_words.size()) i = 0;
-      } while (i != path.half_end);
-      //draw all the balls
-      int sbs = subdivided_balls.size();
-      for (int i=0; i<sbs; ++i) {
-        int col = get_rgb_color(0, (double)i/(double)sbs,
-                                   (double)(sbs-i)/(double)sbs);
+        std::cout.flush();
+        //draw the balls
+        int sbs = subdivided_balls.back().size();
+        std::cout << "Got the " << sbs << " balls -- about to draw\n";
+        int col = get_rgb_color(0, (double)num_done/(double)num_to_do,
+                                   (double)(num_to_do-num_done)/(double)num_to_do);
+        std::cout << "Got color " << col << "\n";
         XSetForeground(display, MW.gc, col);
-        for (int j=0; j<(int)subdivided_balls[i].size(); ++j) {
-          Point2d<int> p = mand_cpx_to_pixel(subdivided_balls[i][j].center);
-          int r = int(subdivided_balls[i][j].radius / mand_pixel_width);
+        for (int j=0; j<(int)subdivided_balls.back().size(); ++j) {
+          if (j==0) {
+            std::cout << "Drawing ball at " << subdivided_balls.back()[j].center << " of radius " << subdivided_balls.back()[j].radius << 
+                                " with ll " << mand_ll << " ur " << mand_ur <<  " pixel width: " << mand_pixel_width << " so pixel radius = " << int(subdivided_balls.back()[j].radius / mand_pixel_width) << "\n";
+            std::cout.flush();
+          }
+          Point2d<int> p = mand_cpx_to_pixel(subdivided_balls.back()[j].center);
+          int r = int(subdivided_balls.back()[j].radius / mand_pixel_width);
           if (r < 2) r = 2;
           XFillArc(display, MW.p, MW.gc, p.x-r, p.y-r, 2*r, 2*r, 23040, 23040);
-        }
-      }   
+        }  
+        MW.redraw();                               
+        
+        ++i;
+        ++num_done;
+        if (i == path.half_words.size()) i = 0;
+      } while (num_done < num_to_do);
     }
                                              
                                              

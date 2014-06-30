@@ -247,11 +247,16 @@ cpx ifs::solve_for_half(const Bitword& u, cpx start, double tol) {
   cpx current_output = upow.apply(current_z, 0.5);
   cpx deriv, step;
   double err;
+  int i=0;
   while (abs(current_output - 0.5) > tol) {
     word_deriv(upow, current_z, deriv, err);
     step = (0.5-current_output)/deriv;
     current_z += step;
     current_output =  upow.apply(current_z, 0.5);
+    //++i;
+    //if (i%1000 == 0 && i>0) {
+    //  std::cout << "Took " << i << " steps\n";
+    //}
   }
   return current_z;
 }
@@ -377,7 +382,7 @@ std::vector<Bitword> ifs::get_certified_half_balls_along_path(const std::vector<
   for (int i=0; i<(int)balls.size(); ++i) {
     ball_zs[i] = solve_for_half(balls[i], 
                                 initial_point, 
-                                0.01*approx_radius*pow(abs(initial_point), balls[i].len));
+                                0.005*approx_radius*pow(abs(initial_point), balls[i].len));
     if (verbose>0) {
       std::cout << "Placed ball " << balls[i] << " at " << ball_zs[i] << "\n";
     }
@@ -422,25 +427,82 @@ std::vector<Ball> ifs::subdivide_half_prefix(const Bitword& u,
   cpx old_w = w;
   double approx_radius = abs(0.5*start_z-0.5)/(1.0-abs(start_z));
   //set up the initial ball
-  std::vector<Ball> stack(1);
+  std::deque<Ball> stack(1);
   stack[0].word = u.w;
   stack[0].word_len = u.len;
-  stack[0].center = solve_for_half(u, start_z, 0.01*approx_radius*pow(abs(start_z), u.len));
+  stack[0].center = solve_for_half(u, start_z, 0.005*approx_radius*pow(abs(start_z), u.len));
   set_params(stack[0].center, stack[0].center);
   if (!certify_set_B_point(u, true, stack[0].radius)) {
     std::cout << "Couldn't certify disk\n";
     return std::vector<Ball>(0);
   }
   
-  while (stack.size() > 0) {
-  //TODO
+  std::vector<Ball> ans(0);
+  
+  if (d == 0) {
+    ans.resize(1);
+    ans[0] = stack[0];
+    return ans;
   }
   
+  double max_radius = 0;
+  std::cout << "Starting to subdivide half prefix " << u << "\n";
   
-  
-  
+  while (stack.size() > 0) {
+    Ball b = stack.back();
+    stack.pop_back();
+    
+    //std::cout << "Word: " << b.word << " word len: " << b.word_len << " center: " << b.center << " radius: " << b.radius << "\n";
+    
+    //find the next step balls
+    Ball b0(b.center, 0, 0, b.radius, b.word << 1, b.word_len+1);
+    approx_radius = abs(0.5*b0.center-0.5)/(1.0-abs(b0.center));
+    Bitword b0word = Bitword(b0.word, b0.word_len);
+    //std::cout << "Solving for new center within radius " << 0.005*approx_radius*pow(abs(b0.center), b0.word_len) << "\n";
+    b0.center = solve_for_half(b0word, 
+                               b0.center, 
+                               0.005*approx_radius*pow(abs(b0.center), b0.word_len));
+    //std::cout << "New center: " << b0.center << "\n";
+    set_params(b0.center, b0.center);
+    if (!certify_set_B_point(b0word, true, b0.radius)) {
+      std::cout << "Couldn't certify disk\n";
+      return std::vector<Ball>(0);
+    }
+    //std::cout << "New radius: " << b0.radius << "\n";
+    
+    Ball b1(b.center, 0, 0, b.radius, (b.word << 1).flip(0), b.word_len+1);
+    approx_radius = abs(0.5*b1.center-0.5)/(1.0-abs(b1.center));
+    Bitword b1word = Bitword(b1.word, b1.word_len);
+    b1.center = solve_for_half(b1word,
+                               b1.center, 
+                               0.005*approx_radius*pow(abs(b1.center), b1.word_len));
+    set_params(b1.center, b1.center);
+    if (!certify_set_B_point(b1word, true, b1.radius)) {
+      std::cout << "Couldn't certify disk\n";
+      return std::vector<Ball>(0);
+    }
+    
+    //decide what to do with them
+    if (!b0.is_disjoint(ll, ur)) {
+      if (b0.word_len - u.len >= d) {
+        ans.push_back(b0);
+        if (b0.radius > max_radius) max_radius = b0.radius;
+      } else {
+        stack.push_front(b0);
+      }
+    }
+    if (!b1.is_disjoint(ll, ur)) {
+      if (b1.word_len - u.len >= d) {
+        ans.push_back(b1);
+        if (b1.radius > max_radius) max_radius = b1.radius;
+      } else {
+        stack.push_front(b1);
+      }
+    }
+  }
+  std::cout << "Done subdividing; max radius: " << max_radius << "\n";
   set_params(old_z,old_w);
-  return std::vector<Ball>(0);
+  return ans;
 }
 
 
