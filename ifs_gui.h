@@ -93,6 +93,9 @@ struct IFSPath {
   std::vector<std::pair<Bitword,Bitword> > uv_words;
   bool has_half_words;
   std::vector<Bitword> half_words;
+  int half_depth;
+  int half_start;
+  int half_end;
   int movie_length;
   int movie_fps;
   bool movie_with_mandlebrot;
@@ -106,6 +109,9 @@ struct IFSPath {
     movie_length = 10;
     movie_fps = 30;
     movie_with_mandlebrot = false;
+    half_depth = 10;
+    half_start = 0;
+    half_end = 0;
   }
 };
 
@@ -311,6 +317,17 @@ struct IFSGui {
   WidgetCheck W_mand_path_movie_with_mandlebrot;
   WidgetButton W_mand_path_find_uv_words_button;
   WidgetButton W_mand_path_find_half_words_button;
+  WidgetText W_mand_path_half_depth_title;
+  WidgetLeftArrow W_mand_path_half_depth_leftarrow;
+  WidgetText W_mand_path_half_depth_label;
+  WidgetRightArrow W_mand_path_half_depth_rightarrow;
+  WidgetText W_mand_path_half_start_stop_title;
+  WidgetLeftArrow W_mand_path_half_start_leftarrow;
+  WidgetText W_mand_path_half_start_label;
+  WidgetRightArrow W_mand_path_half_start_rightarrow;
+  WidgetLeftArrow W_mand_path_half_end_leftarrow;
+  WidgetText W_mand_path_half_end_label;
+  WidgetRightArrow W_mand_path_half_end_rightarrow;
   
   
   //signal functions
@@ -380,6 +397,12 @@ struct IFSGui {
   void S_mand_path_movie_with_mandlebrot(XEvent* e);
   void S_mand_path_find_uv_words(XEvent* e);
   void S_mand_path_find_half_words(XEvent* e);
+  void S_mand_path_half_increase_depth(XEvent* e);
+  void S_mand_path_half_decrease_depth(XEvent* e);
+  void S_mand_path_half_increase_start(XEvent* e);
+  void S_mand_path_half_decrease_start(XEvent* e);
+  void S_mand_path_half_increase_end(XEvent* e);
+  void S_mand_path_half_decrease_end(XEvent* e);
   
   bool main_window_initialized;
   int main_window_height;

@@ -909,11 +909,81 @@ void IFSGui::S_mand_path_find_uv_words(XEvent* e) {
 void IFSGui::S_mand_path_find_half_words(XEvent* e) {
   if (e->type != ButtonPress || !path.is_valid) return;
   ifs temp_IFS;
-  temp_IFS.certify_set_B_path(path.path, limit_depth, 1);
+  path.half_words = temp_IFS.get_certified_half_balls_along_path(path.path, limit_depth, 1);
+  path.has_half_words = true;
+  path.half_start = 0;
+  std::stringstream T; T.str(""); T << path.half_start;
+  W_mand_path_half_start_label.update_text(T.str());
+  path.half_end = path.half_words.size()-1;
+  T.str(""); T << path.half_end;
+  W_mand_path_half_end_label.update_text(T.str());
+  draw_mand();
 }
 
 
+void IFSGui::S_mand_path_half_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++path.half_depth;
+  std::stringstream T; T.str(""); T << path.half_depth;
+  W_mand_path_half_depth_label.update_text(T.str());
+  draw_mand();
+}
 
+void IFSGui::S_mand_path_half_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --path.half_depth; 
+  if (path.half_depth < 0) {
+    path.half_depth = 0;
+    return;
+  }
+  std::stringstream T; T.str(""); T << path.half_depth;
+  W_mand_path_half_depth_label.update_text(T.str());
+  draw_mand();
+}
+
+void IFSGui::S_mand_path_half_increase_start(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++path.half_start;
+  if (path.has_half_words && path.half_start >= path.half_words.size()) {
+    path.half_start = 0;
+  }
+  std::stringstream T; T.str(""); T << path.half_start;
+  W_mand_path_half_start_label.update_text(T.str());
+  draw_mand();
+}
+
+void IFSGui::S_mand_path_half_decrease_start(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --path.half_start;
+  if (path.has_half_words && path.half_start < 0) {
+    path.half_start = path.half_words.size() - 1;
+  }
+  std::stringstream T; T.str(""); T << path.half_start;
+  W_mand_path_half_start_label.update_text(T.str());
+  draw_mand();
+}
+
+void IFSGui::S_mand_path_half_increase_end(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++path.half_end;
+  if (path.has_half_words && path.half_end >= path.half_words.size()) {
+    path.half_end = 0;
+  }
+  std::stringstream T; T.str(""); T << path.half_end;
+  W_mand_path_half_end_label.update_text(T.str());
+  draw_mand();
+}
+
+void IFSGui::S_mand_path_half_decrease_end(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --path.half_end;
+  if (path.has_half_words && path.half_end < 0) {
+    path.half_end = path.half_words.size()-1;
+  }
+  std::stringstream T; T.str(""); T << path.half_end;
+  W_mand_path_half_end_label.update_text(T.str());
+  draw_mand();
+}
 
 void IFSGui::make_path_drawing_buttons() {
   detach_widget(&W_mand_path_create_by_drawing_button);
@@ -950,6 +1020,18 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandlebrot);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_half_words_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_half_depth_title);
+  pack_widget_upper_right(&W_mand_path_half_depth_title, &W_mand_path_half_depth_leftarrow);
+  pack_widget_upper_right(&W_mand_path_half_depth_leftarrow, &W_mand_path_half_depth_label);
+  pack_widget_upper_right(&W_mand_path_half_depth_label, &W_mand_path_half_depth_rightarrow);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_half_start_stop_title);
+  pack_widget_upper_right(&W_mand_path_half_start_stop_title, &W_mand_path_half_start_leftarrow);
+  pack_widget_upper_right(&W_mand_path_half_start_leftarrow, &W_mand_path_half_start_label);
+  pack_widget_upper_right(&W_mand_path_half_start_label, &W_mand_path_half_start_rightarrow);
+  pack_widget_upper_right(&W_mand_path_half_start_rightarrow, &W_mand_path_half_end_leftarrow);
+  pack_widget_upper_right(&W_mand_path_half_end_leftarrow, &W_mand_path_half_end_label);
+  pack_widget_upper_right(&W_mand_path_half_end_label, &W_mand_path_half_end_rightarrow);
+  
   W_mand_path_tasks_title.initial_draw();
   W_mand_path_delete_button.initial_draw();
   W_mand_path_find_traps_button.initial_draw();
@@ -964,6 +1046,20 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   W_mand_path_movie_increase_length.initial_draw();
   W_mand_path_find_uv_words_button.initial_draw();
   W_mand_path_find_half_words_button.initial_draw();
+  W_mand_path_half_depth_title.initial_draw();
+  W_mand_path_half_depth_leftarrow.initial_draw();
+  T.str(""); T << path.half_depth;
+  W_mand_path_half_depth_label.update_text(T.str());
+  W_mand_path_half_depth_rightarrow.initial_draw();
+  W_mand_path_half_start_stop_title.initial_draw();
+  W_mand_path_half_start_leftarrow.initial_draw();
+  T.str(""); T << path.half_start;
+  W_mand_path_half_start_label.update_text(T.str());
+  W_mand_path_half_start_rightarrow.initial_draw();
+  W_mand_path_half_end_leftarrow.initial_draw();
+  T.str(""); T << path.half_end;
+  W_mand_path_half_end_label.update_text(T.str());
+  W_mand_path_half_end_rightarrow.initial_draw();
 }
 
 void IFSGui::make_path_creation_buttons(bool cancelling) {
@@ -984,6 +1080,17 @@ void IFSGui::make_path_creation_buttons(bool cancelling) {
     detach_widget(&W_mand_path_movie_with_mandlebrot);
     detach_widget(&W_mand_path_find_uv_words_button);
     detach_widget(&W_mand_path_find_half_words_button);
+    detach_widget(&W_mand_path_half_depth_title);
+    detach_widget(&W_mand_path_half_depth_leftarrow);
+    detach_widget(&W_mand_path_half_depth_label);
+    detach_widget(&W_mand_path_half_depth_rightarrow);
+    detach_widget(&W_mand_path_half_start_stop_title);
+    detach_widget(&W_mand_path_half_start_leftarrow);
+    detach_widget(&W_mand_path_half_start_label);
+    detach_widget(&W_mand_path_half_start_rightarrow);
+    detach_widget(&W_mand_path_half_end_leftarrow);
+    detach_widget(&W_mand_path_half_end_label);
+    detach_widget(&W_mand_path_half_end_rightarrow);
   }
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);
@@ -1356,6 +1463,34 @@ void IFSGui::draw_mand() {
         XFillArc(display, MW.p, MW.gc, p.x-r, p.y-r, 2*r, 2*r, 23040, 23040);
       }
     }
+    //if the path has half balls, draw them
+    if (path.has_half_words) {
+      std::vector<std::vector<Ball> > subdivided_balls(0);
+      int i=path.half_start;
+      do {
+        subdivided_balls.push_back( IFS.subdivide_half_prefix(path.half_words[i], 
+                                                              path.path[0],
+                                                              path.half_depth,
+                                                              mand_ll, mand_ur) );
+        ++i;
+        if (i == path.half_words.size()) i = 0;
+      } while (i != path.half_end);
+      //draw all the balls
+      int sbs = subdivided_balls.size();
+      for (int i=0; i<sbs; ++i) {
+        int col = get_rgb_color(0, (double)i/(double)sbs,
+                                   (double)(sbs-i)/(double)sbs);
+        XSetForeground(display, MW.gc, col);
+        for (int j=0; j<(int)subdivided_balls[i].size(); ++j) {
+          Point2d<int> p = mand_cpx_to_pixel(subdivided_balls[i][j].center);
+          int r = int(subdivided_balls[i][j].radius / mand_pixel_width);
+          if (r < 2) r = 2;
+          XFillArc(display, MW.p, MW.gc, p.x-r, p.y-r, 2*r, 2*r, 23040, 23040);
+        }
+      }   
+    }
+                                             
+                                             
   }
   
   MW.redraw();
@@ -1901,6 +2036,23 @@ void IFSGui::reset_and_pack_window() {
     W_mand_path_movie_with_mandlebrot = WidgetCheck(this, "Movie with mandlebrot", -1, 20, path.movie_with_mandlebrot, &IFSGui::S_mand_path_movie_with_mandlebrot);
     W_mand_path_find_uv_words_button = WidgetButton(this, "Find uv words along path", -1, 20, &IFSGui::S_mand_path_find_uv_words);
     W_mand_path_find_half_words_button = WidgetButton(this, "Find half words along path", -1, 20, &IFSGui::S_mand_path_find_half_words);
+    W_mand_path_half_depth_title = WidgetText(this, "Half ball depth", -1, 20);
+    W_mand_path_half_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_path_half_decrease_depth);
+    T.str(""); T << path.half_depth;
+    W_mand_path_half_depth_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_path_half_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_path_half_increase_depth);
+    W_mand_path_half_start_stop_title = WidgetText(this, "Start/stop:", -1, 20);
+    W_mand_path_half_start_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_path_half_decrease_start);
+    T.str(""); T << path.half_start;
+    W_mand_path_half_start_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_path_half_start_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_path_half_increase_start);
+    W_mand_path_half_end_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_path_half_decrease_end);
+    T.str(""); T << path.half_end;
+    W_mand_path_half_end_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_path_half_end_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_path_half_increase_end);
+
+
+
 
     if (window_mode == MANDLEBROT) {
       pack_widget_upper_right(NULL, &W_mand_plot);
@@ -1959,6 +2111,17 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandlebrot);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_half_words_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_half_depth_title);
+      pack_widget_upper_right(&W_mand_path_half_depth_title, &W_mand_path_half_depth_leftarrow);
+      pack_widget_upper_right(&W_mand_path_half_depth_leftarrow, &W_mand_path_half_depth_label);
+      pack_widget_upper_right(&W_mand_path_half_depth_label, &W_mand_path_half_depth_rightarrow);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_half_start_stop_title);
+      pack_widget_upper_right(&W_mand_path_half_start_stop_title, &W_mand_path_half_start_leftarrow);
+      pack_widget_upper_right(&W_mand_path_half_start_leftarrow, &W_mand_path_half_start_label);
+      pack_widget_upper_right(&W_mand_path_half_start_label, &W_mand_path_half_start_rightarrow);
+      pack_widget_upper_right(&W_mand_path_half_start_rightarrow, &W_mand_path_half_end_leftarrow);
+      pack_widget_upper_right(&W_mand_path_half_end_leftarrow, &W_mand_path_half_end_label);
+      pack_widget_upper_right(&W_mand_path_half_end_label, &W_mand_path_half_end_rightarrow);
     } else {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_drawing_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_by_boundary_button);

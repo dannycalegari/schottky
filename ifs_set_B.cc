@@ -200,7 +200,7 @@ std::vector<Bitword> ifs::get_half_balls_along_path(const std::vector<cpx>& path
   std::map<Bitword, std::pair<int,int> >::iterator it = ball_indices.begin();
   std::map<Bitword, std::pair<int,int> >::iterator it2;
   std::map<Bitword, std::pair<int,int> >::iterator it3;
-  while (it != ball_indices.end()) {
+  while (false) { //it != ball_indices.end()) {
     it2 = ball_indices.begin();
     while (it2 != ball_indices.end()) {
       if (it2 == it) {
@@ -265,6 +265,7 @@ void ifs::draw_set_B_balls(const std::vector<Bitword>& balls,
                            int verbose) {
   cpx old_z = z;
   cpx old_w = w;
+  
   //first, get a guess about z for each of the balls
   double approx_radius = abs(0.5*initial_point-0.5)/(1.0-abs(initial_point));
   std::vector<cpx> ball_zs(balls.size());
@@ -272,7 +273,7 @@ void ifs::draw_set_B_balls(const std::vector<Bitword>& balls,
   for (int i=0; i<(int)balls.size(); ++i) {
     ball_zs[i] = solve_for_half(balls[i], 
                                 initial_point, 
-                                approx_radius*pow(abs(initial_point), balls[i].len));
+                                0.01*approx_radius*pow(abs(initial_point), balls[i].len));
     if (verbose>0) {
       std::cout << "Placed ball " << balls[i] << " at " << ball_zs[i] << "\n";
     }
@@ -363,7 +364,38 @@ void ifs::draw_set_B_balls(const std::vector<Bitword>& balls,
 
 
 
-
+std::vector<Bitword> ifs::get_certified_half_balls_along_path(const std::vector<cpx>& path,
+                                                              int d,
+                                                              int verbose) {
+  std::vector<Bitword> balls = get_half_balls_along_path(path, d, verbose);
+  cpx old_z = z;
+  cpx old_w = w;
+  cpx initial_point = path[0];
+  double approx_radius = abs(0.5*initial_point-0.5)/(1.0-abs(initial_point));
+  std::vector<cpx> ball_zs(balls.size());
+  std::vector<double> ball_rads(balls.size());
+  for (int i=0; i<(int)balls.size(); ++i) {
+    ball_zs[i] = solve_for_half(balls[i], 
+                                initial_point, 
+                                0.01*approx_radius*pow(abs(initial_point), balls[i].len));
+    if (verbose>0) {
+      std::cout << "Placed ball " << balls[i] << " at " << ball_zs[i] << "\n";
+    }
+  }
+  //certify all of the balls within some radius
+  for (int i=0; i<(int)balls.size(); ++i) {
+    set_params(ball_zs[i], ball_zs[i]);
+    if (!certify_set_B_point(balls[i], true, ball_rads[i])) {
+      std::cout << "Couldn't certify a ball; aborting\n";
+      return std::vector<Bitword>(0);
+    }
+    if (verbose>0) {
+      std::cout << "Certified " << balls[i] << " within " << ball_rads[i] << "\n";
+    }
+  }
+  set_params(old_z, old_w);
+  return balls;
+}
 
 
 bool ifs::certify_set_B_path(const std::vector<cpx>& path, int initial_depth, int verbose) {
@@ -376,13 +408,40 @@ bool ifs::certify_set_B_path(const std::vector<cpx>& path, int initial_depth, in
     }
   }
   
-  draw_set_B_balls(initial_balls, path[0], 8, verbose);
+  draw_set_B_balls(initial_balls, path[0], 10, verbose);
   
   
   return true;
 }
 
 
+std::vector<Ball> ifs::subdivide_half_prefix(const Bitword& u, 
+                                             cpx start_z,
+                                             int d, cpx ll, cpx ur) {
+  cpx old_z = z;
+  cpx old_w = w;
+  double approx_radius = abs(0.5*start_z-0.5)/(1.0-abs(start_z));
+  //set up the initial ball
+  std::vector<Ball> stack(1);
+  stack[0].word = u.w;
+  stack[0].word_len = u.len;
+  stack[0].center = solve_for_half(u, start_z, 0.01*approx_radius*pow(abs(start_z), u.len));
+  set_params(stack[0].center, stack[0].center);
+  if (!certify_set_B_point(u, true, stack[0].radius)) {
+    std::cout << "Couldn't certify disk\n";
+    return std::vector<Ball>(0);
+  }
+  
+  while (stack.size() > 0) {
+  //TODO
+  }
+  
+  
+  
+  
+  set_params(old_z,old_w);
+  return std::vector<Ball>(0);
+}
 
 
 

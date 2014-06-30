@@ -275,7 +275,16 @@ class ifs{
     std::vector<Bitword> get_half_balls_along_path(const std::vector<cpx>& path,
                                                    int d,
                                                    int verbose);
+    std::vector<Bitword> get_certified_half_balls_along_path(const std::vector<cpx>& path,
+                                                             int d,
+                                                             int verbose);
     bool certify_set_B_path(const std::vector<cpx>& path, int initial_depth, int verbose);
+    std::vector<Ball> subdivide_half_prefix(const Bitword& u, 
+                                             cpx start_z,
+                                             int d,
+                                             cpx ll, cpx ur);
+    
+    
     //balls
     void draw_set_B_balls(const std::vector<Bitword>& balls, 
                           cpx initial_point, 
