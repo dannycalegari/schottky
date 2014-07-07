@@ -1473,6 +1473,7 @@ void IFSGui::draw_mand() {
       std::vector<std::vector<Ball> > subdivided_balls(0);
       int i=path.half_start;
       int num_done = 0;
+      int total_num = path.half_words.size();
       int num_to_do = (path.half_end >= path.half_start ? 
                             path.half_end - path.half_start+1 : 
                             (path.half_end+1) + (path.half_words.size()-path.half_start));
@@ -1487,8 +1488,8 @@ void IFSGui::draw_mand() {
         //draw the balls
         int sbs = subdivided_balls.back().size();
         std::cout << "Got the " << sbs << " balls -- about to draw\n";
-        int col = get_rgb_color(0, (double)num_done/(double)num_to_do,
-                                   (double)(num_to_do-num_done)/(double)num_to_do);
+        int col = get_rgb_color(0, (double)i/(double)total_num,
+                                   (double)(total_num-i)/(double)total_num);
         std::cout << "Got color " << col << "\n";
         XSetForeground(display, MW.gc, col);
         for (int j=0; j<(int)subdivided_balls.back().size(); ++j) {
