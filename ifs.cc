@@ -1015,9 +1015,76 @@ void ifs::word_deriv(const Bitword& u, const cpx& z0, cpx& deriv, double& err) {
 }
   
 
-
-
-
+//computes the angle and scale coordinates of this limit set.  
+//
+//this function finds the boundary of the limit set, expressed as 
+//a bunch of words.  Then it splits the boundary into the f and g halves, 
+//removes the prefix "f" from the f half, and finds where that interval is, 
+//and how long it is.  The position gives theta and the length 
+//gives lambda
+bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
+  
+  //first, compute all the balls
+  ifs temp_IFS;
+  temp_IFS.set_params(z,z);
+  
+  //find all the balls
+  double min_r;
+  if (!temp_IFS.minimal_enclosing_radius(min_r) ||
+      !temp_IFS.circ_connected(min_r)) {
+    return false;
+  }
+  Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
+  std::vector<Ball> balls(0);
+  compute_balls(balls, initial_ball, n_depth);
+  
+  //get a box which contains the balls
+  cpx ll, ur;
+  box_containing_balls(balls, ll, ur);
+  cpx box_center = 0.5*(ur + ll);
+  double box_radius = 0.5*(ur.real() - ll.real());
+  
+  //make the box slightly larger so that we make sure the 
+  //balls have some room around them
+  box_radius *= 1.05;
+  ll = cpx(box_center.real()-box_radius, box_center.imag()-box_radius);
+  ur = cpx(box_center.real()+box_radius, box_center.imag()+box_radius);
+  
+  //figure out how big the pixels should be
+  //(the ball radius ought to be about 2 pixel diameters)
+  double desired_pixel_diameter = balls[0].radius/2.5;
+  int num_pixels = int( (2*box_radius)/desired_pixel_diameter + 1 );
+  if (num_pixels > 1000) num_pixels = 1000;  
+  
+  //create a trap grid from the balls
+  TrapGrid TG;
+  TG.reset_grid(ll, ur, num_pixels);
+  TG.fill_pixels(balls);
+  
+  //compute the boundary (the third coordinate is unused)
+  std::vector<Point3d<int> > pixel_boundary(0);
+  TG.compute_boundary(pixel_boundary);
+  
+  TG.show(NULL, &pixel_boundary, NULL, NULL, NULL);
+  
+  //get the list of uv words from the boundary
+  std::vector<Bitword> word_boundary(0);
+  for (int i=0; i<(int)pixel_boundary.size(); ++i) {
+    int ii = pixel_boundary[i].x;
+    int jj = pixel_boundary[i].y;
+    int ball_index = -1;
+    if (TG.grid[ii][jj].z_ball_status > 0) {
+      ball_index = TG.grid[ii][jj].closest_z_ball;
+    } else {
+      ball_index = TG.grid[ii][jj].closest_w_ball;
+    }   
+    word_boundary[i] = Bitword( balls[ball_index].word, balls[ball_index].word_len );
+    std::cout << i << ": " << word_boundary[i] << "\n";
+  }
+  
+   
+  return true;
+}
 
 
 

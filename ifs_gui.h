@@ -186,7 +186,10 @@ struct IFSGui {
   bool point_trap_check;
   int point_trap_depth;
   std::vector<std::pair<Bitword,Bitword> > point_trap_words;
-  
+  bool point_coordinates_check;
+  int point_coordinates_depth;
+  double point_coordinates_theta;
+  double point_coordinates_lambda;
   
   //data about path
   IFSPath path;
@@ -246,6 +249,12 @@ struct IFSGui {
   WidgetText W_point_uv_words_depth_label;
   WidgetRightArrow W_point_uv_words_rightarrow;
   WidgetText W_point_uv_words_status;
+  
+  WidgetCheck W_point_coordinates_check;
+  WidgetLeftArrow W_point_coordinates_leftarrow;
+  WidgetText W_point_coordinates_depth_label;
+  WidgetRightArrow W_point_coordinates_rightarrow;
+  WidgetText W_point_coordinates_status;
   
   WidgetDraw W_limit_plot;
   WidgetText W_limit_depth_title;
@@ -383,6 +392,9 @@ struct IFSGui {
   void S_point_uv_words(XEvent* e);
   void S_point_uv_words_increase_depth(XEvent* e);
   void S_point_uv_words_decrease_depth(XEvent* e);
+  void S_point_coordinates(XEvent* e);
+  void S_point_coordinates_increase_depth(XEvent* e);
+  void S_point_coordinates_decrease_depth(XEvent* e);
   
   void S_mand_path_create_by_drawing_button(XEvent* e);
   void S_mand_path_create_by_boundary(XEvent* e);

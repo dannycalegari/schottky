@@ -788,6 +788,31 @@ void IFSGui::S_point_trap_decrease_depth(XEvent* e) {
 }
 
 
+void IFSGui::S_point_coordinates(XEvent* e) {  
+  if (e->type != ButtonPress) return;
+  point_coordinates_check = !point_coordinates_check;
+  W_point_coordinates_check.checked = point_coordinates_check;
+  W_point_coordinates_check.redraw();
+  recompute_point_data();
+}
+void IFSGui::S_point_coordinates_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++point_coordinates_depth;
+  std::stringstream T; T.str(""); T << point_coordinates_depth;
+  W_point_coordinates_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+void IFSGui::S_point_coordinates_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --point_coordinates_depth;
+  std::stringstream T; T.str(""); T << point_coordinates_depth;
+  W_point_coordinates_depth_label.update_text(T.str());
+  recompute_point_data();
+}
+
+
+
 
 void IFSGui::S_mand_path_create_by_drawing_button(XEvent* e) {
   if (e->type != ButtonPress) return;
@@ -1687,6 +1712,19 @@ void IFSGui::recompute_point_data() {
   //} else {
   //  std::cout << "no\n";
   //}
+  
+  if (!point_coordinates_check) {
+    T.str(""); T << "(disabled)";
+  } else {    
+    point_coordinates_theta = -1;
+    point_coordinates_lambda = -1;
+    IFS.compute_coordinates(&point_coordinates_theta, 
+                            &point_coordinates_lambda, 
+                            point_coordinates_depth);
+    T.str("");
+    T << "Theta: " << point_coordinates_theta << " Lambda: " << point_coordinates_lambda;
+  }
+  W_point_coordinates_status.update_text(T.str());
 }
 
 
@@ -1879,13 +1917,13 @@ void IFSGui::reset_and_pack_window() {
   int x = (width_rest > height_rest ? height_rest : width_rest);
   
   if (window_mode == MANDLEBROT) {
-    main_window_height = x + 120;
+    main_window_height = x + 140;
     main_window_width = x + mand_sidebar_size;
   } else if (window_mode == LIMIT) {
-    main_window_height = x + 120;
+    main_window_height = x + 140;
     main_window_width = x + limit_sidebar_size;
   } else {
-    main_window_height = x + 120;
+    main_window_height = x + 140;
     main_window_width = 2*x + mand_sidebar_size + limit_sidebar_size;
   }
   
@@ -1951,6 +1989,13 @@ void IFSGui::reset_and_pack_window() {
   W_point_trap_depth_label = WidgetText(this, T.str(), -1, 20);
   W_point_trap_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_trap_increase_depth);
   W_point_trap_status = WidgetText(this, "initializing", x, 20);
+  
+  W_point_coordinates_check = WidgetCheck(this, "Coordinates", 105, 20, point_coordinates_check, &IFSGui::S_point_coordinates);
+  W_point_coordinates_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_coordinates_decrease_depth);
+  T.str(""); T << point_coordinates_depth;
+  W_point_coordinates_depth_label = WidgetText(this, T.str(), -1, 20);
+  W_point_coordinates_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_coordinates_increase_depth);
+  W_point_coordinates_status = WidgetText(this, "initializing", x, 20);
   
   //if the limit set is shown:
   if (window_mode != MANDLEBROT) {
@@ -2172,6 +2217,11 @@ void IFSGui::reset_and_pack_window() {
   pack_widget_upper_right(&W_point_trap_leftarrow, &W_point_trap_depth_label);
   pack_widget_upper_right(&W_point_trap_depth_label, &W_point_trap_rightarrow);
   pack_widget_upper_right(&W_point_trap_rightarrow, &W_point_trap_status);
+  pack_widget_upper_right(NULL, &W_point_coordinates_check);
+  pack_widget_upper_right(&W_point_coordinates_check, &W_point_coordinates_leftarrow);
+  pack_widget_upper_right(&W_point_coordinates_leftarrow, &W_point_coordinates_depth_label);
+  pack_widget_upper_right(&W_point_coordinates_depth_label, &W_point_coordinates_rightarrow);
+  pack_widget_upper_right(&W_point_coordinates_rightarrow, &W_point_coordinates_status);
   
   
   
@@ -2272,6 +2322,8 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   point_trap_check = false;
   point_trap_depth = 12;
   point_trap_words.resize(0);
+  point_coordinates_check = false;
+  point_coordinates_depth = 12;
   
   currently_drawing_path = false;
   

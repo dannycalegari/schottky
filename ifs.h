@@ -178,8 +178,10 @@ class ifs{
     void draw_color_dots(int d, cpx u, long color);
     void draw_color_chunky_dots(int d, cpx u, long color, double radius);
     void draw_limit_set();
-		
-		
+    
+    //IFS coordinate computation
+    bool compute_coordinates(double* theta, double* lambda, int n_depth);
+    
     //mandlebrot mode
     cpx center;            // center of screen in mandelbrot mode
     double wind;           // size of window in mandelbrot mode
