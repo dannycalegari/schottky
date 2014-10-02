@@ -97,6 +97,8 @@ struct Bitword {
   cpx apply(cpx z, cpx x) const;
   Bitword pow(int n) const;
   Bitword append(int n, int L) const;
+  bool operator==(const Bitword& b) const;
+  bool operator!=(const Bitword& b) const;
 };
 
 std::ostream& operator<<(std::ostream& os, const Bitword& b);

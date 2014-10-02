@@ -169,6 +169,15 @@ Bitword Bitword::append(int n, int L) const {
 }
 
 
+bool Bitword::operator==(const Bitword& b) const {
+  return str() == b.str();
+}
+
+bool Bitword::operator!=(const Bitword& b) const {
+  return str() != b.str();
+}
+
+
 /****************  IFS functions ****************************/
 ifs::ifs() {
 }
@@ -1068,7 +1077,7 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   TG.show(NULL, &pixel_boundary, NULL, NULL, NULL);
   
   //get the list of uv words from the boundary
-  std::vector<Bitword> word_boundary(0);
+  std::vector<Bitword> unreduced_word_boundary(pixel_boundary.size());
   for (int i=0; i<(int)pixel_boundary.size(); ++i) {
     int ii = pixel_boundary[i].x;
     int jj = pixel_boundary[i].y;
@@ -1078,10 +1087,55 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
     } else {
       ball_index = TG.grid[ii][jj].closest_w_ball;
     }   
-    word_boundary[i] = Bitword( balls[ball_index].word, balls[ball_index].word_len );
-    std::cout << i << ": " << word_boundary[i] << "\n";
+    unreduced_word_boundary[i] = Bitword( balls[ball_index].word, 
+                                          balls[ball_index].word_len );
+    std::cout << i << ": " << unreduced_word_boundary[i] << "\n";
   }
   
+  //reduce the boundary
+  int start_index = 0;
+  int M = (int)pixel_boundary.size();
+  while (unreduced_word_boundary[start_index].reverse_get(0) != 1 || 
+         unreduced_word_boundary[(start_index+1)%M].reverse_get(0) != 0) ++start_index;
+  start_index = (start_index+1)%M;
+  std::vector<Bitword> word_boundary(0);
+  word_boundary.push_back(unreduced_word_boundary[start_index]);
+  for (int i=1; i<M; ++i) {
+    Bitword b = unreduced_word_boundary[(start_index+i)%M];
+    if (b != word_boundary.back()) {
+      word_boundary.push_back(b);
+    }
+  }
+  
+  //find where the boundary goes 0->1 or 1->0
+  std::vector<int> switch01indices(0);
+  std::vector<int> switch10indices(0);
+  M = (int)word_boundary.size();
+  for (int i=0; i<M; ++i) {
+    int a = word_boundary[i].reverse_get(0);
+    int b = word_boundary[(i+1)%M].reverse_get(0);
+    if (a != b) {
+      if (a == 0) {
+        switch01indices.push_back(i);
+      } else {
+        switch10indices.push_back(i);
+      }
+    }
+  }
+  
+  //find the largest gap
+  std::vector<int> gaps(switch01indices.size());
+  for (int i=0; i<(int)switch01indices.size(); ++i) {
+    gaps[i] = switch10indices[i] - switch01indices[i];
+    gaps[i] = (gaps[i] >= 0 ? gaps[i] : (gaps[i]+M)%M);
+  }
+  int largest_gap_ind = -1;
+  for (int i=0; i<(int)switch01indices.size(); ++i) {
+    if (largest_gap_ind == -1 || gaps[largest_gap_ind] < gaps[i]) {
+      largest_gap_ind = i;
+    }
+  }
+      
    
   return true;
 }
