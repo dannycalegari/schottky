@@ -1718,9 +1718,9 @@ void IFSGui::recompute_point_data() {
   } else {    
     point_coordinates_theta = -1;
     point_coordinates_lambda = -1;
-    IFS.compute_coordinates(&point_coordinates_theta, 
-                            &point_coordinates_lambda, 
-                            point_coordinates_depth);
+    (void) IFS.compute_coordinates(&point_coordinates_theta, 
+                                &point_coordinates_lambda, 
+                                point_coordinates_depth);
     T.str("");
     T << "Theta: " << point_coordinates_theta << " Lambda: " << point_coordinates_lambda;
   }

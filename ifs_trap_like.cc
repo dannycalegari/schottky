@@ -832,7 +832,6 @@ int ifs::check_limit_TLB_recursive(const std::vector<Ball>& TLB,
   cpx omega = cpx(0.3718586800741364, 0.5194111537479428);
   cpx ep = old_z - omega;
   set_params(omega, omega);
-  int verbose = 0;
   
   
   double min_r;

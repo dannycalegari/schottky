@@ -1036,20 +1036,20 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   //first, compute all the balls
   ifs temp_IFS;
   temp_IFS.set_params(z,z);
+  temp_IFS.depth = n_depth;
   
   //find all the balls
   double min_r;
-  if (!temp_IFS.minimal_enclosing_radius(min_r) ||
-      !temp_IFS.circ_connected(min_r)) {
-    return false;
-  }
+  if (!temp_IFS.minimal_enclosing_radius(min_r))  return false;
+  if (!temp_IFS.circ_connected(min_r)) return false;
+  
   Ball initial_ball(0.5,(z-1.0)/2.0,(1.0-w)/2.0,min_r);
   std::vector<Ball> balls(0);
-  compute_balls(balls, initial_ball, n_depth);
+  temp_IFS.compute_balls(balls, initial_ball, n_depth);
   
   //get a box which contains the balls
   cpx ll, ur;
-  box_containing_balls(balls, ll, ur);
+  temp_IFS.box_containing_balls(balls, ll, ur);
   cpx box_center = 0.5*(ur + ll);
   double box_radius = 0.5*(ur.real() - ll.real());
   
@@ -1070,10 +1070,13 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   TG.reset_grid(ll, ur, num_pixels);
   TG.fill_pixels(balls);
   
-  //compute the boundary (the third coordinate is unused)
+  //compute the boundary (the third coordinate is unused, so 
+  //we need to set it to zero)
   std::vector<Point3d<int> > pixel_boundary(0);
   TG.compute_boundary(pixel_boundary);
-  
+  for (int i=0; i<(int)pixel_boundary.size(); ++i) {
+    pixel_boundary[i].z=0;
+  }
   TG.show(NULL, &pixel_boundary, NULL, NULL, NULL);
   
   //get the list of uv words from the boundary
@@ -1168,39 +1171,49 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   int stripped_block_middle;
   int stripped_block_len;
   int wL = word_boundary[0].len;
-  //find where the stripped interval begins
+  //find where the stripped interval begins and ends
+  //to make sure we have the correct position, we 
+  //need to find the one which is followed by its stripped follower
+  //(before seeing another copy of the first one)
+  std::vector<std::pair<Bitword, int> > just_starts(0);
+  std::vector<std::pair<Bitword, int> > just_ends(0);
+  Bitword a = stripped0[0];
+  Bitword b = stripped0[1];
+  Bitword y = stripped0[stripped0.size()-2];
+  Bitword z = stripped0[stripped0.size()-1];
   for (int i=0; i<M; ++i) {
-    int ip1 = (i+1)%M;
-    if (word_boundary[i].prefix(wL-1) == stripped0[0]) {
-      if (word_boundary[i].prefix(wL-1) == word_boundary[ip1].prefix(wL-1)) {
-        ip1 = (ip1+1)%M;
-      }
-      if (word_boundary[ip1].prefix(wL-1) == stripped0[1]) {
-        stripped_block_start = i;
-        break;
-      }
+    Bitword t = word_boundary[i].prefix(wL-1);
+    if (t == a || t == b) {
+      just_starts.push_back( std::make_pair( t, i ) );
+    }
+    if (t == y || t == z) {
+      just_ends.push_back( std::make_pair( t, i ) );
     }
   }
-  //find where the stripped interval ends
-  for (int i=0; i<M; ++i) {
-    int ip1 = (i+1)%M;
-    if (word_boundary[i].prefix(wL-1) == stripped0[stripped0.size()-2]) {
-      if (word_boundary[i].prefix(wL-1) == word_boundary[ip1].prefix(wL-1)) {
-        ip1 = (ip1+1)%M;
-      }
-      if (word_boundary[ip1].prefix(wL-1) == stripped0[stripped0.size()-1]) {
-        stripped_block_end = i;
-        break;
-      }
+  for (int i=0; i<(int)just_starts.size(); ++i) {
+    int ip1 = (i+1)%just_starts.size();
+    if (just_starts[i].first == a && just_starts[ip1].first == b) {
+      stripped_block_start = just_starts[i].second;
+      break;
     }
   }
+  for (int i=0; i<(int)just_ends.size(); ++i) {
+    int ip1 = (i+1)%just_ends.size();
+    if (just_ends[i].first == y && just_ends[ip1].first == z) {
+      stripped_block_end = (just_ends[ip1].second+1)%M;
+      break;
+    }
+  }
+  
+    
   if (stripped_block_end < stripped_block_start) {
     stripped_block_len = (stripped_block_end+M) - stripped_block_start;
-    stripped_block_middle = (stripped_block_start + stripped_block_len/2)%M;
-  } else {
-    stripped_block_middle = (stripped_block_start + stripped_block_end)/2;
+  } else if (stripped_block_end > stripped_block_start) {
     stripped_block_len = stripped_block_end - stripped_block_start;
+  } else if (stripped_block_end == stripped_block_start) {
+    stripped_block_len = M;
   }
+  stripped_block_middle = (stripped_block_start + stripped_block_len/2)%M;
   
   std::cout << "Stripped block: " << stripped_block_start << ", " 
                                   << stripped_block_middle << ", " 

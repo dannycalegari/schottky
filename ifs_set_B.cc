@@ -129,7 +129,7 @@ std::vector<Bitword> ifs::get_half_balls_along_path(const std::vector<cpx>& path
   
   int i=0;
   //subdivide the path until every step is a strict subset or superset
-  while (i < ball_list.size()) {
+  while (i < (int)ball_list.size()) {
     int ip1 = (i+1)%ball_list.size();
     //check if subdivision is necessary
     if (std::includes(ball_list[i].second.begin(), ball_list[i].second.end(),
@@ -163,7 +163,7 @@ std::vector<Bitword> ifs::get_half_balls_along_path(const std::vector<cpx>& path
 
   //this list records the indices on which the balls starts and stops
   std::map<Bitword, std::pair<int,int> > ball_indices;
-  for (int i=0; i<ball_list.size(); ++i) {
+  for (int i=0; i<(int)ball_list.size(); ++i) {
     int ip1 = (i+1)%ball_list.size();
     std::vector<Bitword> in_first_not_second(ball_list[i].second.size() + 
                                              ball_list[ip1].second.size());
@@ -247,7 +247,7 @@ cpx ifs::solve_for_half(const Bitword& u, cpx start, double tol) {
   cpx current_output = upow.apply(current_z, 0.5);
   cpx deriv, step;
   double err;
-  int i=0;
+  //int i=0;
   while (abs(current_output - 0.5) > tol) {
     word_deriv(upow, current_z, deriv, err);
     step = (0.5-current_output)/deriv;
