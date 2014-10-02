@@ -1093,6 +1093,8 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   }
   
   //reduce the boundary
+  //this rotates the boundary so that it starts with a 0
+  //and then removes any duplicates (which are next to each other)
   int start_index = 0;
   int M = (int)pixel_boundary.size();
   while (unreduced_word_boundary[start_index].reverse_get(0) != 1 || 
@@ -1107,36 +1109,111 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
     }
   }
   
+  for (int i=0; i<(int)word_boundary.size(); ++i) {
+    std::cout << i << ": " << word_boundary[i] << "\n";
+  }
+  
   //find where the boundary goes 0->1 or 1->0
-  std::vector<int> switch01indices(0);
-  std::vector<int> switch10indices(0);
+  //note it'll have to switch 0->1 first
+  //and there is a switch at the beginning of the list
+  std::vector<int> s01(0);
+  std::vector<int> s10(0);
   M = (int)word_boundary.size();
+  s10.push_back(-1);
   for (int i=0; i<M; ++i) {
     int a = word_boundary[i].reverse_get(0);
     int b = word_boundary[(i+1)%M].reverse_get(0);
     if (a != b) {
       if (a == 0) {
-        switch01indices.push_back(i);
+        s01.push_back(i);
       } else {
-        switch10indices.push_back(i);
+        s10.push_back(i);
       }
     }
   }
   
-  //find the largest gap
-  std::vector<int> gaps(switch01indices.size());
-  for (int i=0; i<(int)switch01indices.size(); ++i) {
-    gaps[i] = switch10indices[i] - switch01indices[i];
-    gaps[i] = (gaps[i] >= 0 ? gaps[i] : (gaps[i]+M)%M);
+  //find the largest block of 0's
+  std::vector<int> gaps(s01.size());
+  for (int i=0; i<(int)s01.size(); ++i) {
+    gaps[i] = s01[i] - s10[i];
   }
   int largest_gap_ind = -1;
-  for (int i=0; i<(int)switch01indices.size(); ++i) {
+  for (int i=0; i<(int)s01.size(); ++i) {
     if (largest_gap_ind == -1 || gaps[largest_gap_ind] < gaps[i]) {
       largest_gap_ind = i;
     }
   }
-      
-   
+  
+  //get the largest block of 0's
+  int zero_block_start = s10[largest_gap_ind]+1;
+  int zero_block_end = s01[largest_gap_ind]+1;
+  int zero_block_middle = (zero_block_start + zero_block_end)/2;
+  int zero_block_len = zero_block_end - zero_block_start;
+  std::vector<Bitword> block0( word_boundary.begin() + zero_block_start,
+                               word_boundary.begin() + zero_block_end );
+  
+  //strip the 0's off
+  std::vector<Bitword> stripped0(block0.size());
+  for (int i=0; i<(int)block0.size(); ++i) {
+    stripped0[i] = block0[i].suffix(block0[i].len-1);
+  }
+  
+  std::cout << "Zero block: " << zero_block_start << ", " 
+                              << zero_block_middle << ", " 
+                              << zero_block_end << ", length: " << zero_block_len << "\n";
+  
+  //find where this stripped block exists in the word boundary
+  int stripped_block_start;
+  int stripped_block_end;
+  int stripped_block_middle;
+  int stripped_block_len;
+  int wL = word_boundary[0].len;
+  //find where the stripped interval begins
+  for (int i=0; i<M; ++i) {
+    int ip1 = (i+1)%M;
+    if (word_boundary[i].prefix(wL-1) == stripped0[0]) {
+      if (word_boundary[i].prefix(wL-1) == word_boundary[ip1].prefix(wL-1)) {
+        ip1 = (ip1+1)%M;
+      }
+      if (word_boundary[ip1].prefix(wL-1) == stripped0[1]) {
+        stripped_block_start = i;
+        break;
+      }
+    }
+  }
+  //find where the stripped interval ends
+  for (int i=0; i<M; ++i) {
+    int ip1 = (i+1)%M;
+    if (word_boundary[i].prefix(wL-1) == stripped0[stripped0.size()-2]) {
+      if (word_boundary[i].prefix(wL-1) == word_boundary[ip1].prefix(wL-1)) {
+        ip1 = (ip1+1)%M;
+      }
+      if (word_boundary[ip1].prefix(wL-1) == stripped0[stripped0.size()-1]) {
+        stripped_block_end = i;
+        break;
+      }
+    }
+  }
+  if (stripped_block_end < stripped_block_start) {
+    stripped_block_len = (stripped_block_end+M) - stripped_block_start;
+    stripped_block_middle = (stripped_block_start + stripped_block_len/2)%M;
+  } else {
+    stripped_block_middle = (stripped_block_start + stripped_block_end)/2;
+    stripped_block_len = stripped_block_end - stripped_block_start;
+  }
+  
+  std::cout << "Stripped block: " << stripped_block_start << ", " 
+                                  << stripped_block_middle << ", " 
+                                  << stripped_block_end << ", length: " << stripped_block_len << "\n";
+  
+  if (zero_block_middle >= stripped_block_middle) {
+    *theta = double(zero_block_middle - stripped_block_middle)/double(M);
+  } else {
+    *theta = double((zero_block_middle+M) - stripped_block_middle)/double(M);
+  }
+  
+  *lambda = double(stripped_block_len)/double(zero_block_len);
+  
   return true;
 }
 
