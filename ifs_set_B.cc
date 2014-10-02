@@ -15,7 +15,7 @@ void ifs::deriv_bounds_around_ball(const Bitword& u,
                                     double& min) {
   int N = 100;
   cpx current_z;
-  double E = 2.718281828459045;
+  //double E = 2.718281828459045;
   double PI = 3.1415926535897932;
   double small_r = PI*r / (double)N;
   cpx angle;

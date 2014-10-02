@@ -685,6 +685,33 @@ void IFSGui::S_mand_set_C_increase_depth(XEvent* e) {
   if (mand_set_C) draw_mand();
 }
 
+void IFSGui::S_mand_theta(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  mand_theta = !mand_theta;
+  W_mand_theta_check.checked = mand_theta;
+  W_mand_theta_check.redraw();
+  draw_mand();
+}
+
+void IFSGui::S_mand_theta_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  --mand_theta_depth;
+  std::stringstream T;
+  T.str(""); T << mand_theta_depth;
+  W_mand_theta_depth_label.update_text(T.str());
+  mand_grid_theta_valid = false;
+  if (mand_theta) draw_mand();
+}
+
+void IFSGui::S_mand_theta_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  ++mand_theta_depth;
+  std::stringstream T;
+  T.str(""); T << mand_theta_depth;
+  W_mand_theta_depth_label.update_text(T.str());
+  mand_grid_theta_valid = false;
+  if (mand_theta) draw_mand();
+}
 
 
 
@@ -971,7 +998,7 @@ void IFSGui::S_mand_path_half_decrease_depth(XEvent* e) {
 void IFSGui::S_mand_path_half_increase_start(XEvent* e) {
   if (e->type != ButtonPress) return;
   ++path.half_start;
-  if (path.has_half_words && path.half_start >= path.half_words.size()) {
+  if (path.has_half_words && path.half_start >= (int)path.half_words.size()) {
     path.half_start = 0;
   }
   std::stringstream T; T.str(""); T << path.half_start;
@@ -993,7 +1020,7 @@ void IFSGui::S_mand_path_half_decrease_start(XEvent* e) {
 void IFSGui::S_mand_path_half_increase_end(XEvent* e) {
   if (e->type != ButtonPress) return;
   ++path.half_end;
-  if (path.has_half_words && path.half_end >= path.half_words.size()) {
+  if (path.has_half_words && path.half_end >= (int)path.half_words.size()) {
     path.half_end = 0;
   }
   std::stringstream T; T.str(""); T << path.half_end;
@@ -1318,7 +1345,7 @@ Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
                        W_mand_plot.height - ((c.imag() - mand_ll.imag()) / mand_pixel_width) );
 }
 
-int IFSGui::mand_get_color(PointNd<5,int>& p) {
+int IFSGui::mand_get_color(PointNd<6,int>& p) {
 /*
   if (mand_trap && p.z > 0) { //use the trap color
     return p.z;
@@ -1340,6 +1367,8 @@ int IFSGui::mand_get_color(PointNd<5,int>& p) {
     return p[4];
   } else if (mand_contains_half && p.y > 0) {
     return p.y;
+  } else if (mand_theta && p[5] > 0) {
+    return p[5];
   } else if (mand_connected && p.x >= 0) {
     return p.x*0x000001;
   } else if (mand_dirichlet && p.w >= 0) {
@@ -1438,6 +1467,14 @@ void IFSGui::draw_mand() {
           mand_data_grid[i][j][4] = get_rgb_color(1.0,0.0,1.0);
         }
       }
+      if (mand_theta && !mand_grid_theta_valid) {
+        double th, lam;
+        if (temp_IFS.compute_coordinates(&th, &lam, mand_theta_depth)) {
+          mand_data_grid[i][j][5] = (int)((th+0.6)*100000.0);
+        } else {
+          mand_data_grid[i][j][5] = -1;
+        }
+      }
       
       //draw the pixel for the impatient
       int col = mand_get_color(mand_data_grid[i][j]);
@@ -1454,11 +1491,51 @@ void IFSGui::draw_mand() {
                                                    MW.ul.y + j*mand_pixel_group_size);
     }
   }
+  
+  //if we're drawing theta, we need to go back over and get the real values
+  if (mand_theta && !mand_grid_theta_valid) {
+    int min_theta=-1;
+    int max_theta=-1;
+    for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
+      for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
+        if (mand_data_grid[i][j][5] > 0) {
+          if (min_theta==-1 || mand_data_grid[i][j][5] < min_theta) 
+            min_theta = mand_data_grid[i][j][5];
+          if (max_theta==-1 || mand_data_grid[i][j][5] > max_theta) 
+            max_theta = mand_data_grid[i][j][5];
+        }
+      }
+    }
+    int theta_range = double(max_theta - min_theta);
+    for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
+      for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
+        int v = mand_data_grid[i][j][5];
+        if (v > 0) {
+          double amount = double((v-min_theta)%(theta_range/10)) / double(theta_range/10) ;
+          mand_data_grid[i][j][5] = get_rgb_color( 1, amount, amount );
+        }
+        int col = mand_get_color(mand_data_grid[i][j]);
+        XSetForeground(display, MW.gc, col);
+        XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
+                                             j*mand_pixel_group_size, 
+                                             mand_pixel_group_size, 
+                                             mand_pixel_group_size);
+        XCopyArea(display, MW.p, main_window, MW.gc, i*mand_pixel_group_size, 
+                                                     j*mand_pixel_group_size, 
+                                                     mand_pixel_group_size, 
+                                                     mand_pixel_group_size, 
+                                                     MW.ul.x + i*mand_pixel_group_size,
+                                                     MW.ul.y + j*mand_pixel_group_size);
+      }
+    }
+  }
+  
   if (mand_connected && !mand_grid_connected_valid) mand_grid_connected_valid = true;
   if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_contains_half_valid = true;
   if (mand_trap && !mand_grid_trap_valid) mand_grid_trap_valid = true;
   if (mand_dirichlet && !mand_grid_dirichlet_valid) mand_grid_dirichlet_valid = true;
   if (mand_set_C && !mand_grid_set_C_valid) mand_grid_set_C_valid = true;
+  if (mand_theta && !mand_grid_theta_valid) mand_grid_theta_valid = true;
   
   //now draw the highlighted point
   Point2d<int> h = mand_cpx_to_pixel(IFS.z);
@@ -1532,7 +1609,7 @@ void IFSGui::draw_mand() {
         
         ++i;
         ++num_done;
-        if (i == path.half_words.size()) i = 0;
+        if (i == (int)path.half_words.size()) i = 0;
       } while (num_done < num_to_do);
     }
                                              
@@ -1612,6 +1689,7 @@ void IFSGui::mand_recenter() {
   mand_grid_trap_valid = false;
   mand_grid_dirichlet_valid = false;
   mand_grid_set_C_valid = false;
+  mand_grid_theta_valid = false;
   draw_mand();
 }
 
@@ -1621,13 +1699,14 @@ void IFSGui::mand_reset_mesh() {
   mand_num_pixel_groups = W_mand_plot.width / mand_pixel_group_size;
   mand_data_grid.resize(mand_num_pixel_groups);
   for (int i=0; i<mand_num_pixel_groups; ++i) {
-    mand_data_grid[i] = std::vector<PointNd<5,int> >(mand_num_pixel_groups, PointNd<5,int>(-1));
+    mand_data_grid[i] = std::vector<PointNd<6,int> >(mand_num_pixel_groups, PointNd<6,int>(-1));
   }
   mand_grid_connected_valid = false;
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
   mand_grid_dirichlet_valid = false;
   mand_grid_set_C_valid = false;
+  mand_grid_theta_valid = false;
 }
 
 
@@ -2082,6 +2161,12 @@ void IFSGui::reset_and_pack_window() {
     T.str(""); T << mand_set_C_depth;
     W_mand_set_C_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_set_C_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_set_C_increase_depth);
+    W_mand_theta_check = WidgetCheck(this, "Theta:", 105, 20, mand_set_C, &IFSGui::S_mand_theta);
+    W_mand_theta_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_theta_decrease_depth);
+    T.str(""); T << mand_theta_depth;
+    W_mand_theta_depth_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_theta_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_theta_increase_depth);
+    
     W_mand_mouse_label = WidgetText(this, "Mouse: initializing", 200, 20);
     
     W_mand_path_create_by_drawing_button = WidgetButton(this, "Draw path", -1, 20, &IFSGui::S_mand_path_create_by_drawing_button);
@@ -2159,6 +2244,10 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_set_C_check, &W_mand_set_C_depth_leftarrow);
     pack_widget_upper_right(&W_mand_set_C_depth_leftarrow, &W_mand_set_C_depth_label);
     pack_widget_upper_right(&W_mand_set_C_depth_label, &W_mand_set_C_depth_rightarrow);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_theta_check);
+    pack_widget_upper_right(&W_mand_theta_check, &W_mand_theta_depth_leftarrow);
+    pack_widget_upper_right(&W_mand_theta_depth_leftarrow, &W_mand_theta_depth_label);
+    pack_widget_upper_right(&W_mand_theta_depth_label, &W_mand_theta_depth_rightarrow);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_label);
     if (currently_drawing_path) {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_drawing_title);
@@ -2309,6 +2398,8 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_dirichlet_depth = 3;
   mand_set_C = false;
   mand_set_C_depth = 10;
+  mand_theta = false;
+  mand_theta_depth = 8;
   
   point_connected_check = true;
   point_connected_depth = 18;

@@ -1033,6 +1033,11 @@ void ifs::word_deriv(const Bitword& u, const cpx& z0, cpx& deriv, double& err) {
 //gives lambda
 bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   
+  int verbose = 0;
+  
+  //check if we are in the reasonable region 
+  if (abs(z) > 1.0/sqrt(2.0) + 0.01) return false;
+  
   //first, compute all the balls
   ifs temp_IFS;
   temp_IFS.set_params(z,z);
@@ -1077,7 +1082,7 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   for (int i=0; i<(int)pixel_boundary.size(); ++i) {
     pixel_boundary[i].z=0;
   }
-  TG.show(NULL, &pixel_boundary, NULL, NULL, NULL);
+  if (verbose>0) TG.show(NULL, &pixel_boundary, NULL, NULL, NULL);
   
   //get the list of uv words from the boundary
   std::vector<Bitword> unreduced_word_boundary(pixel_boundary.size());
@@ -1092,7 +1097,7 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
     }   
     unreduced_word_boundary[i] = Bitword( balls[ball_index].word, 
                                           balls[ball_index].word_len );
-    std::cout << i << ": " << unreduced_word_boundary[i] << "\n";
+    //std::cout << i << ": " << unreduced_word_boundary[i] << "\n";
   }
   
   //reduce the boundary
@@ -1112,8 +1117,10 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
     }
   }
   
-  for (int i=0; i<(int)word_boundary.size(); ++i) {
-    std::cout << i << ": " << word_boundary[i] << "\n";
+  if (verbose>0) { 
+    for (int i=0; i<(int)word_boundary.size(); ++i) {
+      std::cout << i << ": " << word_boundary[i] << "\n";
+    }
   }
   
   //find where the boundary goes 0->1 or 1->0
@@ -1149,11 +1156,11 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   
   //get the largest block of 0's
   int zero_block_start = s10[largest_gap_ind]+1;
-  int zero_block_end = s01[largest_gap_ind]+1;
+  int zero_block_end = s01[largest_gap_ind];
   int zero_block_middle = (zero_block_start + zero_block_end)/2;
-  int zero_block_len = zero_block_end - zero_block_start;
+  int zero_block_len = zero_block_end - zero_block_start+1;
   std::vector<Bitword> block0( word_boundary.begin() + zero_block_start,
-                               word_boundary.begin() + zero_block_end );
+                               word_boundary.begin() + zero_block_end + 1);
   
   //strip the 0's off
   std::vector<Bitword> stripped0(block0.size());
@@ -1161,9 +1168,11 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
     stripped0[i] = block0[i].suffix(block0[i].len-1);
   }
   
-  std::cout << "Zero block: " << zero_block_start << ", " 
+  if (verbose>0) {
+    std::cout << "Zero block: " << zero_block_start << ", " 
                               << zero_block_middle << ", " 
                               << zero_block_end << ", length: " << zero_block_len << "\n";
+  }
   
   //find where this stripped block exists in the word boundary
   int stripped_block_start;
@@ -1185,9 +1194,11 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
     Bitword t = word_boundary[i].prefix(wL-1);
     if (t == a || t == b) {
       just_starts.push_back( std::make_pair( t, i ) );
+      //std::cout << "start: " << just_starts.back().first << " " << just_starts.back().second << "\n";
     }
     if (t == y || t == z) {
       just_ends.push_back( std::make_pair( t, i ) );
+      //std::cout << "end: " << just_ends.back().first << " " << just_ends.back().second << "\n";
     }
   }
   for (int i=0; i<(int)just_starts.size(); ++i) {
@@ -1200,32 +1211,38 @@ bool ifs::compute_coordinates(double* theta, double* lambda, int n_depth) {
   for (int i=0; i<(int)just_ends.size(); ++i) {
     int ip1 = (i+1)%just_ends.size();
     if (just_ends[i].first == y && just_ends[ip1].first == z) {
-      stripped_block_end = (just_ends[ip1].second+1)%M;
+      stripped_block_end = (just_ends[ip1].second)%M;
       break;
     }
   }
   
     
   if (stripped_block_end < stripped_block_start) {
-    stripped_block_len = (stripped_block_end+M) - stripped_block_start;
+    stripped_block_len = (stripped_block_end+M) - stripped_block_start + 1;
   } else if (stripped_block_end > stripped_block_start) {
-    stripped_block_len = stripped_block_end - stripped_block_start;
+    stripped_block_len = stripped_block_end - stripped_block_start + 1;
   } else if (stripped_block_end == stripped_block_start) {
     stripped_block_len = M;
   }
   stripped_block_middle = (stripped_block_start + stripped_block_len/2)%M;
   
-  std::cout << "Stripped block: " << stripped_block_start << ", " 
-                                  << stripped_block_middle << ", " 
+  if (verbose>0) {
+    std::cout << "Stripped block: " << stripped_block_start << ", " 
+                                    << stripped_block_middle << ", " 
                                   << stripped_block_end << ", length: " << stripped_block_len << "\n";
-  
-  if (zero_block_middle >= stripped_block_middle) {
-    *theta = double(zero_block_middle - stripped_block_middle)/double(M);
-  } else {
-    *theta = double((zero_block_middle+M) - stripped_block_middle)/double(M);
   }
   
+  if (stripped_block_middle >= zero_block_middle) {
+    *theta = double(stripped_block_middle - zero_block_middle)/double(M);
+  } else {
+    *theta = double( (stripped_block_middle+M) - zero_block_middle)/double(M);
+  }
+  if (*theta > 0.5) *theta -= 1.0;
+  if (verbose>0) std::cout << "theta: " << *theta << "\n";
+  
   *lambda = double(stripped_block_len)/double(zero_block_len);
+  if (verbose>0) std::cout << "lambda: " << *lambda << "\n";
+  
   
   return true;
 }

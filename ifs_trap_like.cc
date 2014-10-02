@@ -811,7 +811,7 @@ int ifs::check_limit_TLB(const std::vector<Ball>& TLB,
     old_n = n;
   }
   
-  BREAKALL:
+  //BREAKALL:
   
   set_params(old_z, old_w);
   trap_radius = best_trap_radius;
