@@ -910,6 +910,11 @@ void IFSGui::S_mand_path_find_traps(XEvent* e) {
   find_traps_along_path(0);
 }
 
+void IFSGui::S_mand_path_find_coordinates(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  find_coordinates_along_path(0);
+}
+
 void IFSGui::S_mand_path_create_movie(XEvent* e) {
   if (e->type != ButtonPress || !path.is_valid) return;
   //create the mandlebrot connectedness grid
@@ -1066,6 +1071,7 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_tasks_title);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_coordinates_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_length_title);
   pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);
@@ -1089,6 +1095,7 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   W_mand_path_tasks_title.initial_draw();
   W_mand_path_delete_button.initial_draw();
   W_mand_path_find_traps_button.initial_draw();
+  W_mand_path_find_coordinates_button.initial_draw();
   W_mand_path_create_movie_button.initial_draw();
   W_mand_path_movie_length_title.initial_draw();
   W_mand_path_movie_decrease_length.initial_draw();
@@ -1126,6 +1133,7 @@ void IFSGui::make_path_creation_buttons(bool cancelling) {
     detach_widget(&W_mand_path_tasks_title);
     detach_widget(&W_mand_path_delete_button);
     detach_widget(&W_mand_path_find_traps_button);
+    detach_widget(&W_mand_path_find_coordinates_button);
     detach_widget(&W_mand_path_create_movie_button);
     detach_widget(&W_mand_path_movie_length_title);
     detach_widget(&W_mand_path_movie_decrease_length);
@@ -1511,7 +1519,7 @@ void IFSGui::draw_mand() {
       for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
         int v = mand_data_grid[i][j][5];
         if (v > 0) {
-          double amount = double((v-min_theta)%(theta_range/10)) / double(theta_range/10) ;
+          double amount = double((v-min_theta)%(theta_range/30)) / double(theta_range/30) ;
           mand_data_grid[i][j][5] = get_rgb_color( 1, amount, amount );
         }
         int col = mand_get_color(mand_data_grid[i][j]);
@@ -1806,6 +1814,24 @@ void IFSGui::recompute_point_data() {
   W_point_coordinates_status.update_text(T.str());
 }
 
+
+void IFSGui::find_coordinates_along_path(int verbose) {
+  if (!path.is_valid || currently_drawing_path || path.path.size() == 0) return;
+  ifs temp_IFS;
+  path.coordinates.resize(0);
+  for (int i=0; i<(int)path.path.size(); ++i) {
+    temp_IFS.set_params(path.path[i], path.path[i]);
+    double t, ell;
+    if (temp_IFS.compute_coordinates( &t, &ell, mand_theta_depth )) {
+      path.coordinates.push_back( std::make_pair(t, ell) );
+    }
+  }
+  for (int i=0; i<(int)path.coordinates.size(); ++i) {
+    std::cout << "{" << path.coordinates[i].first << "," << 
+                        path.coordinates[i].second << "},";
+  }
+  std::cout << "\n";
+}
 
 
 void IFSGui::find_traps_along_path(int verbose) {
@@ -2178,6 +2204,7 @@ void IFSGui::reset_and_pack_window() {
     W_mand_path_tasks_title = WidgetText(this, "Path options:", -1, 20);
     W_mand_path_delete_button = WidgetButton(this, "Delete path", -2, 20, &IFSGui::S_mand_path_delete);
     W_mand_path_find_traps_button = WidgetButton(this, "Find traps along path", -1, 20, &IFSGui::S_mand_path_find_traps);
+    W_mand_path_find_coordinates_button = WidgetButton(this, "Find coords along path", -1, 20, &IFSGui::S_mand_path_find_coordinates);
     W_mand_path_create_movie_button = WidgetButton(this, "Create movie along path", -1, 20, &IFSGui::S_mand_path_create_movie);
     W_mand_path_movie_length_title = WidgetText(this, "Movie length: ", -1, 20);
     W_mand_path_movie_decrease_length = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_path_movie_decrease_length);
@@ -2258,6 +2285,7 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_tasks_title);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_coordinates_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_length_title);
       pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);

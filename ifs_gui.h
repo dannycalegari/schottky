@@ -89,6 +89,8 @@ struct IFSPath {
   bool has_traps;
   std::vector<Ball> traps;
   std::vector<int> trap_colors;
+  bool has_coordinates;
+  std::vector<std::pair<double, double> > coordinates;
   bool has_uv_words;
   std::vector<std::pair<Bitword,Bitword> > uv_words;
   bool has_half_words;
@@ -102,9 +104,10 @@ struct IFSPath {
   IFSPath() {
     is_valid = false;
     path.resize(0);
-    closed = has_traps = has_uv_words = has_half_words = false;
+    closed = has_traps = has_coordinates = has_uv_words = has_half_words = false;
     traps.resize(0);
     trap_colors.resize(0);
+    coordinates.resize(0);
     uv_words.resize(0);
     movie_length = 10;
     movie_fps = 30;
@@ -212,6 +215,7 @@ struct IFSGui {
   void mand_draw_ball(const Ball& b, int col);
   void recompute_point_data();
   void find_traps_along_path(int verbose);
+  void find_coordinates_along_path(int verbose);
   
   //graphics stuff
   Display* display;
@@ -325,6 +329,7 @@ struct IFSGui {
   WidgetText W_mand_path_tasks_title;
   WidgetButton W_mand_path_delete_button;
   WidgetButton W_mand_path_find_traps_button;
+  WidgetButton W_mand_path_find_coordinates_button;
   WidgetButton W_mand_path_create_movie_button;
   WidgetText W_mand_path_movie_length_title;
   WidgetLeftArrow W_mand_path_movie_decrease_length;
@@ -413,6 +418,7 @@ struct IFSGui {
   void S_mand_path_finish_loop(XEvent* e);
   void S_mand_path_delete(XEvent* e);
   void S_mand_path_find_traps(XEvent* e);
+  void S_mand_path_find_coordinates(XEvent* e);
   void S_mand_path_create_movie(XEvent* e);
   void S_mand_path_movie_decrease_length(XEvent* e);
   void S_mand_path_movie_increase_length(XEvent* e);
