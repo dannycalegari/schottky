@@ -1821,13 +1821,17 @@ void IFSGui::find_coordinates_along_path(int verbose) {
   path.coordinates.resize(0);
   for (int i=0; i<(int)path.path.size(); ++i) {
     temp_IFS.set_params(path.path[i], path.path[i]);
-    double t, ell;
-    if (temp_IFS.compute_coordinates( &t, &ell, mand_theta_depth )) {
-      path.coordinates.push_back( std::make_pair(t, ell) );
+    double t1, ell1;
+    double t2, ell2;
+    if (temp_IFS.compute_coordinates( &t1, &ell1, mand_theta_depth ) &&
+        temp_IFS.compute_coordinates( &t2, &ell2, mand_theta_depth+1) ) {
+      path.coordinates.push_back( std::make_pair(t1, ell1) );
     }
   }
   for (int i=0; i<(int)path.coordinates.size(); ++i) {
-    std::cout << "{" << path.coordinates[i].first << "," << 
+    std::cout << "{" << 
+                        path.path[i] << "," <<
+                        path.coordinates[i].first << "," << 
                         path.coordinates[i].second << "},";
   }
   std::cout << "\n";
