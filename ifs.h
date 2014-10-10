@@ -75,6 +75,8 @@ void ball_convex_hull(std::vector<int>& ch,
 
 void box_containing_points(const std::vector<cpx>& points, cpx& ll, cpx& ur);
 
+
+
 /**************************************************************************
  * a bit word
  **************************************************************************/
@@ -318,5 +320,51 @@ class ifs{
     void user_interface();
     void input_loop(std::vector<cpx>& loop);
 };
+
+
+
+/****************************************************************************
+ * A more general ball with less information
+ ****************************************************************************/
+struct nBall {
+  cpx center;
+  double radius;
+  cpx one; // this is the vector which points where 1 is in the original ball
+  
+  nBall();
+  nBall(cpx c, double r, cpx o);
+  bool is_disjoint(const cpx& ll, const cpx& ur) const;
+  bool is_contained(const cpx& ll, const cpx& ur) const;
+};
+
+/***************************************************************************
+ * a more general IFS
+ ***************************************************************************/
+struct nIFS {
+  cpx c;
+  std::vector<cpx> centers;
+  
+  //initializing
+  nIFS();
+  nIFS(int n, cpx C);
+  void set_param(cpx C);
+  void set_centers(const std::vector<cpx>& new_centers);
+  void set_std_centers(int n);
+  
+  //return the minimal radius of a ball sent inside itself under all 
+  //functions
+  double minimal_initial_radius(); 
+  
+  //acting
+  nBall act_on_left(int i, const nBall& b);
+  nBall act_on_right(int i, const nBall& b);
+};
+
+
+
+
+
+
+
 
 #endif

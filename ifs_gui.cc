@@ -434,7 +434,13 @@ void IFSGui::S_limit_uv_graph_increase_depth(XEvent* e) {
   draw_limit();
 }
 
-
+void IFSGui::S_limit_nifs(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  limit_nifs = !limit_nifs;
+  W_limit_nifs.checked = limit_nifs;
+  W_limit_nifs.redraw();
+  draw_limit();
+}
 
 //mandlebrot
 void IFSGui::S_mand_draw(XEvent* e) {
@@ -2127,6 +2133,7 @@ void IFSGui::reset_and_pack_window() {
     T.str(""); T << limit_uv_graph_depth;
     W_limit_uv_graph_depth_label = WidgetText(this, T.str(), -1, 20);
     W_limit_uv_graph_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_limit_uv_graph_increase_depth);
+    W_limit_nifs = WidgetCheck(this, "nIFS", -1, 20, limit_nifs, &IFSGui::S_limit_nifs);
     
     pack_widget_upper_right(NULL, &W_limit_plot);
     if (window_mode == LIMIT) {
@@ -2149,6 +2156,7 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_uv_graph_depth_title, &W_limit_uv_graph_depth_leftarrow);
     pack_widget_upper_right(&W_limit_uv_graph_depth_leftarrow, &W_limit_uv_graph_depth_label);
     pack_widget_upper_right(&W_limit_uv_graph_depth_label, &W_limit_uv_graph_depth_rightarrow);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_nifs);
     
   }
   
@@ -2411,6 +2419,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   limit_colors = true;
   limit_uv_graph = false;
   limit_uv_graph_depth = 3;
+  limit_nifs = false;
   limit_marked_points.resize(3);
   limit_marked_points[0] = cpx(0,0);
   limit_marked_points[1] = cpx(0.5,0);

@@ -139,6 +139,7 @@ struct IFSGui {
   double limit_pixel_width;
   bool limit_uv_graph;
   int limit_uv_graph_depth;
+  bool limit_nifs;
   std::vector<cpx> limit_marked_points;
   Point2d<int> limit_cpx_to_pixel(const cpx& c);
   cpx limit_pixel_to_cpx(const Point2d<int>& p);
@@ -280,6 +281,7 @@ struct IFSGui {
   WidgetLeftArrow W_limit_uv_graph_depth_leftarrow;
   WidgetText W_limit_uv_graph_depth_label;
   WidgetRightArrow W_limit_uv_graph_depth_rightarrow;
+  WidgetCheck W_limit_nifs;
   
   
   WidgetDraw W_mand_plot;
@@ -367,6 +369,7 @@ struct IFSGui {
   void S_limit_uv_graph(XEvent* e);
   void S_limit_uv_graph_decrease_depth(XEvent* e);
   void S_limit_uv_graph_increase_depth(XEvent* e);
+  void S_limit_nifs(XEvent* e);
   
   void S_mand_draw(XEvent* e);
   void S_mand_recenter(XEvent* e);

@@ -17,6 +17,7 @@
 #include "ifs_trap_like.cc"    //functions to find trap balls via u,v words
 #include "ifs_set_A.cc"        //function to find the boundary of holes in set A
 #include "ifs_set_B.cc"        //functions about set B
+#include "ifs_nifs.cc"         //functions for more general ifss
 
 //first some ball functions
 Ball::Ball() { 
