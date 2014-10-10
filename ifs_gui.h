@@ -207,6 +207,7 @@ struct IFSGui {
   
   //computation functions
   void draw_limit();
+  void draw_nifs_limit();
   void recenter_limit(cpx c);
   void draw_mand();
   void change_highlighted_ifs(cpx c);

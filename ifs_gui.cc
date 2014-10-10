@@ -1183,9 +1183,94 @@ cpx IFSGui::limit_pixel_to_cpx(const Point2d<int>& p) {
   return cpx(r,i);
 }
 
+void IFSGui::draw_nifs_limit() {
+
+  //create the nifs object
+  nIFS nifs(3, IFS.z);
+  double min_r = nifs.minimal_initial_radius();
+  
+  //std::cout << "Got min initial radius of " << min_r << "\n";
+  
+  if (min_r < 0) return;
+
+  Widget& LW = W_limit_plot;
+  
+  //clear the limit widget
+  XSetForeground(display, LW.gc, WhitePixel(display, screen));
+  XFillRectangle(display, LW.p, LW.gc, 0, 0, LW.width, LW.height);
+  XSetForeground(display, LW.gc, BlackPixel(display, screen));
+  XDrawRectangle(display, LW.p, LW.gc, 0, 0, LW.width-1, LW.height-1);
+  XSetFillStyle(display, LW.gc, FillSolid);
+  
+  std::vector<int> colors(3);
+  colors[0] = get_rgb_color(1,0,0);
+  colors[1] = get_rgb_color(0,1,0);
+  colors[2] = get_rgb_color(0,0,1);
+  
+  nBall initial_ball(0,min_r,1);
+  
+  std::vector< nBall_stuff > stack(0);
+  stack.push_back( nBall_stuff(false, -1, 0, initial_ball) );
+  while (stack.size() > 0) {
+    nBall_stuff bs = stack.back();
+    stack.pop_back();
+    //if the ball is disjoint from the window, we might as well get rid of it
+    if (!bs.contained && bs.ball.is_disjoint(limit_ll, limit_ur)) continue;
+    if ( bs.depth >= limit_depth || bs.ball.radius < limit_pixel_width/2.0 ) {
+      Point2d<int> p = limit_cpx_to_pixel(bs.ball.center);
+      double r = bs.ball.radius / limit_pixel_width;
+      if (r <= 1.0) r = 1.0;
+      if (limit_colors) {
+        XSetForeground(display, LW.gc, colors[bs.last_gen]);
+      }
+      if (limit_chunky) {
+        XFillArc(display, LW.p, LW.gc, p.x-r, p.y-r, int(2.0*r), int(2.0*r), 23040, 23040);
+      } else {
+        XDrawPoint(display, LW.p, LW.gc, p.x, p.y);
+      }
+      continue;
+    }
+    //if the ball isn't disjoint from the window, maybe it is contained in it?
+    for (int i=0; i<3; ++i) {
+      nBall new_ball = nifs.act_on_right(i, bs.ball);
+      if (bs.contained) {
+        stack.push_back(nBall_stuff(true, (bs.last_gen==-1 ? i : bs.last_gen), bs.depth+1, new_ball));
+      } else {
+        if (bs.ball.is_contained(limit_ll, limit_ur)) {
+          stack.push_back(nBall_stuff(true, (bs.last_gen==-1 ? i : bs.last_gen), bs.depth+1, new_ball));
+        } else {
+          stack.push_back(nBall_stuff(false, (bs.last_gen==-1 ? i: bs.last_gen), bs.depth+1, new_ball));
+        }
+      }
+    }
+  }
+  
+  //draw the marked points 0, 1/2, 1
+  for (int i=0; i<(int)limit_marked_points.size(); ++i) {
+    cpx& c = limit_marked_points[i];
+    int rcol = get_rgb_color(1,0.1,0);
+    if (limit_ll.real() < c.real() && c.real() < limit_ur.real() &&
+        limit_ll.imag() < c.imag() && c.imag() < limit_ur.imag()) {
+      Point2d<int> p = limit_cpx_to_pixel(c);
+      XSetForeground(display, LW.gc, rcol);
+      XFillArc(display, LW.p, LW.gc, p.x-3, p.y-3, 3, 3, 23040, 23040);
+    }
+  }
+  
+  LW.redraw();
+}
+
+
+
+
 void IFSGui::draw_limit() {
   double min_r;
   if (!IFS.minimal_enclosing_radius(min_r)) {
+    return;
+  }
+  
+  if (limit_nifs) {
+    draw_nifs_limit();
     return;
   }
   

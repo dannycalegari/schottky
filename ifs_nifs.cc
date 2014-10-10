@@ -48,9 +48,18 @@ void nIFS::set_std_centers(int n) {
   
 double nIFS::minimal_initial_radius() {
   double lb = -1;
+  
+  //std::cout << "Finding min initial radius for nifs with param " << c
+  //          << " and centers: \n";
+  //for (int i=0; i<(int)centers.size(); ++i) {
+  //  std::cout << centers[i] << "\n";
+  //}
+  //std::cout << "(1-|c|) = " << fabs(1.0-abs(c)) << "\n";
+  
+  if (fabs(1.0-abs(c)) < 0.0001) return -1;
   for (int i=0; i<(int)centers.size(); ++i) {
     double lbi = abs(centers[i]*(1.0-c)/(1.0-abs(c)));
-    if (lb < 0 || lbi < lb) {
+    if (lb < 0 || lbi > lb) {
       lb = lbi;
     }
   }

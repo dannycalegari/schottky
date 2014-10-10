@@ -17,7 +17,7 @@ movie.o: movie.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c movie.cc
 
 ifs_gui.o: ifs_gui.cc
-	$(CC) $(CFLAGS) $(IFLAGS) -c ifs_gui.cc
+	g++ $(CFLAGS) $(IFLAGS) -c ifs_gui.cc
 
 ifs.o: ifs.cc ifs_draw.cc ifs_trap.cc ifs_interface.cc ifs_connected.cc ifs_trap_like.cc ifs_set_A.cc ifs_set_B.cc ifs_nifs.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c ifs.cc

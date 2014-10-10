@@ -337,6 +337,18 @@ struct nBall {
   bool is_contained(const cpx& ll, const cpx& ur) const;
 };
 
+//the boolean means whether the ball is completely contained in the window
+//the ints are (last gen, depth)
+struct nBall_stuff { 
+    bool contained;
+    int last_gen;
+    int depth;
+    nBall ball;
+    nBall_stuff() {}
+    nBall_stuff(bool c, int l, int d, nBall b) { 
+      contained = c; last_gen = l; depth = d; ball = b;
+    }
+  };
 /***************************************************************************
  * a more general IFS
  ***************************************************************************/
