@@ -1188,7 +1188,7 @@ cpx IFSGui::limit_pixel_to_cpx(const Point2d<int>& p) {
 void IFSGui::draw_nifs_limit() {
 
   //create the nifs object
-  nIFS nifs(3, IFS.z);
+  nIFS nifs(4, IFS.z);
   double min_r = nifs.minimal_initial_radius();
   
   //std::cout << "Got min initial radius of " << min_r << "\n";
@@ -1204,10 +1204,11 @@ void IFSGui::draw_nifs_limit() {
   XDrawRectangle(display, LW.p, LW.gc, 0, 0, LW.width-1, LW.height-1);
   XSetFillStyle(display, LW.gc, FillSolid);
   
-  std::vector<int> colors(3);
+  std::vector<int> colors(4);
   colors[0] = get_rgb_color(1,0,0);
   colors[1] = get_rgb_color(0,1,0);
   colors[2] = get_rgb_color(0,0,1);
+  colors[3] = get_rgb_color(1,0,1);
   
   nBall initial_ball(0,min_r,1);
   
@@ -1233,7 +1234,7 @@ void IFSGui::draw_nifs_limit() {
       continue;
     }
     //if the ball isn't disjoint from the window, maybe it is contained in it?
-    for (int i=0; i<3; ++i) {
+    for (int i=0; i<4; ++i) {
       nBall new_ball = nifs.act_on_right(i, bs.ball);
       if (bs.contained) {
         stack.push_back(nBall_stuff(true, (bs.last_gen==-1 ? i : bs.last_gen), bs.depth+1, new_ball));
@@ -1525,7 +1526,7 @@ void IFSGui::draw_mand() {
             mand_data_grid[i][j].x = -1;
           }
         } else {
-          nIFS nifs(3, c);
+          nIFS nifs(4, c);
           if (!nifs.is_connected(mand_connected_depth, mand_data_grid[i][j].x)) {
             mand_data_grid[i][j].x = -1;
           }
