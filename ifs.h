@@ -333,9 +333,12 @@ struct nBall {
   
   nBall();
   nBall(cpx c, double r, cpx o);
+  bool is_disjoint(const nBall& other) const;
   bool is_disjoint(const cpx& ll, const cpx& ur) const;
   bool is_contained(const cpx& ll, const cpx& ur) const;
 };
+
+std::ostream& operator<<(std::ostream& os, const nBall& b);
 
 //the boolean means whether the ball is completely contained in the window
 //the ints are (last gen, depth)
@@ -349,6 +352,8 @@ struct nBall_stuff {
       contained = c; last_gen = l; depth = d; ball = b;
     }
   };
+  
+std::ostream& operator<<(std::ostream& os, const nBall_stuff& b);
 /***************************************************************************
  * a more general IFS
  ***************************************************************************/
@@ -370,6 +375,9 @@ struct nIFS {
   //acting
   nBall act_on_left(int i, const nBall& b);
   nBall act_on_right(int i, const nBall& b);
+  
+  //computation
+  bool is_connected(int depth, int& difficulty);
 };
 
 

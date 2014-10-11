@@ -440,6 +440,8 @@ void IFSGui::S_limit_nifs(XEvent* e) {
   W_limit_nifs.checked = limit_nifs;
   W_limit_nifs.redraw();
   draw_limit();
+  mand_grid_connected_valid = false;
+  if (mand_connected) draw_mand();
 }
 
 //mandlebrot
@@ -1518,8 +1520,15 @@ void IFSGui::draw_mand() {
       
       if (mand_connected && !mand_grid_connected_valid) {
         //temp_IFS.set_params(c*c,c*c);
-        if (!temp_IFS.is_connected(mand_connected_depth, mand_data_grid[i][j].x) ) {
-          mand_data_grid[i][j].x = -1;
+        if (!limit_nifs) {
+          if (!temp_IFS.is_connected(mand_connected_depth, mand_data_grid[i][j].x) ) {
+            mand_data_grid[i][j].x = -1;
+          }
+        } else {
+          nIFS nifs(3, c);
+          if (!nifs.is_connected(mand_connected_depth, mand_data_grid[i][j].x)) {
+            mand_data_grid[i][j].x = -1;
+          }
         }
         //temp_IFS.set_params(c,c);
       }
