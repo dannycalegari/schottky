@@ -1833,6 +1833,7 @@ void IFSGui::mand_reset_mesh() {
 
 void IFSGui::recompute_point_data() {
   std::stringstream T;
+  T.precision(15);
   int difficulty;
   T.str(""); T << "Location: " << IFS.z;
   W_point_point.update_text(T.str());
