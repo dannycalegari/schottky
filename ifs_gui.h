@@ -322,6 +322,9 @@ struct IFSGui {
   WidgetText W_mand_theta_depth_label;
   WidgetRightArrow W_mand_theta_depth_rightarrow;
   WidgetText W_mand_mouse_label;
+  WidgetText W_mand_mouse_X;
+  WidgetText W_mand_mouse_Y;
+  WidgetButton W_mand_output_window;
   
   WidgetText W_mand_path_drawing_title;
   WidgetButton W_mand_path_create_by_drawing_button;
@@ -397,6 +400,7 @@ struct IFSGui {
   void S_mand_theta(XEvent* e);
   void S_mand_theta_decrease_depth(XEvent* e);
   void S_mand_theta_increase_depth(XEvent* e);
+  void S_mand_output_window(XEvent* e);
   
   
   void S_point_connected(XEvent* e);

@@ -499,8 +499,12 @@ void IFSGui::S_mand_draw(XEvent* e) {
     int widget_y = e->xbutton.y - W_mand_plot.ul.y;
     cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
     std::stringstream T; T.str("");
-    T << "Mouse: " << c;
-    W_mand_mouse_label.update_text(T.str());
+    T.precision(15);
+    T << "Re: " << std::real(c);
+    W_mand_mouse_X.update_text(T.str());
+    T.str("");
+    T << "Im: " << std::imag(c);
+    W_mand_mouse_Y.update_text(T.str());
   }
   
 }
@@ -721,7 +725,13 @@ void IFSGui::S_mand_theta_increase_depth(XEvent* e) {
   if (mand_theta) draw_mand();
 }
 
-
+void IFSGui::S_mand_output_window(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  int old_prec = std::cout.precision();
+  std::cout.precision(15);
+  std::cout << "Lower left: " << mand_ll << ", upper right: " << mand_ur << "\n";
+  std::cout.precision(old_prec);
+}
 
 
 //point
@@ -2300,7 +2310,10 @@ void IFSGui::reset_and_pack_window() {
     W_mand_theta_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_theta_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_theta_increase_depth);
     
-    W_mand_mouse_label = WidgetText(this, "Mouse: initializing", 200, 20);
+    W_mand_mouse_label = WidgetText(this, "Mouse:", 50, 20);
+    W_mand_mouse_X = WidgetText(this, "Re: initializing", 200, 20);
+    W_mand_mouse_Y = WidgetText(this, "Im: initializing", 200, 20);
+    W_mand_output_window = WidgetButton(this, "Write window coords", -1, 20, &IFSGui::S_mand_output_window);
     
     W_mand_path_create_by_drawing_button = WidgetButton(this, "Draw path", -1, 20, &IFSGui::S_mand_path_create_by_drawing_button);
     W_mand_path_create_by_boundary_button = WidgetButton(this, "Find boundary path", -1, 20, &IFSGui::S_mand_path_create_by_boundary);
@@ -2383,6 +2396,9 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_theta_depth_leftarrow, &W_mand_theta_depth_label);
     pack_widget_upper_right(&W_mand_theta_depth_label, &W_mand_theta_depth_rightarrow);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_label);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_X);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_Y);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_output_window);
     if (currently_drawing_path) {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_drawing_title);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_cancel_button);
