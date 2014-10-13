@@ -18,6 +18,7 @@
 #include "ifs_set_A.cc"        //function to find the boundary of holes in set A
 #include "ifs_set_B.cc"        //functions about set B
 #include "ifs_nifs.cc"         //functions for more general ifss
+#include "ifs_2d.cc"           //functions for 2d ifss
 
 //first some ball functions
 Ball::Ball() { 

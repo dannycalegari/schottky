@@ -32,16 +32,19 @@ int main(int argc, char *argv[]) {
   
   //std::cout << sizeof(long long int) <<"\n";
   
-  std::cout << "enter 'i' for IFS or 'm' for mandelbrot (n for new GUI):";
-  std::cin >> c;
-  if (c == 'n') {
-    IFSGui G;
-    G.launch(BOTH, cpx(-0.58, 0.33));
-  } else {
-    mode = (c=='i' ? 0 : 1);
-    ifs G(cos(TWOPI/3.0)+I*sin(TWOPI/3.0), 0.5, w, mode);      // default value : Sierpinski triangle
-    G.user_interface();
-  }
-	
-	return 0;
+//  std::cout << "enter 'i' for IFS or 'm' for mandelbrot (n for new GUI):";
+//  std::cin >> c;
+//   if (c == 'n') {
+//     IFSGui G;
+//     G.launch(BOTH, cpx(-0.58, 0.33));
+//   } else {
+//     mode = (c=='i' ? 0 : 1);
+//     ifs G(cos(TWOPI/3.0)+I*sin(TWOPI/3.0), 0.5, w, mode);      // default value : Sierpinski triangle
+//     G.user_interface();
+//   }
+  
+  IFSGui G;
+  G.launch(BOTH, cpx(-0.58, 0.33));
+  
+  return 0;
 }

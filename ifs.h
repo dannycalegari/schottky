@@ -7,6 +7,7 @@
 #include "graphics.h"
 #include "cpx.h"
 
+#include "point.h"
 
 /*************************************************************************
  * convex hull computational geometry stuff
@@ -381,7 +382,59 @@ struct nIFS {
 };
 
 
+/***************************************************************************
+ * a 2d affine map 
+ * *************************************************************************/
+struct LinearMap {
+  double a,b,c,d;
+  LinearMap();
+  LinearMap(double A, double B, double C, double D);
+  LinearMap operator*(const LinearMap& other) const;
+  Point2d<double> operator()(const Point2d<double>& X) const;
+};
 
+struct AffineMap {
+  LinearMap A;
+  Point2d<double> t;
+  AffineMap();
+  AffineMap(const LinearMap& a, const Point2d<double>& T);
+  AffineMap(double a, double b, double c, double d, double x, double y);
+  AffineMap operator*(const AffineMap& other) const;
+  Point2d<double> operator()(const Point2d<double>& X) const;
+};
+
+struct Box_Stuff {
+  bool contained;
+  int last_gen;
+  int depth;
+  std::vector< Point2d<double> > box;
+  Box_Stuff() {}
+  Box_Stuff(bool C, int L, int D, const std::vector< Point2d<double> >& B) {
+    contained = C;
+    last_gen = L;
+    depth = D;
+    box = B;
+  }
+  bool is_disjoint(cpx ll, cpx ur) {
+    return false;
+  }
+  bool is_contained(cpx ll, cpx ur) {
+    return false;
+  }
+};
+
+Point4d<double> point_as_weighted_average_in_box(const Point2d<double>& point_target, 
+                                                 const Point2d<double>& center, 
+                                                 double radius);
+
+/***************************************************************************
+ * a 2d affine IFS      
+ * *************************************************************************/
+struct ifs2d {
+  std::vector<AffineMap> gens;
+  AffineMap semigroup_element(const std::vector<int>& gen_word);
+  AffineMap semigroup_element(int list, int n);
+};
 
 
 

@@ -439,9 +439,27 @@ void IFSGui::S_limit_nifs(XEvent* e) {
   limit_nifs = !limit_nifs;
   W_limit_nifs.checked = limit_nifs;
   W_limit_nifs.redraw();
+  if (limit_2d) {
+    limit_2d = W_limit_2d.checked = false;
+    W_limit_2d.redraw();
+  }
   draw_limit();
   mand_grid_connected_valid = false;
   if (mand_connected) draw_mand();
+}
+
+void IFSGui::S_limit_2d(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  limit_2d = !limit_2d;
+  W_limit_2d.checked = limit_2d;
+  W_limit_2d.redraw();
+  if (limit_nifs) {
+    limit_nifs = W_limit_nifs.checked = false;
+    W_limit_nifs.redraw();
+    mand_grid_connected_valid = false;
+    if (mand_connected) draw_mand();
+  }
+  draw_limit();
 }
 
 //mandlebrot
@@ -1275,6 +1293,100 @@ void IFSGui::draw_nifs_limit() {
 
 
 
+void IFSGui::draw_2d_limit() {
+  
+  Widget& LW = W_limit_plot;
+  //clear the limit widget
+  XSetForeground(display, LW.gc, WhitePixel(display, screen));
+  XFillRectangle(display, LW.p, LW.gc, 0, 0, LW.width, LW.height);
+  XSetForeground(display, LW.gc, BlackPixel(display, screen));
+  XDrawRectangle(display, LW.p, LW.gc, 0, 0, LW.width-1, LW.height-1);
+  XSetFillStyle(display, LW.gc, FillSolid);
+  
+  //set up the IFS and get the initial rectangle 
+  double rz = std::real(IFS.z);
+  if (rz < 0.6 || rz > 0.68) {
+    LW.redraw();
+    return;
+  }
+  
+  ifs2d IFS2d;
+  IFS2d.gens.resize(2);
+  IFS2d.gens[0] = AffineMap( rz, 0, 1, rz, 0, 0 );
+  IFS2d.gens[1] = AffineMap( rz, 0, 1, rz, 1-rz, -1 );
+  double box_sizes[17] = {1.98593, 2.08085, 2.1883, 2.31103, 2.45263, 2.61793, 2.81353,
+                          3.04875, 3.33714, 3.69922, 4.16762, 4.79755, 5.69039, 7.05483,
+                          9.46713, 14.6384, 33.0532};
+  int ub_ind = 0;
+  double upper_bound = 0.6;
+  while (upper_bound < rz) {
+    upper_bound += 0.05;
+    ub_ind++;
+  };
+  double bs = box_sizes[ub_ind];
+  
+  std::vector<Point2d<double> > initial_box(4);
+  initial_box[0] = Point2d<double>(0.5-bs, 0-bs);
+  initial_box[1] = Point2d<double>(0.5+bs, 0-bs);
+  initial_box[2] = Point2d<double>(0.5+bs, 0+bs);
+  initial_box[3] = Point2d<double>(0.5-bs, 0+bs);
+    
+  //figure out where the box goes, as averages of its own boundary points,
+  //under all the words of length 6
+  std::vector<std::vector<Point4d<double> > > targets_under_words(64);
+  for (int i=0; i<64; ++i) {
+    AffineMap A = IFS2d.semigroup_element(i, 6);
+    targets_under_words[i].resize(4);
+    for (int j=0; j<4; ++j) {
+      Point2d<double> point_target = A(initial_box[j]);
+      targets_under_words[i][j] = point_as_weighted_average_in_box(point_target, Point2d<double>(0.5,0), bs);
+    }
+  }
+  
+  std::vector< Box_Stuff > stack(1);
+  stack[0] = Box_Stuff(false, -1, 0, initial_box);
+  
+  while ((int)stack.size() > 0) {
+    Box_Stuff bs = stack.back();
+    stack.pop_back();
+    
+    //if the box is disjoint from the window, get rid of it
+    if (!bs.contained && bs.is_disjoint(limit_ll, limit_ur)) continue;
+    
+    //if we are at our target depth, draw it
+    if (bs.depth >= limit_depth) {
+      //DRAW IT
+      continue;
+    }
+    
+    //if the box isn't disjoint, we must subdivide
+    //we check if it is contained in order to speed this up
+    for (int i=0; i<64; ++i) {
+      std::vector<Point2d<double> > new_box(4);
+      for (int j=0; j<4; ++j) {
+        Point4d<double> target_weights = targets_under_words[i][j];
+        new_box[j] = target_weights.x*bs.box[0] + target_weights.y*bs.box[1] + 
+                     target_weights.z*bs.box[2] + target_weights.w*bs.box[3];
+      }
+      if (bs.contained) {
+        stack.push_back( Box_Stuff(true, (bs.last_gen==-1 ? (i>>5)&1 : bs.last_gen), bs.depth+1, new_box) );
+      } else {
+        stack.push_back( Box_Stuff( bs.is_contained(limit_ll, limit_ur), 
+                                    (bs.last_gen==-1 ? (i>>5)&1 : bs.last_gen), 
+                                    bs.depth+1, 
+                                    new_box) );
+      }
+    }
+  }
+  
+  
+  
+  LW.redraw();
+  
+}
+
+
+
 
 void IFSGui::draw_limit() {
   double min_r;
@@ -1284,6 +1396,9 @@ void IFSGui::draw_limit() {
   
   if (limit_nifs) {
     draw_nifs_limit();
+    return;
+  } else if (limit_2d) {
+    draw_2d_limit();
     return;
   }
   
@@ -2240,6 +2355,7 @@ void IFSGui::reset_and_pack_window() {
     W_limit_uv_graph_depth_label = WidgetText(this, T.str(), -1, 20);
     W_limit_uv_graph_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_limit_uv_graph_increase_depth);
     W_limit_nifs = WidgetCheck(this, "nIFS", -1, 20, limit_nifs, &IFSGui::S_limit_nifs);
+    W_limit_2d = WidgetCheck(this, "2d IFS", -1, 20, limit_2d, &IFSGui::S_limit_2d);
     
     pack_widget_upper_right(NULL, &W_limit_plot);
     if (window_mode == LIMIT) {
@@ -2263,6 +2379,7 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_uv_graph_depth_leftarrow, &W_limit_uv_graph_depth_label);
     pack_widget_upper_right(&W_limit_uv_graph_depth_label, &W_limit_uv_graph_depth_rightarrow);
     pack_widget_upper_right(&W_limit_plot, &W_limit_nifs);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_2d);
     
   }
   
@@ -2532,6 +2649,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   limit_uv_graph = false;
   limit_uv_graph_depth = 3;
   limit_nifs = false;
+  limit_2d = false;
   limit_marked_points.resize(3);
   limit_marked_points[0] = cpx(0,0);
   limit_marked_points[1] = cpx(0.5,0);
