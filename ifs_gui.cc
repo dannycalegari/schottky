@@ -1320,7 +1320,7 @@ void IFSGui::draw_2d_limit() {
   int ub_ind = 0;
   double upper_bound = 0.6;
   while (upper_bound < rz) {
-    upper_bound += 0.05;
+    upper_bound += 0.005;
     ub_ind++;
   };
   double bs = box_sizes[ub_ind];
@@ -1334,14 +1334,23 @@ void IFSGui::draw_2d_limit() {
   //figure out where the box goes, as averages of its own boundary points,
   //under all the words of length 6
   std::vector<std::vector<Point4d<double> > > targets_under_words(64);
+  //std::cout << "Original box: " << initial_box[0] << " " << initial_box[1] << " " << initial_box[2] << " " << initial_box[3] << "\n";
   for (int i=0; i<64; ++i) {
     AffineMap A = IFS2d.semigroup_element(i, 6);
     targets_under_words[i].resize(4);
+    //std::cout << i << ": box points: ";
     for (int j=0; j<4; ++j) {
       Point2d<double> point_target = A(initial_box[j]);
       targets_under_words[i][j] = point_as_weighted_average_in_box(point_target, Point2d<double>(0.5,0), bs);
+      //std::cout << point_target << " weights: " << targets_under_words[i][j] << "; ";
     }
+    //std::cout << "\n";
   }
+  Point4d<double> zero_weights = point_as_weighted_average_in_box(Point2d<double>(0,0), Point2d<double>(0.5,0), bs);
+  
+  //set the colors
+  int bcolor = get_rgb_color(0,0,1);
+  int rcolor = get_rgb_color(1,0,0);
   
   std::vector< Box_Stuff > stack(1);
   stack[0] = Box_Stuff(false, -1, 0, initial_box);
@@ -1351,11 +1360,23 @@ void IFSGui::draw_2d_limit() {
     stack.pop_back();
     
     //if the box is disjoint from the window, get rid of it
-    if (!bs.contained && bs.is_disjoint(limit_ll, limit_ur)) continue;
+    if (!bs.contained && bs.is_disjoint(cpx(limit_ll.real(), 5*limit_ll.imag()), 
+                                        cpx(limit_ur.real(), 5*limit_ur.imag())) ) continue;
     
     //if we are at our target depth, draw it
     if (bs.depth >= limit_depth) {
-      //DRAW IT
+      //XPoint v[4];
+      //for (int i=0; i<(int)4; ++i) {
+      //  Point2d<int> pv = limit_cpx_to_pixel(cpx(bs.box[i].x, bs.box[i].y));
+      //  v[i].x = pv.x; v[i].y = pv.y;
+      //}
+      //XSetForeground(display, LW.gc, (bs.last_gen == 1 ? rcolor : bcolor));
+      //XFillPolygon(display, LW.p, LW.gc, v, 4, Convex, CoordModeOrigin);
+      XSetForeground(display, LW.gc, (bs.last_gen == 1 ? rcolor : bcolor));
+      Point2d<double> zero_image = zero_weights.x*bs.box[0] + zero_weights.y*bs.box[1] + 
+                                   zero_weights.z*bs.box[2] + zero_weights.w*bs.box[3];
+      Point2d<int> pv = limit_cpx_to_pixel(cpx(zero_image.x, zero_image.y/5.0));
+      XDrawPoint(display, LW.p, LW.gc, pv.x, pv.y);
       continue;
     }
     
@@ -1371,7 +1392,8 @@ void IFSGui::draw_2d_limit() {
       if (bs.contained) {
         stack.push_back( Box_Stuff(true, (bs.last_gen==-1 ? (i>>5)&1 : bs.last_gen), bs.depth+1, new_box) );
       } else {
-        stack.push_back( Box_Stuff( bs.is_contained(limit_ll, limit_ur), 
+        stack.push_back( Box_Stuff( bs.is_contained(cpx(limit_ll.real(), 5*limit_ll.imag()), 
+                                                    cpx(limit_ur.real(), 5*limit_ur.imag())), 
                                     (bs.last_gen==-1 ? (i>>5)&1 : bs.last_gen), 
                                     bs.depth+1, 
                                     new_box) );

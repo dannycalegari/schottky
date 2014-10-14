@@ -389,6 +389,11 @@ bool ifs::is_ball_disjoint(const Ball& b, const cpx& ll, const cpx& ur) {
 }
 
 
+bool is_point_contained(const cpx& c, const cpx& ll, const cpx& ur) {
+  return ll.real() <= c.real() && c.real() <= ur.real() && 
+         ll.imag() <= c.imag() && c.imag() <= ur.imag();
+}
+
 //return the lower left and upper right of a box (square) containing
 //all the balls
 void ifs::box_containing_balls(const std::vector<Ball>& balls, 

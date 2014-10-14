@@ -64,7 +64,29 @@ AffineMap ifs2d::semigroup_element(int list, int n) {
 Point4d<double> point_as_weighted_average_in_box(const Point2d<double>& point_target, 
                                                  const Point2d<double>& center, 
                                                  double radius) {
-  return Point4d<double>();
+  if (!is_point_contained(cpx(point_target.x, point_target.y),
+                          cpx(center.x - radius, center.y - radius),
+                          cpx(center.x + radius, center.y + radius))) {
+    std::cout << cpx(point_target.x, point_target.y) << " isn't in " << 
+                 cpx(center.x - radius, center.y - radius) << ", " << 
+                 cpx(center.x + radius, center.y + radius) << "\n";
+    return Point4d<double>();
+  }
+  if (point_target.x + point_target.y > center.x + center.y) {
+    Point2d<double> diff = point_target - Point2d<double>(center.x+radius, center.y+radius);
+    double x_amount = diff.x / (-2*radius);
+    double y_amount = diff.y / (-2*radius); 
+    return Point4d<double>(0, y_amount, 1-x_amount-y_amount, x_amount);
+  } else {
+    Point2d<double> diff = point_target - Point2d<double>(center.x-radius, center.y-radius);
+    double x_amount = diff.x / (2*radius);
+    double y_amount = diff.y / (2*radius);
+    //ans = (center.x-radius, center.y-radius) 
+    //      + x_amount*(center.x+radius, center.y-radius)
+    //      + y_amount*(center.x-radius, center.y+radius)
+    //    = v[0] + x_amount(v[1]-v[0]) + y_amount(v[3]-v[0])
+    return Point4d<double>(1-x_amount-y_amount, x_amount, 0, y_amount);
+  }
 }
 
 

@@ -403,6 +403,9 @@ struct AffineMap {
   Point2d<double> operator()(const Point2d<double>& X) const;
 };
 
+
+bool is_point_contained(const cpx& c, const cpx& ll, const cpx& ur);
+
 struct Box_Stuff {
   bool contained;
   int last_gen;
@@ -416,10 +419,36 @@ struct Box_Stuff {
     box = B;
   }
   bool is_disjoint(cpx ll, cpx ur) {
+    //check if the box is separated from the square by a square side
+    if ( (box[0].x < ll.real() && box[1].x < ll.real() && box[2].x < ll.real() && box[3].x < ll.real()) ||
+         (box[0].x > ur.real() && box[1].x > ur.real() && box[2].x > ur.real() && box[3].x > ur.real()) ||
+         (box[0].y < ll.imag() && box[1].y < ll.imag() && box[2].y < ll.imag() && box[3].y < ll.imag()) ||
+         (box[0].y > ur.imag() && box[1].y > ur.imag() && box[2].y > ur.imag() && box[3].y > ur.imag()) ) {
+      return true;
+    }
+    //check if the box is separated from the square by a box side
+    std::vector<Point2d<double> > square(4);
+    square[0] = Point2d<double>(ll.real(), ll.imag());
+    square[1] = Point2d<double>(ur.real(), ll.imag());
+    square[2] = Point2d<double>(ur.real(), ur.imag());
+    square[3] = Point2d<double>(ll.real(), ur.imag());
+    for (int i=0; i<(int)box.size(); ++i) {
+      Point2d<double> v = box[(i+1)%4] - box[i];
+      Point2d<double> vp(-v.y, v.x);
+      if ( dot(vp, square[0]-box[i]) < 0 && dot(vp, square[1]-box[i]) < 0 &&
+           dot(vp, square[2]-box[i]) < 0 && dot(vp, square[3]-box[i]) < 0    ) {
+        return true;
+      }
+    }
     return false;
   }
   bool is_contained(cpx ll, cpx ur) {
-    return false;
+    for (int i=0; i<(int)box.size(); ++i) {
+      if (!is_point_contained(cpx(box[i].x, box[i].y), ll, ur)) {
+        return false;
+      }
+    }
+    return true;
   }
 };
 
