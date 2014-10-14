@@ -409,12 +409,14 @@ bool is_point_contained(const cpx& c, const cpx& ll, const cpx& ur);
 struct Box_Stuff {
   bool contained;
   int last_gen;
+  int word;
   int depth;
   std::vector< Point2d<double> > box;
   Box_Stuff() {}
-  Box_Stuff(bool C, int L, int D, const std::vector< Point2d<double> >& B) {
+  Box_Stuff(bool C, int L, int W, int D, const std::vector< Point2d<double> >& B) {
     contained = C;
     last_gen = L;
+    word = W;
     depth = D;
     box = B;
   }

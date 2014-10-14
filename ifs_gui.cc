@@ -1353,7 +1353,7 @@ void IFSGui::draw_2d_limit() {
   int rcolor = get_rgb_color(1,0,0);
   
   std::vector< Box_Stuff > stack(1);
-  stack[0] = Box_Stuff(false, -1, 0, initial_box);
+  stack[0] = Box_Stuff(false, -1, 0, 0, initial_box);
   
   while ((int)stack.size() > 0) {
     Box_Stuff bs = stack.back();
@@ -1367,7 +1367,7 @@ void IFSGui::draw_2d_limit() {
     if (bs.depth >= limit_depth) {
       //XPoint v[4];
       //for (int i=0; i<(int)4; ++i) {
-      //  Point2d<int> pv = limit_cpx_to_pixel(cpx(bs.box[i].x, bs.box[i].y));
+      //  Point2d<int> pv = limit_cpx_to_pixel(cpx(bs.box[i].x, bs.box[i].y/5.0));
       //  v[i].x = pv.x; v[i].y = pv.y;
       //}
       //XSetForeground(display, LW.gc, (bs.last_gen == 1 ? rcolor : bcolor));
@@ -1377,6 +1377,7 @@ void IFSGui::draw_2d_limit() {
                                    zero_weights.z*bs.box[2] + zero_weights.w*bs.box[3];
       Point2d<int> pv = limit_cpx_to_pixel(cpx(zero_image.x, zero_image.y/5.0));
       XDrawPoint(display, LW.p, LW.gc, pv.x, pv.y);
+      //std::cout << "Drew: " << std::bitset<64>(bs.word).to_string() << "\n";
       continue;
     }
     
@@ -1390,11 +1391,16 @@ void IFSGui::draw_2d_limit() {
                      target_weights.z*bs.box[2] + target_weights.w*bs.box[3];
       }
       if (bs.contained) {
-        stack.push_back( Box_Stuff(true, (bs.last_gen==-1 ? (i>>5)&1 : bs.last_gen), bs.depth+1, new_box) );
+        stack.push_back( Box_Stuff(true, 
+                                   (bs.last_gen==-1 ? (i>>5)&1 : bs.last_gen), 
+                                   (bs.last_gen==-1 ? i : (bs.word<<6)|i),
+                                   bs.depth+1, 
+                                   new_box) );
       } else {
         stack.push_back( Box_Stuff( bs.is_contained(cpx(limit_ll.real(), 5*limit_ll.imag()), 
                                                     cpx(limit_ur.real(), 5*limit_ur.imag())), 
                                     (bs.last_gen==-1 ? (i>>5)&1 : bs.last_gen), 
+                                    (bs.last_gen==-1 ? i : (bs.word<<6)|i),
                                     bs.depth+1, 
                                     new_box) );
       }
