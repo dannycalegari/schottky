@@ -20,6 +20,10 @@ bool Widget::contains_pixel(int x, int y) {
   return (ul.x <= x) && (x < ul.x + width) && (ul.y <= y) && (y < ul.y + height);
 }
 
+bool Widget::intersects_rectangle(const Point2d<int>& ul, int w, int h) {
+  return true;
+}
+
 void Widget::clear() {
   XSetForeground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
   XFillRectangle(ifsg->display, ifsg->main_window, gc, ul.x, ul.y, width, height);
@@ -2638,7 +2642,7 @@ void IFSGui::main_loop() {
     XNextEvent(display, &e);
     //if it was the keyboard, we deal with it here
     if (e.type == KeyPress) {
-      if(XLookupKeysym(&e.xkey, 0) == XK_q){ // left arrow
+      if(XLookupKeysym(&e.xkey, 0) == XK_q){ 
         break;
       }
      
@@ -2652,7 +2656,18 @@ void IFSGui::main_loop() {
           break;
         }
       }
+    
+    } else if (e.type == Expose) {
+      Point2d<int> expose_ul( e.xexpose.x, e.xexpose.y );
+      int ewidth = e.xexpose.width;
+      int eheight = e.xexpose.height;
+      for (int i=0; i<(int)widgets.size(); ++i) {
+        if (widgets[i]->intersects_rectangle(expose_ul, ewidth, eheight)) {
+          widgets[i]->redraw();
+        }
+      }
     }
+    
   }
 }
 

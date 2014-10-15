@@ -26,8 +26,9 @@ struct Widget {
   
   virtual void initial_draw() {}
   virtual void redraw() {}
-  virtual bool contains_pixel(int x, int y);
   virtual void clear();
+  bool contains_pixel(int x, int y);
+  bool intersects_rectangle(const Point2d<int>& ul, int w, int h);
   Widget() {}
 };
 
