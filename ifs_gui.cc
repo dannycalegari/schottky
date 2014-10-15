@@ -20,8 +20,8 @@ bool Widget::contains_pixel(int x, int y) {
   return (ul.x <= x) && (x < ul.x + width) && (ul.y <= y) && (y < ul.y + height);
 }
 
-bool Widget::intersects_rectangle(const Point2d<int>& ul, int w, int h) {
-  return true;
+bool Widget::intersects_rectangle(const Point2d<int>& p, int w, int h) {
+  return !(ul.x > p.x + w || ul.y > p.y + h || p.x > ul.x + width || p.y > ul.y + height);
 }
 
 void Widget::clear() {
@@ -104,6 +104,10 @@ WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (
 
 void WidgetButton::initial_draw() {
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
+}
+
+void WidgetButton::redraw() {
+  initial_draw();
 }
 
 
@@ -264,7 +268,9 @@ void WidgetLeftArrow::initial_draw() {
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
 }
 
-
+void WidgetLeftArrow::redraw() {
+  initial_draw();
+}
 
 WidgetRightArrow::WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*)) {
   ifsg = i;
@@ -296,7 +302,9 @@ void WidgetRightArrow::initial_draw() {
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
 }
 
-
+void WidgetRightArrow::redraw() {
+  initial_draw();
+}
 
 
 

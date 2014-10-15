@@ -28,7 +28,7 @@ struct Widget {
   virtual void redraw() {}
   virtual void clear();
   bool contains_pixel(int x, int y);
-  bool intersects_rectangle(const Point2d<int>& ul, int w, int h);
+  bool intersects_rectangle(const Point2d<int>& p, int w, int h);
   Widget() {}
 };
 
@@ -46,6 +46,7 @@ struct WidgetButton : Widget {
   WidgetButton() {}
   WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (IFSGui::*f)(XEvent*));
   void initial_draw();
+  void redraw();
 };
 
 struct WidgetText : Widget {
@@ -74,12 +75,14 @@ struct WidgetLeftArrow : Widget {
   WidgetLeftArrow() {}
   WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*));
   void initial_draw();
+  void redraw();
 };
 
 struct WidgetRightArrow : Widget {
   WidgetRightArrow() {}
   WidgetRightArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*));
   void initial_draw();
+  void redraw();
 };
 
 
