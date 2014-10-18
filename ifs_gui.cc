@@ -1228,7 +1228,9 @@ cpx IFSGui::limit_pixel_to_cpx(const Point2d<int>& p) {
 void IFSGui::draw_nifs_limit() {
 
   //create the nifs object
-  nIFS nifs(4, IFS.z);
+  //nIFS nifs(4, IFS.z);
+  nIFS nifs(3,IFS.z);
+  nifs.centers[0] = -1; nifs.centers[1] = 0; nifs.centers[2] = 1;
   double min_r = nifs.minimal_initial_radius();
   
   //std::cout << "Got min initial radius of " << min_r << "\n";
@@ -1691,7 +1693,8 @@ void IFSGui::draw_mand() {
             mand_data_grid[i][j].x = -1;
           }
         } else {
-          nIFS nifs(4, c);
+          nIFS nifs(3, c);
+          nifs.centers[0] = -1; nifs.centers[1] = 0; nifs.centers[2] = 1;
           if (!nifs.is_connected(mand_connected_depth, mand_data_grid[i][j].x)) {
             mand_data_grid[i][j].x = -1;
           }
