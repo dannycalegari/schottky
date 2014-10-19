@@ -1230,6 +1230,7 @@ void IFSGui::draw_nifs_limit() {
   //create the nifs object
   //nIFS nifs(4, IFS.z);
   nIFS nifs(3,IFS.z);
+  //nifs.centers[3] = -2; nifs.centers[4] = 2;
   nifs.centers[0] = -1; nifs.centers[1] = 0; nifs.centers[2] = 1;
   double min_r = nifs.minimal_initial_radius();
   
@@ -1246,11 +1247,12 @@ void IFSGui::draw_nifs_limit() {
   XDrawRectangle(display, LW.p, LW.gc, 0, 0, LW.width-1, LW.height-1);
   XSetFillStyle(display, LW.gc, FillSolid);
   
-  std::vector<int> colors(4);
+  std::vector<int> colors(5);
   colors[0] = get_rgb_color(1,0,0);
   colors[1] = get_rgb_color(0,1,0);
   colors[2] = get_rgb_color(0,0,1);
   colors[3] = get_rgb_color(1,0,1);
+  colors[4] = get_rgb_color(0,1,1);
   
   nBall initial_ball(0,min_r,1);
   
@@ -1276,7 +1278,7 @@ void IFSGui::draw_nifs_limit() {
       continue;
     }
     //if the ball isn't disjoint from the window, maybe it is contained in it?
-    for (int i=0; i<4; ++i) {
+    for (int i=0; i<3; ++i) {
       nBall new_ball = nifs.act_on_right(i, bs.ball);
       if (bs.contained) {
         stack.push_back(nBall_stuff(true, (bs.last_gen==-1 ? i : bs.last_gen), bs.depth+1, new_ball));
