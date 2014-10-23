@@ -1690,7 +1690,7 @@ void IFSGui::draw_mand() {
       
       if (mand_connected && !mand_grid_connected_valid) {
         //temp_IFS.set_params(c*c,c*c);
-        if (!limit_nifs) {
+        if (true){//!limit_nifs) {
           if (!temp_IFS.is_connected(mand_connected_depth, mand_data_grid[i][j].x) ) {
             mand_data_grid[i][j].x = -1;
           }
