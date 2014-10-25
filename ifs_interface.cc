@@ -174,7 +174,7 @@ void ifs::user_interface() {
                     draw();
                     break;
                 } else if (XLookupKeysym(&report.xkey, 0) == XK_o) { //start drawing a loop
-                    if (mode == 1) { //only do it in mandlebrot mode
+                    if (mode == 1) { //only do it in mandelbrot mode
                       //get a loop
                       std::vector<cpx> loop(0);
                       input_loop(loop);
@@ -191,7 +191,7 @@ void ifs::user_interface() {
 
 
 
-//in mandlebrot mode, read in a sequence of points
+//in mandelbrot mode, read in a sequence of points
 void ifs::input_loop(std::vector<cpx>& loop) {
   bool done_drawing = false;
   Point2d<int> p;
@@ -232,14 +232,14 @@ void ifs::input_loop(std::vector<cpx>& loop) {
       mz = (mz*wind)+center;   //now mz is the real complex number
       X.draw_dot(p, rcol);
       if (loop.size() > 0) { 
-        X.draw_line(cpx_to_point_mandlebrot(loop.back()), p, rcol);
+        X.draw_line(cpx_to_point_mandelbrot(loop.back()), p, rcol);
       }
       loop.push_back(mz);
     
     } else if (report.type == KeyPress && 
                XLookupKeysym(&report.xkey, 0) == XK_o) {
-      X.draw_line(cpx_to_point_mandlebrot(loop.back()), 
-                  cpx_to_point_mandlebrot(loop.front()), rcol);
+      X.draw_line(cpx_to_point_mandelbrot(loop.back()), 
+                  cpx_to_point_mandelbrot(loop.front()), rcol);
       done_drawing= true;
     }
   }

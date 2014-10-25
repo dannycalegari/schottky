@@ -104,7 +104,7 @@ struct IFSPath {
   int half_end;
   int movie_length;
   int movie_fps;
-  bool movie_with_mandlebrot;
+  bool movie_with_mandelbrot;
   IFSPath() {
     is_valid = false;
     path.resize(0);
@@ -115,7 +115,7 @@ struct IFSPath {
     uv_words.resize(0);
     movie_length = 10;
     movie_fps = 30;
-    movie_with_mandlebrot = false;
+    movie_with_mandelbrot = false;
     half_depth = 10;
     half_start = 0;
     half_end = 0;
@@ -124,14 +124,14 @@ struct IFSPath {
 
 
 
-enum IFSWindowMode { LIMIT, MANDLEBROT, BOTH };
+enum IFSWindowMode { LIMIT, MANDELBROT, BOTH };
 
 struct IFSGui {
   
   //which mode
   IFSWindowMode window_mode;
   
-  //limit and mandlebrot settings
+  //limit and mandelbrot settings
   //limit
   ifs IFS;
   cpx limit_ll;
@@ -149,7 +149,7 @@ struct IFSGui {
   Point2d<int> limit_cpx_to_pixel(const cpx& c);
   cpx limit_pixel_to_cpx(const Point2d<int>& p);
   
-  //mandlebrot
+  //mandelbrot
   cpx mand_ll;
   cpx mand_ur;
   int mand_pixel_group_size;
@@ -174,9 +174,10 @@ struct IFSGui {
   cpx mand_pixel_to_cpx(const Point2d<int>& p);
   Point2d<int> mand_cpx_to_pixel(const cpx& c);
   int mand_get_color(PointNd<6,int>& p);
+  int mand_output_picture_size;
   
 
-  //data for mandlebrot
+  //data for mandelbrot
   std::vector<std::vector<PointNd<6,int> > > mand_data_grid;
   bool mand_grid_connected_valid;
   bool mand_grid_contains_half_valid;
@@ -236,7 +237,7 @@ struct IFSGui {
   
   //widgets:
   WidgetButton W_switch_to_limit;
-  WidgetButton W_switch_to_mandlebrot;
+  WidgetButton W_switch_to_mandelbrot;
   WidgetButton W_switch_to_combined;
   
   WidgetText W_point_title;
@@ -332,6 +333,10 @@ struct IFSGui {
   WidgetText W_mand_mouse_X;
   WidgetText W_mand_mouse_Y;
   WidgetButton W_mand_output_window;
+  WidgetButton W_mand_output_picture;
+  WidgetLeftArrow W_mand_output_picture_size_leftarrow;
+  WidgetText W_mand_output_picture_size_label;
+  WidgetRightArrow W_mand_output_picture_size_rightarrow;
   
   WidgetText W_mand_path_drawing_title;
   WidgetButton W_mand_path_create_by_drawing_button;
@@ -348,7 +353,7 @@ struct IFSGui {
   WidgetLeftArrow W_mand_path_movie_decrease_length;
   WidgetText W_mand_path_movie_length_label;
   WidgetRightArrow W_mand_path_movie_increase_length;
-  WidgetCheck W_mand_path_movie_with_mandlebrot;
+  WidgetCheck W_mand_path_movie_with_mandelbrot;
   WidgetButton W_mand_path_find_uv_words_button;
   WidgetButton W_mand_path_find_half_words_button;
   WidgetText W_mand_path_half_depth_title;
@@ -366,7 +371,7 @@ struct IFSGui {
   
   //signal functions
   void S_switch_to_limit(XEvent* e);
-  void S_switch_to_mandlebrot(XEvent* e);
+  void S_switch_to_mandelbrot(XEvent* e);
   void S_switch_to_combined(XEvent* e);
   
   void S_limit_draw(XEvent* e);
@@ -409,6 +414,9 @@ struct IFSGui {
   void S_mand_theta_decrease_depth(XEvent* e);
   void S_mand_theta_increase_depth(XEvent* e);
   void S_mand_output_window(XEvent* e);
+  void S_mand_output_picture(XEvent* e);
+  void S_mand_output_picture_increase_size(XEvent* e);
+  void S_mand_output_picture_decrease_size(XEvent* e);
   
   
   void S_point_connected(XEvent* e);
@@ -438,7 +446,7 @@ struct IFSGui {
   void S_mand_path_create_movie(XEvent* e);
   void S_mand_path_movie_decrease_length(XEvent* e);
   void S_mand_path_movie_increase_length(XEvent* e);
-  void S_mand_path_movie_with_mandlebrot(XEvent* e);
+  void S_mand_path_movie_with_mandelbrot(XEvent* e);
   void S_mand_path_find_uv_words(XEvent* e);
   void S_mand_path_find_half_words(XEvent* e);
   void S_mand_path_half_increase_depth(XEvent* e);

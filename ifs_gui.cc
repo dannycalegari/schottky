@@ -329,9 +329,9 @@ void IFSGui::S_switch_to_limit(XEvent* e) {
   reset_and_pack_window();
 }
 
-void IFSGui::S_switch_to_mandlebrot(XEvent* e) {
+void IFSGui::S_switch_to_mandelbrot(XEvent* e) {
   if (e->type != ButtonPress) return;
-  window_mode = MANDLEBROT;
+  window_mode = MANDELBROT;
   reset_and_pack_window();
 }
 
@@ -474,7 +474,7 @@ void IFSGui::S_limit_2d(XEvent* e) {
   draw_limit();
 }
 
-//mandlebrot
+//mandelbrot
 void IFSGui::S_mand_draw(XEvent* e) {
   if (e->type == KeyPress) return;
         
@@ -764,6 +764,41 @@ void IFSGui::S_mand_output_window(XEvent* e) {
 }
 
 
+void IFSGui::S_mand_output_picture(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  std::vector<std::vector<Point3d<unsigned char> > > bmp(mand_output_picture_size);
+  for (int i=0; i<mand_output_picture_size; ++i) {
+    bmp[i].resize(mand_output_picture_size);
+  }
+  IFS.draw_mand_to_array(bmp, mand_ll, mand_ur, mand_connected_depth, mand_contains_half);
+  write_bitmap(bmp, "mandelbrot_output.bmp");
+  std::cout << "Wrote bitmap\n";
+}
+  
+  
+void IFSGui::S_mand_output_picture_increase_size(XEvent* e) {
+  if (e->type != ButtonPress) return; 
+  mand_output_picture_size += 200;
+  std::stringstream T;
+  T.str(""); T << mand_output_picture_size;
+  W_mand_output_picture_size_label.update_text(T.str());
+}
+  
+void IFSGui::S_mand_output_picture_decrease_size(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  if (mand_output_picture_size >= 200) mand_output_picture_size -= 200;
+  std::stringstream T;
+  T.str(""); T << mand_output_picture_size;
+  W_mand_output_picture_size_label.update_text(T.str());
+}
+  
+
+
+
+
+
+
+
 //point
 void IFSGui::S_point_connected(XEvent* e) {
   if (e->type != ButtonPress) return;
@@ -965,9 +1000,9 @@ void IFSGui::S_mand_path_find_coordinates(XEvent* e) {
 
 void IFSGui::S_mand_path_create_movie(XEvent* e) {
   if (e->type != ButtonPress || !path.is_valid) return;
-  //create the mandlebrot connectedness grid
+  //create the mandelbrot connectedness grid
   std::vector<std::vector<bool> > mand_connected_grid;
-  if (path.movie_with_mandlebrot) {
+  if (path.movie_with_mandelbrot) {
     mand_connected_grid = std::vector<std::vector<bool> >(mand_data_grid.size(), std::vector<bool>(mand_data_grid.size(), false));
     for (int i=0; i<(int)mand_data_grid.size(); ++i) {
       for (int j=0; j<(int)mand_data_grid.size(); ++j) {
@@ -977,7 +1012,7 @@ void IFSGui::S_mand_path_create_movie(XEvent* e) {
   }
   (void)ifs_movie_from_path(IFS, path.path, path.closed, "ifs_movie",
                             limit_ll, limit_ur, limit_depth, 
-                            path.movie_with_mandlebrot, &mand_ll, &mand_ur, &mand_connected_grid, 
+                            path.movie_with_mandelbrot, &mand_ll, &mand_ur, &mand_connected_grid, 
                             W_limit_plot.width, W_limit_plot.height, 
                             path.movie_fps, path.movie_length, 1);
 }
@@ -997,11 +1032,11 @@ void IFSGui::S_mand_path_movie_increase_length(XEvent* e) {
   W_mand_path_movie_length_label.update_text(T.str());
 }
 
-void IFSGui::S_mand_path_movie_with_mandlebrot(XEvent* e) {
+void IFSGui::S_mand_path_movie_with_mandelbrot(XEvent* e) {
   if (e->type != ButtonPress) return;
-  path.movie_with_mandlebrot = !path.movie_with_mandlebrot;
-  W_mand_path_movie_with_mandlebrot.checked = path.movie_with_mandlebrot;
-  W_mand_path_movie_with_mandlebrot.redraw();
+  path.movie_with_mandelbrot = !path.movie_with_mandelbrot;
+  W_mand_path_movie_with_mandelbrot.checked = path.movie_with_mandelbrot;
+  W_mand_path_movie_with_mandelbrot.redraw();
 }
 
 void IFSGui::S_mand_path_find_uv_words(XEvent* e) {
@@ -1125,7 +1160,7 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);
   pack_widget_upper_right(&W_mand_path_movie_decrease_length, &W_mand_path_movie_length_label);
   pack_widget_upper_right(&W_mand_path_movie_length_label, &W_mand_path_movie_increase_length);
-  pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandlebrot);
+  pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandelbrot);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_half_words_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_half_depth_title);
@@ -1149,9 +1184,9 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   W_mand_path_movie_decrease_length.initial_draw();
   std::stringstream T; T.str(""); T << path.movie_length;
   W_mand_path_movie_length_label.update_text(T.str());
-  W_mand_path_movie_with_mandlebrot.checked = path.movie_with_mandlebrot;
-  W_mand_path_movie_with_mandlebrot.initial_draw();
-  W_mand_path_movie_with_mandlebrot.redraw();
+  W_mand_path_movie_with_mandelbrot.checked = path.movie_with_mandelbrot;
+  W_mand_path_movie_with_mandelbrot.initial_draw();
+  W_mand_path_movie_with_mandelbrot.redraw();
   W_mand_path_movie_increase_length.initial_draw();
   W_mand_path_find_uv_words_button.initial_draw();
   W_mand_path_find_half_words_button.initial_draw();
@@ -1187,7 +1222,7 @@ void IFSGui::make_path_creation_buttons(bool cancelling) {
     detach_widget(&W_mand_path_movie_decrease_length);
     detach_widget(&W_mand_path_movie_length_label);
     detach_widget(&W_mand_path_movie_increase_length);
-    detach_widget(&W_mand_path_movie_with_mandlebrot);
+    detach_widget(&W_mand_path_movie_with_mandelbrot);
     detach_widget(&W_mand_path_find_uv_words_button);
     detach_widget(&W_mand_path_find_half_words_button);
     detach_widget(&W_mand_path_half_depth_title);
@@ -1661,7 +1696,7 @@ void IFSGui::mand_draw_ball(const Ball& b, int col) {
   
   
 
-//draw the mandlebrot set
+//draw the mandelbrot set
 void IFSGui::draw_mand() {
   ifs temp_IFS;
   Widget& MW = W_mand_plot;
@@ -1938,7 +1973,7 @@ void IFSGui::change_highlighted_ifs(cpx c) {
   XCopyArea(display, MW.p, main_window, MW.gc,h.x-2, h.y-2, 6, 6, 
                                               MW.ul.x + h.x-2, MW.ul.y + h.y-2);
   
-  if (window_mode != MANDLEBROT) {
+  if (window_mode != MANDELBROT) {
     draw_limit();
   }
   recompute_point_data();
@@ -2285,7 +2320,7 @@ void IFSGui::reset_and_pack_window() {
     XDestroyWindow(display, main_window);
   }
   //figure out how big to make the window (here ss = sidebar size)
-  //for each of limit and mandlebrot, we need height x+ss and width x+ss,
+  //for each of limit and mandelbrot, we need height x+ss and width x+ss,
   //if if it's just one of them, we can set the height to be the display height
   //minus 200 (say), as long as x+ss is smaller than the width
   //otherwise, we can make it x+ss, as long as 2x+ss < width
@@ -2297,7 +2332,7 @@ void IFSGui::reset_and_pack_window() {
   int height_rest = display_height - 170;
   int x = (width_rest > height_rest ? height_rest : width_rest);
   
-  if (window_mode == MANDLEBROT) {
+  if (window_mode == MANDELBROT) {
     main_window_height = x + 140;
     main_window_width = x + mand_sidebar_size;
   } else if (window_mode == LIMIT) {
@@ -2338,7 +2373,7 @@ void IFSGui::reset_and_pack_window() {
   
   //stuff for the IFS computations
   W_switch_to_limit = WidgetButton(this, "Switch to limit", -1, 20, &IFSGui::S_switch_to_limit);
-  W_switch_to_mandlebrot = WidgetButton(this, "Switch to mandlebrot", -1,20, &IFSGui::S_switch_to_mandlebrot);
+  W_switch_to_mandelbrot = WidgetButton(this, "Switch to mandelbrot", -1,20, &IFSGui::S_switch_to_mandelbrot);
   W_switch_to_combined = WidgetButton(this, "Switch to combined", -1, 20, &IFSGui::S_switch_to_combined);
   
   W_point_title = WidgetText(this, "Current IFS status:", -1, 20);
@@ -2379,7 +2414,7 @@ void IFSGui::reset_and_pack_window() {
   W_point_coordinates_status = WidgetText(this, "initializing", x, 20);
   
   //if the limit set is shown:
-  if (window_mode != MANDLEBROT) {
+  if (window_mode != MANDELBROT) {
     W_limit_plot = WidgetDraw(this, x,x, &IFSGui::S_limit_draw);
     W_limit_depth_title = WidgetText(this, "Depth: ", -1, 20);
     W_limit_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_limit_decrease_depth);
@@ -2404,7 +2439,7 @@ void IFSGui::reset_and_pack_window() {
     
     pack_widget_upper_right(NULL, &W_limit_plot);
     if (window_mode == LIMIT) {
-      pack_widget_upper_right(&W_limit_plot, &W_switch_to_mandlebrot);
+      pack_widget_upper_right(&W_limit_plot, &W_switch_to_mandelbrot);
       pack_widget_upper_right(&W_limit_plot, &W_switch_to_combined);
     }
     pack_widget_upper_right(&W_limit_plot, &W_limit_center_title);
@@ -2428,10 +2463,10 @@ void IFSGui::reset_and_pack_window() {
     
   }
   
-  //if the mandlebrot set is shown:
+  //if the mandelbrot set is shown:
   if (window_mode != LIMIT) {
     W_mand_plot = WidgetDraw(this, x,x, &IFSGui::S_mand_draw);
-    W_mand_options_title = WidgetText(this, "Mandlebrot options:", -1, 20);
+    W_mand_options_title = WidgetText(this, "mandelbrot options:", -1, 20);
     W_mand_recenter = WidgetButton(this, "Recenter", -1, 20, &IFSGui::S_mand_recenter);
     W_mand_zoom_title = WidgetText(this, "Zoom: ", -1, 20);
     W_mand_zoom_in = WidgetButton(this, "in", -1, 20, &IFSGui::S_mand_zoom_in);
@@ -2477,6 +2512,11 @@ void IFSGui::reset_and_pack_window() {
     W_mand_mouse_X = WidgetText(this, "Re: initializing", 200, 20);
     W_mand_mouse_Y = WidgetText(this, "Im: initializing", 200, 20);
     W_mand_output_window = WidgetButton(this, "Write window coords", -1, 20, &IFSGui::S_mand_output_window);
+    W_mand_output_picture = WidgetButton(this, "Write picture", -1, 20, &IFSGui::S_mand_output_picture);
+    W_mand_output_picture_size_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_output_picture_decrease_size);
+    T.str(""); T << mand_output_picture_size;
+    W_mand_output_picture_size_label = WidgetText(this, T.str(), -1, 20);
+    W_mand_output_picture_size_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_output_picture_increase_size);
     
     W_mand_path_create_by_drawing_button = WidgetButton(this, "Draw path", -1, 20, &IFSGui::S_mand_path_create_by_drawing_button);
     W_mand_path_create_by_boundary_button = WidgetButton(this, "Find boundary path", -1, 20, &IFSGui::S_mand_path_create_by_boundary);
@@ -2494,7 +2534,7 @@ void IFSGui::reset_and_pack_window() {
     T.str(""); T << path.movie_length;
     W_mand_path_movie_length_label = WidgetText(this, T.str(), -1, 20);
     W_mand_path_movie_increase_length = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_path_movie_increase_length);
-    W_mand_path_movie_with_mandlebrot = WidgetCheck(this, "Movie with mandlebrot", -1, 20, path.movie_with_mandlebrot, &IFSGui::S_mand_path_movie_with_mandlebrot);
+    W_mand_path_movie_with_mandelbrot = WidgetCheck(this, "Movie with mandelbrot", -1, 20, path.movie_with_mandelbrot, &IFSGui::S_mand_path_movie_with_mandelbrot);
     W_mand_path_find_uv_words_button = WidgetButton(this, "Find uv words along path", -1, 20, &IFSGui::S_mand_path_find_uv_words);
     W_mand_path_find_half_words_button = WidgetButton(this, "Find half words along path", -1, 20, &IFSGui::S_mand_path_find_half_words);
     W_mand_path_half_depth_title = WidgetText(this, "Half ball depth", -1, 20);
@@ -2515,14 +2555,14 @@ void IFSGui::reset_and_pack_window() {
 
 
 
-    if (window_mode == MANDLEBROT) {
+    if (window_mode == MANDELBROT) {
       pack_widget_upper_right(NULL, &W_mand_plot);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_limit);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_combined);
     } else {
       pack_widget_upper_right(&W_limit_center_title, &W_mand_plot);
       pack_widget_upper_right(&W_mand_plot, &W_switch_to_limit);
-      pack_widget_upper_right(&W_mand_plot, &W_switch_to_mandlebrot);
+      pack_widget_upper_right(&W_mand_plot, &W_switch_to_mandelbrot);
     }
     pack_widget_upper_right(&W_mand_plot, &W_mand_options_title);
     pack_widget_upper_right(&W_mand_plot, &W_mand_recenter);
@@ -2562,6 +2602,10 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_X);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_Y);
     pack_widget_upper_right(&W_mand_plot, &W_mand_output_window);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_output_picture);
+    pack_widget_upper_right(&W_mand_output_picture, &W_mand_output_picture_size_leftarrow);
+    pack_widget_upper_right(&W_mand_output_picture_size_leftarrow, &W_mand_output_picture_size_label);
+    pack_widget_upper_right(&W_mand_output_picture_size_label, &W_mand_output_picture_size_rightarrow);
     if (currently_drawing_path) {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_drawing_title);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_finish_cancel_button);
@@ -2577,7 +2621,7 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);
       pack_widget_upper_right(&W_mand_path_movie_decrease_length, &W_mand_path_movie_length_label);
       pack_widget_upper_right(&W_mand_path_movie_length_label, &W_mand_path_movie_increase_length);
-      pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandlebrot);
+      pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_with_mandelbrot);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_uv_words_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_half_words_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_half_depth_title);
@@ -2639,7 +2683,7 @@ void IFSGui::reset_and_pack_window() {
   }
   
   //plot the limit set
-  if (window_mode != MANDLEBROT) draw_limit();
+  if (window_mode != MANDELBROT) draw_limit();
   if (window_mode != LIMIT) draw_mand();
   
   //get the point data
@@ -2695,7 +2739,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   //set the ifs
   IFS.set_params(c,c);
   
-  //set the initial settings for limit and mandlebrot
+  //set the initial settings for limit and mandelbrot
   limit_ll = cpx(-1, -1.5);
   limit_ur = cpx(2, 1.5);
   limit_depth = 12;
@@ -2727,6 +2771,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_set_C_depth = 10;
   mand_theta = false;
   mand_theta_depth = 8;
+  mand_output_picture_size = 1000;
   
   point_connected_check = true;
   point_connected_depth = 18;

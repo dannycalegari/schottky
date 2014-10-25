@@ -993,7 +993,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
     }
     trap_list[i][0] = std::make_pair(z, epsilon);
     if (draw_it) {
-      Point2d<int> p = cpx_to_point_mandlebrot(z);
+      Point2d<int> p = cpx_to_point_mandelbrot(z);
       double r = trap_list[i][0].second / pixel_width;
       if (r<2) r = 2;
       double gamount = difficulty/100.0;
@@ -1034,7 +1034,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
       }
       //display it
       if (draw_it) {
-        Point2d<int> p = cpx_to_point_mandlebrot(z);
+        Point2d<int> p = cpx_to_point_mandelbrot(z);
         double r = trap_list[i].back().second / pixel_width;
         if (r<2) r = 2;
         double gamount = difficulty/100.0;

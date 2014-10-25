@@ -163,9 +163,7 @@ class ifs{
                           std::vector<Ball>& balls, 
                           int uv_depth, 
                           int verbose);
-    void set_params(cpx Z, cpx W);
-    void draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
-                           const cpx& region_ll, const cpx& region_ur, int depth);     
+    void set_params(cpx Z, cpx W);    
     void half_balls(std::vector<Bitword>& half_words, 
                     int first_depth, int second_depth);
     std::vector<int> coefficient_list(const Bitword& u); 
@@ -187,7 +185,7 @@ class ifs{
     //IFS coordinate computation
     bool compute_coordinates(double* theta, double* lambda, int n_depth);
     
-    //mandlebrot mode
+    //mandelbrot mode
     cpx center;            // center of screen in mandelbrot mode
     double wind;           // size of window in mandelbrot mode
     int mesh;              // size of mesh in mandelbrot mode in pixels
@@ -307,6 +305,13 @@ class ifs{
                                                   const Point2d<int>& marked_pixel, 
                                                   cpx ll, cpx ur, int verbose) ;
     
+    //picture creation
+    void draw_ifs_to_array(std::vector<std::vector<Point3d<unsigned char> > >& bmp, 
+                           const cpx& region_ll, const cpx& region_ur, 
+                           int depth); 
+    void draw_mand_to_array(std::vector<std::vector<Point3d<unsigned char> > >&bmp,
+                           const cpx& region_ll, const cpx& region_ur,
+                           int connected_depth, int contains_half_depth); 
     
     //Main interface and drawing functions
     XGraphics X;
@@ -315,8 +320,8 @@ class ifs{
     
     Point2d<int> cpx_to_point(cpx w); //this is for ifs mode
     int cpx_to_radius(cpx w);
-    cpx point_to_cpx(const Point2d<int>& p);  //this is for mandlebrot mode
-    Point2d<int> cpx_to_point_mandlebrot(cpx w); //this is for mandlebrot mode
+    cpx point_to_cpx(const Point2d<int>& p);  //this is for mandelbrot mode
+    Point2d<int> cpx_to_point_mandelbrot(cpx w); //this is for mandelbrot mode
     void draw();
     void user_interface();
     void input_loop(std::vector<cpx>& loop);
