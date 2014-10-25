@@ -58,6 +58,8 @@ void ifs::draw_mand_to_array(std::vector<std::vector<Point3d<unsigned char> > >&
   ifs temp_IFS;
   
   std::cout << "Writing picture to array.\n";
+  std::cout << "Connected depth: " << connected_depth << "\n";
+  std::cout << "Contains half dept: " << contains_half_depth << "\n";
   std::cout << "Computing array\n";
   
   for (int i=0; i<num_pixels; ++i) {
@@ -75,6 +77,7 @@ void ifs::draw_mand_to_array(std::vector<std::vector<Point3d<unsigned char> > >&
       
       if ((contains_half_depth>0) && temp_IFS.contains_half(contains_half_depth, diff)) {
         raw_data[i][j].y = diff;
+        //std::cout << "half depth: " << raw_data[i][j].y << "\n";
       }
     }
   }
@@ -93,7 +96,7 @@ void ifs::draw_mand_to_array(std::vector<std::vector<Point3d<unsigned char> > >&
         max_conn_diff = raw_data[i][j].x;
       }
       if (raw_data[i][j].y > -1 && (min_half_diff == -1 || raw_data[i][j].y < min_half_diff)) {
-        min_conn_diff = raw_data[i][j].y;
+        min_half_diff = raw_data[i][j].y;
       }
       if (raw_data[i][j].y > -1 && (max_half_diff == -1 || raw_data[i][j].y > max_half_diff)) {
         max_half_diff = raw_data[i][j].y;
@@ -105,9 +108,11 @@ void ifs::draw_mand_to_array(std::vector<std::vector<Point3d<unsigned char> > >&
   std::cout << "Computed half range: " << min_half_diff << " " << max_half_diff << "\n";
   
   int conn_offset = min_conn_diff;
+  int conn_range = max_conn_diff - min_conn_diff;
   double conn_scaling_factor = (max_conn_diff == min_conn_diff ? 1 : (256.0 / double(max_conn_diff - min_conn_diff)));
   int half_offset = min_half_diff;
-  int half_scaling_factor = (max_half_diff == min_half_diff ? 1 : (256) / (max_half_diff - min_half_diff));
+  int half_range = max_half_diff - min_half_diff;
+  double half_scaling_factor = (max_half_diff == min_half_diff ? 1 : (256.0 / double(max_half_diff - min_half_diff)));
   
   std::cout << "Computed connectedness scaling: +" << conn_offset << " *" << conn_scaling_factor << "\n";
   std::cout << "Computed half scaling: +" << half_offset << " *" << half_scaling_factor << "\n";
@@ -116,11 +121,10 @@ void ifs::draw_mand_to_array(std::vector<std::vector<Point3d<unsigned char> > >&
     for (int j=0; j<num_pixels; ++j) {
       bmp[i][j].x = bmp[i][j].y = bmp[i][j].z = 255;
       if (raw_data[i][j].x != -1) {
-        bmp[i][j].z = int(double(raw_data[i][j].x - conn_offset)*conn_scaling_factor);
+        bmp[i][j].z = int(56+200.0*pow( (double(raw_data[i][j].x - conn_offset)/double(conn_range)), 0.6));
         bmp[i][j].x = bmp[i][j].y = 0;
-      } else if (raw_data[i][j].y != -1) {
-        bmp[i][j].y = (raw_data[i][j].y - half_offset)*half_scaling_factor;
-        bmp[i][j].x = bmp[i][j].z = 128;
+      } if (raw_data[i][j].y != -1) {
+        bmp[i][j].x = int(56+200.0*pow( (double(raw_data[i][j].y - half_offset)/double(half_range)), 0.1));
       }
     }
   }

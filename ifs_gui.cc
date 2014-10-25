@@ -770,7 +770,9 @@ void IFSGui::S_mand_output_picture(XEvent* e) {
   for (int i=0; i<mand_output_picture_size; ++i) {
     bmp[i].resize(mand_output_picture_size);
   }
-  IFS.draw_mand_to_array(bmp, mand_ll, mand_ur, mand_connected_depth, mand_contains_half);
+  IFS.draw_mand_to_array(bmp, mand_ll, mand_ur, 
+                         (mand_connected ? mand_connected_depth : 0), 
+                         (mand_contains_half ? mand_contains_half_depth : 0));
   write_bitmap(bmp, "mandelbrot_output.bmp");
   std::cout << "Wrote bitmap\n";
 }
