@@ -312,7 +312,11 @@ class ifs{
     void draw_mand_to_array(std::vector<std::vector<Point3d<unsigned char> > >&bmp,
                            const cpx& region_ll, const cpx& region_ur,
                            int connected_depth, int contains_half_depth); 
-    
+    void draw_mand_to_array_radial(std::vector<std::vector<Point3d<unsigned char> > >&bmp,
+                                    int num_pixels, //height
+                                    double radius_start, double radius_end,
+                                    double theta_start, double theta_end,
+                                    int connected_depth, int contains_half_depth);
     //Main interface and drawing functions
     XGraphics X;
     int drawing_width;

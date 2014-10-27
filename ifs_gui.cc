@@ -773,6 +773,13 @@ void IFSGui::S_mand_output_picture(XEvent* e) {
   IFS.draw_mand_to_array(bmp, mand_ll, mand_ur, 
                          (mand_connected ? mand_connected_depth : 0), 
                          (mand_contains_half ? mand_contains_half_depth : 0));
+  //double PI = 3.14159265358979;
+  //IFS.draw_mand_to_array_radial(bmp, 
+  //                              mand_output_picture_size, 
+  //                              0.89*1/sqrt(2.0), 1.01*(1/sqrt(2.0)),
+  //                              PI/2.0, 0.04,
+  //                              (mand_connected ? mand_connected_depth : 0), 
+  //                              (mand_contains_half ? mand_contains_half_depth : 0));
   write_bitmap(bmp, "mandelbrot_output.bmp");
   std::cout << "Wrote bitmap\n";
 }
@@ -780,7 +787,7 @@ void IFSGui::S_mand_output_picture(XEvent* e) {
   
 void IFSGui::S_mand_output_picture_increase_size(XEvent* e) {
   if (e->type != ButtonPress) return; 
-  mand_output_picture_size += 200;
+  mand_output_picture_size += 50;
   std::stringstream T;
   T.str(""); T << mand_output_picture_size;
   W_mand_output_picture_size_label.update_text(T.str());
@@ -788,7 +795,7 @@ void IFSGui::S_mand_output_picture_increase_size(XEvent* e) {
   
 void IFSGui::S_mand_output_picture_decrease_size(XEvent* e) {
   if (e->type != ButtonPress) return;
-  if (mand_output_picture_size >= 200) mand_output_picture_size -= 200;
+  if (mand_output_picture_size >= 50) mand_output_picture_size -= 50;
   std::stringstream T;
   T.str(""); T << mand_output_picture_size;
   W_mand_output_picture_size_label.update_text(T.str());
