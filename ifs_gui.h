@@ -24,8 +24,8 @@ struct Widget {
   GC gc;
   void (IFSGui::*click_signal)(XEvent*);
   
-  virtual void initial_draw() {}
-  virtual void redraw() {}
+  virtual void initial_draw() = 0;
+  virtual void redraw() = 0;
   void clear();
   bool contains_pixel(int x, int y);
   bool intersects_rectangle(const Point2d<int>& p, int w, int h);
