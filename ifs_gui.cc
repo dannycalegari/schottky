@@ -1296,7 +1296,7 @@ void IFSGui::draw_nifs_limit() {
   //nIFS nifs(4, IFS.z);
   nIFS nifs(3,IFS.z);
   //nifs.centers[3] = -2; nifs.centers[4] = 2;
-  nifs.centers[0] = -1; nifs.centers[1] = 0; nifs.centers[2] = 1;
+  //nifs.centers[0] = -1; nifs.centers[1] = 0; nifs.centers[2] = 1;
   double min_r = nifs.minimal_initial_radius();
   
   //std::cout << "Got min initial radius of " << min_r << "\n";
@@ -1848,7 +1848,7 @@ void IFSGui::draw_mand() {
       
       if (mand_connected && !mand_grid_connected_valid) {
         //temp_IFS.set_params(c*c,c*c);
-        if (!limit_nifs && !limit_gifs) {
+        if (true) { //!limit_nifs && !limit_gifs) {
           if (!temp_IFS.is_connected(mand_connected_depth, mand_data_grid[i][j].x) ) {
             mand_data_grid[i][j].x = -1;
           }

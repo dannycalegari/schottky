@@ -109,7 +109,7 @@ gBall gIFS::act_on_right(int i, const gBall& b) {
 
 bool gIFS::is_connected(int depth, int& difficulty) {
   gBall initial_ball;
-  if (!minimal_ball(initial_ball)) return true;
+  if (!minimal_ball(initial_ball)) return false;
   
   std::vector<std::pair<gBall_stuff,gBall_stuff> > stack(0); 
   stack.push_back( std::make_pair( gBall_stuff(false, 0, 1, act_on_right(0, initial_ball)),
