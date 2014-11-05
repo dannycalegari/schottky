@@ -390,7 +390,64 @@ struct nIFS {
   bool is_connected(int depth, int& difficulty);
 };
 
+/**************************************************************************
+ * A most general ball
+ **************************************************************************/
+struct gBall {
+  cpx center;
+  double radius;
+  std::vector<cpx> ifs_centers; //this records where the IFS centers 
+                               //are upon subdividing
+  
+  gBall();
+  gBall(cpx c, double r, const std::vector<cpx>& i_c);
+  bool is_disjoint(const gBall& other) const;
+  bool is_disjoint(const cpx& ll, const cpx& ur) const;
+  bool is_contained(const cpx& ll, const cpx& ur) const;
+};
 
+std::ostream& operator<<(std::ostream& os, const gBall& b);
+
+//the boolean means whether the ball is completely contained in the window
+//the ints are (last gen, depth)
+struct gBall_stuff { 
+  bool contained;
+  int last_gen;
+  int depth;
+  gBall ball;
+  gBall_stuff() {}
+  gBall_stuff(bool c, int l, int d, gBall b) { 
+    contained = c; last_gen = l; depth = d; ball = b;
+  }
+};
+  
+std::ostream& operator<<(std::ostream& os, const gBall_stuff& b);
+
+/***************************************************************************
+ * a most general IFS
+ ***************************************************************************/
+struct gIFS {
+  std::vector<cpx> factors;
+  std::vector<cpx> centers;
+  
+  //initializing
+  gIFS();
+  gIFS(const std::vector<cpx>& facs, const std::vector<cpx>& cents);
+  void set_params(const std::vector<cpx>& new_factors);
+  void set_centers(const std::vector<cpx>& new_centers);
+  
+  //return a ball centered at the average of the centers and sent 
+  //inside itself under all maps
+  bool minimal_ball(gBall& b);
+  
+  //acting
+  gBall act_on_left(int i, const gBall& b);
+  gBall act_on_right(int i, const gBall& b);
+  
+  //computation
+  bool is_connected(int depth, int& difficulty);
+};
+  
 /***************************************************************************
  * a 2d affine map 
  * *************************************************************************/
@@ -475,6 +532,31 @@ struct ifs2d {
   AffineMap semigroup_element(const std::vector<int>& gen_word);
   AffineMap semigroup_element(int list, int n);
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

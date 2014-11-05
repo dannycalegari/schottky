@@ -19,7 +19,7 @@ movie.o: movie.cc
 ifs_gui.o: ifs_gui.cc
 	g++ $(CFLAGS) $(IFLAGS) -c ifs_gui.cc
 
-ifs.o: ifs.cc ifs_draw.cc ifs_trap.cc ifs_interface.cc ifs_connected.cc ifs_trap_like.cc ifs_set_A.cc ifs_set_B.cc ifs_nifs.cc ifs_2d.cc ifs_picture.cc
+ifs.o: ifs.cc ifs_draw.cc ifs_trap.cc ifs_interface.cc ifs_connected.cc ifs_trap_like.cc ifs_set_A.cc ifs_set_B.cc ifs_nifs.cc ifs_gifs.cc ifs_2d.cc ifs_picture.cc
 	$(CC) $(CFLAGS) $(IFLAGS) -c ifs.cc
 
 schottky: schottky.o graphics.o ifs.o trap_grid.o movie.o ifs_gui.o

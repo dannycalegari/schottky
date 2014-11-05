@@ -451,23 +451,44 @@ void IFSGui::S_limit_nifs(XEvent* e) {
   limit_nifs = !limit_nifs;
   W_limit_nifs.checked = limit_nifs;
   W_limit_nifs.redraw();
-  if (limit_2d) {
+  if (limit_2d || limit_gifs) {
     limit_2d = W_limit_2d.checked = false;
+    limit_gifs = W_limit_gifs.checked = false;
     W_limit_2d.redraw();
+    W_limit_gifs.redraw();
   }
   draw_limit();
   mand_grid_connected_valid = false;
   if (mand_connected) draw_mand();
 }
 
+void IFSGui::S_limit_gifs(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  limit_gifs = !limit_gifs;
+  W_limit_gifs.checked = limit_gifs;
+  W_limit_gifs.redraw();
+  if (limit_2d || limit_nifs) {
+    limit_2d = W_limit_2d.checked = false;
+    limit_nifs = W_limit_nifs.checked = false;
+    W_limit_2d.redraw();
+    W_limit_nifs.redraw();
+  }
+  draw_limit();
+  mand_grid_connected_valid = false;
+  if (mand_connected) draw_mand();
+}
+
+
 void IFSGui::S_limit_2d(XEvent* e) {
   if (e->type != ButtonPress) return;
   limit_2d = !limit_2d;
   W_limit_2d.checked = limit_2d;
   W_limit_2d.redraw();
-  if (limit_nifs) {
+  if (limit_nifs || limit_gifs) {
     limit_nifs = W_limit_nifs.checked = false;
+    limit_gifs = W_limit_gifs.checked = false;
     W_limit_nifs.redraw();
+    W_limit_gifs.redraw();
     mand_grid_connected_valid = false;
     if (mand_connected) draw_mand();
   }
@@ -1352,6 +1373,96 @@ void IFSGui::draw_nifs_limit() {
 }
 
 
+void IFSGui::draw_gifs_limit() {
+
+  double PI = 3.14159265358979323846;
+
+  //create the gifs object
+  std::vector<cpx> c(4);
+  std::vector<cpx> f(4);
+  c[0] = cpx(0,1.0); 
+  c[1] = cpx(-sin(PI/3.0), -cos(PI/3.0)); 
+  c[2] = cpx(sin(PI/3.0), -cos(PI/3.0));
+  c[3] = cpx(0,0);
+  f[0] = IFS.z.real(); f[1] = IFS.z.real(); f[2] = IFS.z.real();
+  f[3] = IFS.z.imag();
+  
+  gIFS gifs(f,c);
+  
+  gBall initial_ball;
+  
+  if (!gifs.minimal_ball(initial_ball)) return;
+
+  Widget& LW = W_limit_plot;
+  
+  //clear the limit widget
+  XSetForeground(display, LW.gc, WhitePixel(display, screen));
+  XFillRectangle(display, LW.p, LW.gc, 0, 0, LW.width, LW.height);
+  XSetForeground(display, LW.gc, BlackPixel(display, screen));
+  XDrawRectangle(display, LW.p, LW.gc, 0, 0, LW.width-1, LW.height-1);
+  XSetFillStyle(display, LW.gc, FillSolid);
+  
+  std::vector<int> colors(5);
+  colors[0] = get_rgb_color(1,0,0);
+  colors[1] = get_rgb_color(0,1,0);
+  colors[2] = get_rgb_color(0,0,1);
+  colors[3] = get_rgb_color(1,0,1);
+  
+  std::vector< gBall_stuff > stack(0);
+  stack.push_back( gBall_stuff(false, -1, 0, initial_ball) );
+  while (stack.size() > 0) {
+    gBall_stuff bs = stack.back();
+    stack.pop_back();
+    //if the ball is disjoint from the window, we might as well get rid of it
+    if (!bs.contained && bs.ball.is_disjoint(limit_ll, limit_ur)) continue;
+    if ( bs.depth >= limit_depth || bs.ball.radius < limit_pixel_width/2.0 ) {
+      Point2d<int> p = limit_cpx_to_pixel(bs.ball.center);
+      double r = bs.ball.radius / limit_pixel_width;
+      if (r <= 1.0) r = 1.0;
+      if (limit_colors) {
+        XSetForeground(display, LW.gc, colors[bs.last_gen]);
+      }
+      if (limit_chunky) {
+        XFillArc(display, LW.p, LW.gc, p.x-r, p.y-r, int(2.0*r), int(2.0*r), 23040, 23040);
+      } else {
+        XDrawPoint(display, LW.p, LW.gc, p.x, p.y);
+      }
+      continue;
+    }
+    //if the ball isn't disjoint from the window, maybe it is contained in it?
+    for (int i=0; i<gifs.centers.size(); ++i) {
+      gBall new_ball = gifs.act_on_right(i, bs.ball);
+      if (bs.contained) {
+        stack.push_back(gBall_stuff(true, (bs.last_gen==-1 ? i : bs.last_gen), bs.depth+1, new_ball));
+      } else {
+        if (bs.ball.is_contained(limit_ll, limit_ur)) {
+          stack.push_back(gBall_stuff(true, (bs.last_gen==-1 ? i : bs.last_gen), bs.depth+1, new_ball));
+        } else {
+          stack.push_back(gBall_stuff(false, (bs.last_gen==-1 ? i: bs.last_gen), bs.depth+1, new_ball));
+        }
+      }
+    }
+  }
+  
+  //draw the marked points 0, 1/2, 1
+  for (int i=0; i<(int)limit_marked_points.size(); ++i) {
+    cpx& c = limit_marked_points[i];
+    int rcol = get_rgb_color(1,0.1,0);
+    if (limit_ll.real() < c.real() && c.real() < limit_ur.real() &&
+        limit_ll.imag() < c.imag() && c.imag() < limit_ur.imag()) {
+      Point2d<int> p = limit_cpx_to_pixel(c);
+      XSetForeground(display, LW.gc, rcol);
+      XFillArc(display, LW.p, LW.gc, p.x-3, p.y-3, 3, 3, 23040, 23040);
+    }
+  }
+  
+  LW.redraw();
+}
+
+
+
+
+
 
 void IFSGui::draw_2d_limit() {
   
@@ -1487,6 +1598,9 @@ void IFSGui::draw_limit() {
     return;
   } else if (limit_2d) {
     draw_2d_limit();
+    return;
+  } else if (limit_gifs) {
+    draw_gifs_limit();
     return;
   }
   
@@ -1734,18 +1848,32 @@ void IFSGui::draw_mand() {
       
       if (mand_connected && !mand_grid_connected_valid) {
         //temp_IFS.set_params(c*c,c*c);
-        if (true){//!limit_nifs) {
+        if (!limit_nifs && !limit_gifs) {
           if (!temp_IFS.is_connected(mand_connected_depth, mand_data_grid[i][j].x) ) {
             mand_data_grid[i][j].x = -1;
           }
-        } else {
+        } else if (limit_nifs) {
           nIFS nifs(3, c);
           nifs.centers[0] = -1; nifs.centers[1] = 0; nifs.centers[2] = 1;
           if (!nifs.is_connected(mand_connected_depth, mand_data_grid[i][j].x)) {
             mand_data_grid[i][j].x = -1;
           }
+        } else if (limit_gifs) {
+         //create the gifs object
+          double PI = 3.14159265358979323846;
+          std::vector<cpx> cs(4);
+          std::vector<cpx> fs(4);
+          cs[0] = cpx(0,1.0); 
+          cs[1] = cpx(-sin(PI/3.0), -cos(PI/3.0)); 
+          cs[2] = cpx(sin(PI/3.0), -cos(PI/3.0));
+          cs[3] = cpx(0,0);
+          fs[0] = c.real(); fs[1] = c.real(); fs[2] = c.real();
+          fs[3] = c.imag();
+          gIFS gifs(fs,cs);
+          if (!gifs.is_connected(mand_connected_depth, mand_data_grid[i][j].x)) {
+            mand_data_grid[i][j].x = -1;
+          }
         }
-        //temp_IFS.set_params(c,c);
       }
       if (mand_contains_half && !mand_grid_contains_half_valid) {
         //temp_IFS.set_params(sqrt(c), sqrt(c));
@@ -2444,6 +2572,7 @@ void IFSGui::reset_and_pack_window() {
     W_limit_uv_graph_depth_label = WidgetText(this, T.str(), -1, 20);
     W_limit_uv_graph_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_limit_uv_graph_increase_depth);
     W_limit_nifs = WidgetCheck(this, "nIFS", -1, 20, limit_nifs, &IFSGui::S_limit_nifs);
+    W_limit_gifs = WidgetCheck(this, "gIFS", -1, 20, limit_gifs, &IFSGui::S_limit_gifs);
     W_limit_2d = WidgetCheck(this, "2d IFS", -1, 20, limit_2d, &IFSGui::S_limit_2d);
     
     pack_widget_upper_right(NULL, &W_limit_plot);
@@ -2468,6 +2597,7 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_uv_graph_depth_leftarrow, &W_limit_uv_graph_depth_label);
     pack_widget_upper_right(&W_limit_uv_graph_depth_label, &W_limit_uv_graph_depth_rightarrow);
     pack_widget_upper_right(&W_limit_plot, &W_limit_nifs);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_gifs);
     pack_widget_upper_right(&W_limit_plot, &W_limit_2d);
     
   }
@@ -2758,6 +2888,7 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   limit_uv_graph = false;
   limit_uv_graph_depth = 3;
   limit_nifs = false;
+  limit_gifs = false;
   limit_2d = false;
   limit_marked_points.resize(3);
   limit_marked_points[0] = cpx(0,0);
