@@ -239,7 +239,7 @@ void XGraphics::draw_point(const Point2d<float>& p, long col){
 
 void XGraphics::draw_line(const Point2d<int>& p1, const Point2d<int>& p2, long col) {
   XSetForeground(display, gc, col);
-  XSetLineAttributes(display, gc, 1.5, LineSolid, 1, 1);
+  XSetLineAttributes(display, gc, 1, LineSolid, 1, 1);
   XDrawLine(display, win, gc, p1.x, height-p1.y, p2.x, height-p2.y);
 }
 

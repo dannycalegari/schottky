@@ -93,7 +93,7 @@ WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (
   XSetBackground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
   
   //draw the square
-  XSetLineAttributes(ifsg->display, gc, 0.1, LineSolid, CapButt, JoinMiter);
+  XSetLineAttributes(ifsg->display, gc, 0, LineSolid, CapButt, JoinMiter);
   XDrawLine(ifsg->display, p, gc, 1, 1, 1, height-2);
   XDrawLine(ifsg->display, p, gc, 1, height-2, width-2, height-2);
   XDrawLine(ifsg->display, p, gc, width-2, height-2, width-2, 1);
@@ -1709,7 +1709,7 @@ void IFSGui::draw_limit() {
     XTextExtents(font, T.str().c_str(), T.str().size(), &fdir, &fascent, &fdescent, &te);
     text_width_offset = (te.rbearing - te.lbearing)/2;
     text_height_offset = (te.ascent - te.descent)/2; 
-    XSetLineAttributes(display, LW.gc, 1.5, LineSolid, 1, 1);
+    XSetLineAttributes(display, LW.gc, 1, LineSolid, 1, 1);
     for (int i=0; i<(int)uv_graph_edges.size(); ++i){
       Point3d<int>& e = uv_graph_edges[i];
       cpx& cc1 = uv_graph_balls[e.x].center;
