@@ -87,6 +87,11 @@ It is available at \texttt{http://xquartz.macosforge.org/}.
 The computer also needs to have XCode tools installed to get the 
 C++ compiler.  This is available from the Apple store.
 
+\section{Live technical support}
+
+If something goes wrong or is confusing, the best thing to 
+do is to email Alden at \texttt{akwalker@math.uchicago.edu}.
+
 \section{Usage}
 
 The left panel shows the limit set.  The right panel shows parameter space.  
@@ -177,6 +182,10 @@ program \texttt{ffmpeg} be installed in the directory \texttt{../ffmpeg/}.
 along the path.
 \item[Find half words along path] This finds balls of points guaranteed to be in 
 set $\mathcal{M}_1$, as described in~\cite{paper}.  This is somewhat tricky to use.
+It uses the limit set depth to set the initial size of the chunks it finds.
+Thus, to certify a hole, one should navigate to the hole, zoom in on the limit set 
+and increase the depth until the hole is evident there, then decrease the depth a little.
+The draw the path and find half words along it.
 \end{description}
 \end{description}
 
