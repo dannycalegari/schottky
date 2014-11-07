@@ -453,9 +453,9 @@ void IFSGui::S_limit_nifs(XEvent* e) {
   W_limit_nifs.redraw();
   if (limit_2d || limit_gifs) {
     limit_2d = W_limit_2d.checked = false;
-    limit_gifs = W_limit_gifs.checked = false;
+    //limit_gifs = W_limit_gifs.checked = false;
     W_limit_2d.redraw();
-    W_limit_gifs.redraw();
+    //W_limit_gifs.redraw();
   }
   draw_limit();
   mand_grid_connected_valid = false;
@@ -486,9 +486,9 @@ void IFSGui::S_limit_2d(XEvent* e) {
   W_limit_2d.redraw();
   if (limit_nifs || limit_gifs) {
     limit_nifs = W_limit_nifs.checked = false;
-    limit_gifs = W_limit_gifs.checked = false;
+    //limit_gifs = W_limit_gifs.checked = false;
     W_limit_nifs.redraw();
-    W_limit_gifs.redraw();
+    //W_limit_gifs.redraw();
     mand_grid_connected_valid = false;
     if (mand_connected) draw_mand();
   }
