@@ -1,0 +1,10 @@
+You should be able to make schottky simply by typing:
+
+make
+
+then:
+
+./schottky
+
+to run. You need to have X11 installed.  On OSX, this means 
+installing XQuartz from http://xquartz.macosforge.org/
