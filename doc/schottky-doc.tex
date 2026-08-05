@@ -12,7 +12,18 @@
 
 \usepackage{hyperref}
 
+% Program output is wider than this text block, so verbatim is set smaller.  Do NOT do
+% that by wrapping the environment in {\footnotesize ... }: amsart does not typeset a
+% section heading until the paragraph after it begins, so a heading followed directly by
+% such a group ends up INSIDE it and comes out at 8pt.  Setting verbatim's own font has
+% no surrounding group and cannot leak.
+\makeatletter
+\renewcommand{\verbatim@font}{\normalfont\ttfamily\footnotesize}
+\makeatother
+
 \begin{document}
+
+\sloppy
 
 \newtheorem{theorem}{Theorem}[subsection]
 \newtheorem{lemma}[theorem]{Lemma}
@@ -58,7 +69,7 @@ Chicago, Illinois, 60637}
 \author{Alden Walker}
 \address{Department of Mathematics \\ University of Chicago \\
 Chicago, Illinois, 60637}
-\email{akwalker@math.uchicago.edu}
+\email{alden.walker@gmail.com}
 
 
 \maketitle
@@ -83,20 +94,48 @@ library should be in the search path.  Adjust the makefile so that it
 points to the correct place if necessary.
 
 On OSX, the program XQuartz (the version of X11 for OSX) needs to be installed.
-It is available at \texttt{http://xquartz.macosforge.org/}.  
-The computer also needs to have XCode tools installed to get the 
+It is available at \texttt{http://xquartz.macosforge.org/}.
+The computer also needs to have XCode tools installed to get the
 C++ compiler.  This is available from the Apple store.
+
+All of the above concerns the interactive program.  The headless command-line
+tools \texttt{certify\_arc} and \texttt{funddom} need no X11 at all, and are
+built by \texttt{make headless}.  They are documented in the section
+``The headless tools'' below.
 
 \section{Live technical support}
 
 If something goes wrong or is confusing, the best thing to 
-do is to email Alden at \texttt{akwalker@math.uchicago.edu}.
+do is to email Alden at \texttt{alden.walker@gmail.com}.
 
 \section{Usage}
 
-The left panel shows the limit set.  The right panel shows parameter space.  
-The check boxes allow the user to change the appearance of the limit set 
+The left panel shows the limit set.  The right panel shows parameter space.
+The check boxes allow the user to change the appearance of the limit set
 and change what is plotted in parameter space.
+
+\subsection{The window itself}
+
+\begin{description}
+\item[Starting parameter] \texttt{schottky} with no argument starts at
+$s = -0.58 + 0.33i$.  A single argument sets the starting parameter instead, in any of the
+forms the parameter box accepts below, so \texttt{schottky 45} starts at $45^\circ$ on the
+circle $|s| = 1/\sqrt2$ --- the twindragon.
+\item[Status line] The bottom row of the window reports what the program is doing: progress
+through a long computation (with a bar), the result of the last operation, and a one-line
+explanation of whatever control the mouse is resting on.  Hovering is the quickest way to
+find out what something does; nothing needs to be clicked to read the help.
+\item[Escape] aborts a long computation --- a parameter-space repaint or an annulus run ---
+without recording the incomplete result.
+\item[Quitting] \texttt{q} quits, unless a text box has the keyboard focus, in which case it
+types the letter \texttt{q}.  The window manager's close button also works.
+\item[The parameter box] The box marked \texttt{s =} at the bottom left sets the parameter by
+typing.  It accepts \texttt{re im}, \texttt{re+imi}, a bare angle \texttt{deg} in degrees on
+the circle $|s| = 1/\sqrt2$ (the convention the headless tools use), or \texttt{deg@r} for an
+angle on the circle of radius \texttt{r}.  Unparseable input is reported and leaves the
+parameter alone.  Immediately above it, the parameter is shown to fifteen digits as
+\texttt{re im $|s|$ arg}, which can be selected and pasted into a command line.
+\end{description}
 
 \subsection{Limit set}
 
@@ -114,7 +153,7 @@ depth is ignored.
 of a point in $\Lambda_z$ under all words of length $n$.  If chunky is 
 selected, the drawing is a union of disks.  As explained in~\cite{paper}, 
 if chunky is selected, the drawing is guaranteed to contain the limit set.
-\item[Plot uv graph] This mode (1) indicates the labels on all 
+\item[uv graph] This mode (1) indicates the labels on all 
 the balls at the given depth (match the drawing depth and the uv graph 
 depth to see this) and (2) connects these vertices as appropriate.  
 The vertices are connected using the following rules: there is an 
@@ -125,6 +164,36 @@ There is an edge connecting two vertices $v,w$ in $f\Lambda_z$ or
 $g\Lambda_z$ if there is a shortest pair of vertices $a\inf\Lambda_z$, $b\in g\Lambda_z$
 such that (1) a prefix of $a$ is a suffix of $v$ and (b) the matching prefix of 
 $b$ is a suffix of $w$.  Paths in this graph essentially construct short hop paths.
+\item[Trap] Draw the \emph{trap} that certifies the current parameter, on top of the limit
+set.  A trap is a pair of words $u,v$ --- $u$ beginning $f$, $v$ beginning $g$ --- whose
+balls $u(B)$ and $v(B)$ meet, and whose displacement, renormalized by $s^{-|u|}$, lands
+strictly inside the trap-like set.  Finding one certifies a whole disk of parameters around
+$s$ inside $\mathcal{M}$, so it is the object that makes a claim about $\mathcal{M}$ true;
+until now the program could compute one and print its two words, but never show it.
+
+The picture draws $u(B)$ and $v(B)$ as circles, magenta and green, together with enough of
+their descendants to see the two clusters \emph{interleave}.  The interleaving is the
+content: it is not enough that the two balls overlap, the two Cantor clusters inside them
+have to link, so that no small change of $s$ can pull them apart.  The two are drawn
+alternately rather than one after the other, since they overlap and X11 has no
+transparency, so whichever went second would hide the other exactly where the picture
+matters.
+
+The spinner is the greatest word length to search.  Its default, $16$, finds a trap at most
+parameters; a shorter search is faster but reports nothing where a trap exists only at
+greater length, which is the usual situation near $\partial\mathcal{M}$.  Two failures are
+reported differently, and the difference is informative: ``no trap-like balls at this
+parameter'' means the attractor is not connected there, or $|s|$ is too small, so there is
+nothing to look for; ``no trap with words of length $\le n$'' means there was, and the
+search did not reach it.  At the coincidence cores --- $45^\circ$ is one --- there is no
+finite trap at any length, and the second message is the correct answer rather than a
+failure.
+
+\item[to trap] Take the view to the trap.  This is not merely a convenience: the certifying
+balls have radius about $r|s|^{|u|}$, which for $|u| = 9$ at $|s| = 0.7$ is a few hundredths
+against a default view three units across --- a mark a few pixels wide.  The status line
+says when the trap is too small to see, and this button then frames it.
+
 \item[nIFS] This stands for $n$-generator IFS.  Although right now it is set to 
 simply plot the 3-generator IFS which computes the differences between points in 
 $\Lambda_z$.  Consider navigating to a renormalization point, turning off chunky and 
@@ -144,26 +213,66 @@ Clicking and dragging works.  Right clicking selects a new parameter and zooms i
 \item[Zoom] Zoom in and out
 \item[Mesh size] How many true pixels make up one ``pixel'' in the grid.  
 Setting mesh size smaller makes the picture sharper.
-\item[Connectedness] Plot set $\mathcal{M}$ (run the disconnectedness algorithm).
+\item[Connected] Plot set $\mathcal{M}$ (run the disconnectedness algorithm).
 The shade of blue indicates how hard the program had to work to find a pair of 
 disks which intersect at the required depth.
 \item[Contains $1/2$] Plot set $\mathcal{M}_0$.
-\item[Traps] Find traps in a region.  This will not work at all until the 
+\item[Traps] Find traps in a region.  This will not work at all until the
 panel window is quite zoomed in.  It functions by far the best at the boundary of $\mathcal{M}$.
-\item[Limit traps]  If this is selecting, it will find limit traps instead of traps.
-This \emph{only} works in a neighborhood of the specific renormalization point $\omega$ 
-from~\cite{paper}.
-\item[Dirichlet] In the disconnectedness region, plot how many pairs of points in $\Lambda_z$ 
-are closest.  Darker shades indicate more pairs of closest points.  Note if $\mathcal{M}_0$ 
-and Dirichlet are both turned on, the white (a single pair) Dirichlet regions and 
-$\mathcal{M}_0$ limit on each other.
-\item[Set C] Highlight some parameters which are known to have simply connected limit set.
-This is $\mathcal{M}_1$ as defined in~\cite{paper}.  This feature is somewhat 
-experimental.
-\item[Theta] Plot a rotation parameter.  This is also an experimental feature.
+If there are no trap-like balls to be had in the current window it now says so, rather than
+appearing to do nothing.
+\item[Scale + axes] Draw a scale bar in the corner and the coordinate axes where they fall
+in view.  On by default, because parameter space is self-similar under the renormalization
+at a landmark: a deep zoom looks very much like a shallow one, and without a scale there is
+nothing on screen to say which you are looking at.  The bar is given a round length --- $1$,
+$2$ or $5$ times a power of ten, whichever makes it about a quarter of the pane --- and
+labelled with that exact length, so the number is always a clean one.
+
+\item[$|s| = 1/2$, $|s| = 1/\sqrt2$] Draw either or both of these circles.  They bracket the
+annulus where $\partial\mathcal{M}$ lives: below $|s| = 1/2$ the attractor is a Cantor set, and
+at or above $|s| = 1/\sqrt2$ it is robustly connected.  Several of the controls can therefore
+only do anything in the band between them, and the circles make that visible.  The picture is
+also cut off at $|s| = 1$, since for $|s| \ge 1$ the maps are not contractions and there is no
+attractor to ask about.
+\item[Colors] Dark shades mean the parameter is in $\mathcal{M}$; white means it is not.  With
+more than one layer switched on the shade shown is the first that applies, in the order given by
+the small legend beside the checkboxes.
+\item[Landmarks] Mark the \emph{renormalization points} --- the parameters $\sigma$ at which
+there are words $u,v$ of length $a$ and $s,t$ of length $b$ with
+$\pi(u s^\infty, \sigma) = \pi(v t^\infty, \sigma)$, so that the limit-trap mechanism of the
+paper applies.  The spinner sets the complexity bound $a + b \le N$; the default $7$ gives 2421
+points and takes about a tenth of a second, while $9$ gives 46201 and reads as noise.  Only the
+upper half plane is populated, since conjugate parameters give mirror-image pictures.
+
+Clicking within a few pixels of a landmark \emph{snaps the parameter to it exactly} and reports
+its reusable specification, for example
+\texttt{landmark lm:-+:-:0  sigma = 0.5 0.5  a=2 b=1 deg=2}.  The snap matters: a limit trap
+exists only at the exact renormalization point, so a hand-placed click would never land on one.
+That same \texttt{lm:} string is what \texttt{funddom} takes as a core, so a point found by eye
+here can be handed straight to a command line.  Clicking an already-selected landmark a second
+time zooms in on it, which is how the asymptotic self-similarity becomes visible.
+\item[Limit traps in annulus] With a landmark selected, certify limit traps over one annular
+fundamental domain of the elliptic curve $E_\sigma = \mathbb{C}^*/\langle\sigma^b\rangle$ and
+write the figure as \texttt{schottky\_annulus\_NNN.png}, \texttt{.eps}, \texttt{.pdf} and a
+\texttt{.txt} sidecar.  Each point $C$ is colored by the tail length $c$ at which it is first certified, on the
+viridis ramp: dark for shallow, bright yellow for deep.  That ramp is monotone in lightness,
+so a longer tail always reads as brighter rather than merely as a different hue, and the
+figure survives being printed in gray.  \texttt{render\_funddom.py} uses the same ramp, from
+the same table, so a figure made in the interactive program and one made from a
+\texttt{funddom} raster are directly comparable; the two red circles, at radii $\rho$ and $\rho|\sigma|^b$, bound the fundamental
+domain.  This is the asymptotic picture, drawn deep enough in that it is invariant under
+$C \mapsto \sigma^b C$; both $\rho$ and the depth are derived from the geometry at $\sigma$
+rather than chosen.  The percentage of the fundamental annulus covered stays on screen after the
+run, and everything needed to reproduce the figure goes in the sidecar.
 \item[Write window coords] This outputs the window to the terminal.
-\item[Write picture]  This writes the current picture to a square bitmap with 
-the given resolution.  See the terminal for the status.
+\item[Write picture]  This recomputes the current picture at the given resolution
+and writes it as \texttt{schottky\_mand\_NNN.png}, \texttt{.eps} and \texttt{.pdf},
+together with a \texttt{.txt} sidecar recording the window, the parameter and every
+enabled layer with its depth, so that the figure can be regenerated later.  The counter
+\texttt{NNN} increases on each use, so nothing is overwritten.  In the two vector formats
+the raster is embedded as an image while the overlays --- the circle $|s|=1/\sqrt2$ and
+the current parameter --- are emitted as true paths, so they stay sharp at any
+magnification.  The status line at the bottom of the window reports what was written.
 \item[Draw path] Allows the user to draw a path by clicking in parameter space.
 \item[Find boundary path] Draws a path obtained by following the boundary of 
 the component of Schottky space in which the current parameter lies.  
@@ -172,10 +281,9 @@ This only functions if the selected parameter is \emph{not} in set $\mathcal{M}$
 \item[Path options] ~
 \begin{description}
 \item[Delete] Delete the path
-\item[Find traps along path] Find a sequence of balls of traps to certify that the 
-path lies in the interior of $\mathcal{M}$.  This will use the trap depth 
-as selected above and use limit traps if that is selected.
-\item[Find coords along path] Experimental feature
+\item[Find traps along path] Find a sequence of balls of traps to certify that the
+path lies in the interior of $\mathcal{M}$.  This uses the trap depth
+as selected above.
 \item[Create movie along path] Create a movie.  This requires that the 
 program \texttt{ffmpeg} be installed in the directory \texttt{../ffmpeg/}.
 \item[Find uv words along path] Finds a sequence of closest pairs of balls 
@@ -189,6 +297,626 @@ The draw the path and find half words along it.
 \end{description}
 \end{description}
 
+
+\section{The headless tools}
+
+Everything above concerns the interactive program.  Two further programs do the same
+mathematics with no graphics at all:
+
+\begin{description}
+\item[\texttt{certify\_arc}] traps and trap-like balls at a single parameter or along an arc of
+the circle $|s| = 1/\sqrt2$, including the interval-arithmetic certificates.
+\item[\texttt{funddom}] limit traps, and how much of a fundamental domain of the elliptic curve
+$E_\sigma = \mathbb{C}^*/\langle\sigma^b\rangle$ they cover at a renormalization point.
+\end{description}
+
+They exist for three reasons.  They run where there is no display --- over plain \texttt{ssh}, in
+a batch queue, on a machine with no X11 at all.  They are scriptable, so a computation can be
+recorded as a command line and repeated exactly.  And they are where the quantitative statements
+in~\cite{paper} actually come from: the interactive program is for looking, these are for
+measuring.
+
+\subsection{Building them}
+
+\begin{verbatim}
+make headless
+\end{verbatim}
+
+builds both and needs nothing but a C compiler, a C++ compiler and \texttt{libm} --- no X11
+headers, no X11 library, and no other dependency.  (\texttt{make} on its own builds these two
+\emph{and} the interactive program, which does need X11.)  If you extend the code, note the
+maintenance rule: anything that draws must go inside \texttt{\#ifndef IFS\_NO\_GRAPHICS}, which
+is the macro that selects the graphics-free objects.
+
+\subsection{Conventions}
+
+\begin{description}
+\item[Angles] Except where noted, a parameter is given as an angle in \emph{degrees} on the
+circle $|s| = 1/\sqrt2$, so \texttt{45} means $s = (1+i)/2$, the twindragon.  That circle is
+where the interesting part of $\partial\mathcal{M}$ lies, which is why it is the default
+coordinate.  Two commands take the parameter directly instead and so reach points off the
+circle: \texttt{dumptlbmanyz}, and \texttt{funddom}'s core selectors.
+\item[Words] A word in $f$ and $g$ is written outermost letter first.  Internally a word is a
+\emph{bit string}, \texttt{0} for $f$ and \texttt{1} for $g$, and that is the form every dump and
+every certificate log prints, so output can be fed straight back in.  The letters \texttt{f} and
+\texttt{g} are accepted as well and mean the same thing.  Anything else is rejected with a
+message; it used to be read as a word of all $g$'s, which produced a confident wrong answer.
+\item[Exit codes] $0$ means the thing being looked for was found (a trap, a certificate), $1$
+means it was not, and $2$ means the command line was wrong.  So these compose in shell scripts.
+\item[The two normalizations] This is the one place where it is easy to go wrong.
+The paper uses $f(z) = sz - 1$, $g(z) = sz + 1$, with base point $0$.  The program uses
+$f(x) = zx$, $g(x) = z(x-1) + 1$, with base point $1/2$.  The two frames are conjugate by
+$x \mapsto (2x-1)/(1-s)$, so a trap-like \emph{vector} in one frame differs from the other by a
+factor of $2/(1-s)$ --- of modulus $2.83$ at $s = (1+i)/2$, and exactly $2$ at
+$s = (1 + i\sqrt7)/4$.  Ball files are written in the program's frame and \texttt{funddom}
+applies the conjugation itself when it reads one, so no user needs to think about this; but
+anyone writing a new tool against these files does.
+\end{description}
+
+\subsection{What is certified, and what is merely computed}
+
+This distinction matters more than anything else in this section, because the output looks the
+same either way: a number, and the word \texttt{CERTIFIED} or \texttt{TRAP}.  There are three
+tiers.
+
+\begin{description}
+\item[Interval-arithmetic certificates] \texttt{rigorcert}, \texttt{rigorcertseg},
+\texttt{rigorthin} and \texttt{rigorcover} carry out their arithmetic in the sound, outward-rounded
+interval types of \texttt{rigor.h}, and they verify a statement about a whole \emph{box} of
+parameters rather than about one floating-point sample.  When one of these says
+\texttt{CERTIFIED}, the conclusion holds for every $s$ in the stated arc, subject only to the
+correctness of the reduction and of the compiler's arithmetic --- not to any question of
+floating-point margin.  These are the ones a proof can rest on.
+\item[Floating-point trap searches] \texttt{point}, \texttt{sweep}, \texttt{cover},
+\texttt{dumptlb}, \texttt{dumptlbmany}, \texttt{dumptlbmanyz}, \texttt{findtrap},
+\texttt{mixfind}, \texttt{mixscan}, \texttt{mixpair}, \texttt{mix} and \texttt{ckwfind} evaluate
+rigorous \emph{criteria} in ordinary double precision, with no outward rounding.  The theorem
+behind the margin they print is sound; the computation of it is not verified.  These are the
+right tools for finding a trap, and the wrong tools for claiming one.  The intended workflow is
+to search with these and then verify the answer with \texttt{rigorcert}.
+\item[\texttt{funddom}] is entirely floating point.  It never includes \texttt{rigor.h}.  Its
+coverage percentages are numerical evidence --- strong evidence, and the shape of the uncovered
+set is informative --- but they are not certificates.
+\end{description}
+
+\texttt{hulltest} belongs to none of these: it is a regression test of the convex-hull routine.
+
+\subsection{\texttt{certify\_arc}}
+
+Run it with no arguments for the argument lists; a command given too few arguments says what it
+needs.  Arguments in \verb|<>| are required and those in \verb|[]| are optional and show their
+default.
+
+\subsubsection{Traps at one parameter}
+
+\begin{description}
+\item[\texttt{point}] \texttt{<deg> <n\_depth> <uv\_depth> <box\_halfwidth> [beam=0]}
+
+
+Builds the trap-like ball set $T_0$ for a box of half-width \texttt{box\_halfwidth} about $s$,
+then looks for a pair of words $(u,v)$ of length at most \texttt{uv\_depth} whose renormalized
+displacement lands inside one of those balls.  Such a pair is a \emph{trap}, and it certifies not
+just $s$ but a disk of radius \texttt{eps} about it.  \texttt{beam} $= 0$ searches exhaustively;
+a positive value uses a beam search of that width, which is much faster and may miss.
+\begin{verbatim}
+$ ./certify_arc point 60 16 18 1e-4
+s = 0.353553390593274 + 0.612372435695795 i
+     (|s|=0.707107, arg=60.0000 deg)  beam=0
+  TLB_ok=1  tlb_size=4  certified=1  m=14  eps=6.360285e-07
+     box_halfwidth=1.000000e-04  eps>=d? 0
+\end{verbatim}
+Read this as: the ball set was built and has 4 balls; a trap was found with words of length
+$m = 14$; it certifies a disk of radius $6.36 \times 10^{-7}$ about $s$.  The last field is the
+question that matters when covering an arc --- whether the certified disk is at least as big as
+the box the ball set was built for, so that the boxes can be chained.  Here it is not.
+\item[\texttt{pointz}] \texttt{<re> <im> <n\_depth> <uv\_depth> <box\_halfwidth> [beam=0]}
+
+The same computation with the parameter given directly rather than as an angle, so it
+reaches the rest of $\mathcal{M}$.  The circle $|s| = 1/\sqrt2$ is the arc the paper works
+on, but $\mathcal{M}$ is two-dimensional and most of it is nowhere near that circle; there
+is nothing in the trap machinery that needs $s$ to lie on it.
+\begin{verbatim}
+$ ./certify_arc pointz 0.6 0.3 18 16 1e-9
+s = 0.600000000000000 + 0.300000000000000 i
+     (|s|=0.670820, arg=26.5651 deg)  beam=0
+  TLB_ok=1  tlb_size=10  certified=1  m=9  eps=9.802885e-05
+     box_halfwidth=1.000000e-09  eps>=d? 1
+\end{verbatim}
+Note \texttt{eps>=d? 1} here, unlike the on-circle example above: the certified disk is
+larger than the box the ball set was built for, which is the condition that lets a chain of
+such disks be joined into a covering.
+
+Given the same $s$ to full precision, \texttt{pointz} and \texttt{point} agree exactly.
+They are worth comparing once, because \texttt{eps} is delicate: feeding \texttt{pointz}
+the fifteen digits that \texttt{point} prints, rather than all seventeen, leaves $m$
+unchanged but moves \texttt{eps} by a factor of two and a half.  The certified radius comes
+from a near-cancellation, so quote $s$ to full precision when it matters.
+
+\item[\texttt{sweep}] \texttt{<deg\_lo> <deg\_hi> <steps> <n\_depth> <uv\_depth> <box\_halfwidth> [beam=0]}
+
+
+The same computation at \texttt{steps}$+1$ equally spaced angles, one line each, with a header
+naming the columns.  Useful for seeing where on the circle traps are easy and where they are not.
+\begin{verbatim}
+$ ./certify_arc sweep 44 46 4 16 18 1e-4
+# sweep |s|=1/sqrt2  n_depth=16 uv_depth=18 box_halfwidth=1.000e-04 beam=0
+#  arg_deg  tlbOK  cert    m          eps   min(eps,d)     tlbN
+    44.000      1     1   15   9.3708e-07   9.3708e-07        4
+    44.500      1     0   -1   0.0000e+00   0.0000e+00        4
+    45.000      1     0   -1   0.0000e+00   0.0000e+00        8
+    45.500      1     1   11   4.0141e-05   4.0141e-05        8
+    46.000      1     1    8   3.7020e-05   3.7020e-05        8
+\end{verbatim}
+The failure at $45^\circ$ is not noise: the twindragon is one of the two \emph{coincidence
+cores}, where the trap degenerates and no finite $(u,v)$ of this depth works.  Those points need
+\texttt{rigorthin} instead, or the limit traps of \texttt{funddom}.
+\item[\texttt{mix}] \texttt{<deg> <n\_depth> <uv\_depth> <box\_halfwidth> [kmax=0]}
+
+
+A diagnostic that runs the ordinary same-length search and the mixed-length variant on the same
+ball set and compares them.  Note that the mixed-length routine is documented in the source as
+\emph{not sound} for \texttt{kmax} $\ge 1$, because it omits a protrusion check; treat its
+answers as exploration, not certification.
+\end{description}
+
+\subsubsection{Covering an arc}
+
+\begin{description}
+\item[\texttt{cover}] \texttt{<deg\_lo> <deg\_hi> <n\_depth> <uv\_depth> <d0> [beam=3000] [min\_gap\_deg=5e-4] [prefix=cover]}
+
+
+Walks along the arc, finding a certified disk at each position and advancing by the arc it
+subtends, so that the union of the disks covers as much of the arc as it can.  Reports the
+fraction covered and lists the gaps, and writes \verb|<prefix>_cert.log| (one line per disk, with
+the words that certify it) and \verb|<prefix>_gaps.log|.  It backs off past points where it gets
+stuck rather than hanging.  Floating point throughout, so its output is a \emph{plan} for a
+rigorous covering, not the covering itself.
+
+\texttt{beam} must be positive here.  Unlike \texttt{point} and \texttt{sweep}, this command
+always uses the beam search, and a beam of $0$ does not mean ``exhaustive'' --- it means no
+pruning at all, so the frontier grows without bound and the run never finishes.  It is refused.
+\item[\texttt{rigorcover}] \texttt{<chunk\_id> <deg\_lo> <deg\_hi> <n\_depth> [dmax=0.005] [dmin=1e-6] [ndmax=n\_depth+6] [findnd=12]}
+
+
+The rigorous counterpart, and the heaviest command here: it searches for a trap pair with the
+floating-point machinery, then \emph{verifies} that pair over a box in interval arithmetic,
+shrinking the box or deepening the certificate until it succeeds, and grows a certified interval.
+It checkpoints every certified box to \verb|cov_<chunk_id>.jsonl| as it goes, so a long run can be
+killed and resumed, and different chunks can run in parallel in different directories.  Expect
+minutes to hours per chunk.
+\end{description}
+
+\subsubsection{Verifying a trap you already have}
+
+These take the words as arguments and prove something about a box of parameters.  This is the
+half of the work that a proof cites.
+
+\begin{description}
+\item[\texttt{rigorcert}] \texttt{<deg\_lo> <deg\_hi> <u> <v> <n\_depth>}
+
+
+The all-arcs criterion: verifies, in interval arithmetic and for every $s$ in the arc, that around
+the outer boundary of the union of the two word-disk clouds the labels alternate $u,v,u,v$, which
+is what makes $(u,v)$ a trap.
+\begin{verbatim}
+$ ./certify_arc rigorcert 83.625 83.626 010010001001 111100110111 6
+CERTIFIED min_margin=2.950105e-04 arc=[83.62500,83.62600] (certified)
+\end{verbatim}
+\texttt{min\_margin} is how much room to spare the worst of the checks had; it must be positive.
+Three outcomes are possible: \texttt{CERTIFIED}, \texttt{not-a-trap} (the criterion fails even in
+floating point --- the pair is wrong), and \texttt{interval-FAILED} (it is a trap numerically but
+the box is too wide for the intervals to separate; halve the arc and try again).
+\item[\texttt{rigorcertseg}] \texttt{<deg\_lo> <deg\_hi> <u> <v> <n\_depth>}
+
+
+A relaxed version of the same idea, in which only four alternating directions are checked rather
+than every arc.  It tolerates individual balls entering and leaving the outer boundary as $s$
+moves across the box, which the strict test does not, so it often certifies a wider arc:
+\begin{verbatim}
+$ ./certify_arc rigorcertseg 83.625 83.626 010010001001 111100110111 6
+CERTIFIED min_margin=7.582363e-04 arc=[83.62500,83.62600] (certified)
+\end{verbatim}
+\item[\texttt{rigorthin}] \texttt{<deg\_lo> <deg\_hi> <wA> <wB> <wC> <wD> [theta0\_deg=10]}
+
+
+The thin-trap certificate, for the coincidence cores where the ordinary trap degenerates.  It
+verifies that the chord from $wA(0)$ to $wB(0)$ and the chord from $wC(0)$ to $wD(0)$ cross
+\emph{transversely}, with acute angle at least \texttt{theta0}, for every $s$ in the box.  That is
+the finite, machine-checkable half of the argument that the core lies in the interior of
+$\mathcal{M}$; the contraction lemma that turns it into an exact infinite coincidence is proved by
+hand.
+\begin{verbatim}
+$ ./certify_arc rigorthin 44.9 45.1 01 10 00 11
+CERTIFIED min_margin=3.968762e-01 arc=[44.90000,45.10000] theta0=10.0
+   (transverse-crossing-over-box)
+\end{verbatim}
+Note the margin: $0.4$, against $3 \times 10^{-4}$ for \texttt{rigorcert} on a box two hundred
+times narrower.  Transversality of two chords is a far more robust thing to verify than
+alternation of a whole disk cloud, which is exactly why it works at the cores.
+\end{description}
+
+Setting the environment variable \texttt{RIGOR\_DIAG} makes all three print their intermediate
+quantities to standard error, which is the way to find out \emph{why} a box failed.
+
+\subsubsection{Trap-like ball sets}
+
+The trap-like set $T_0$ is the target that a trap has to hit, and building a good one is usually
+what decides whether a coverage run closes up.  \texttt{funddom} reads these files.
+
+\begin{description}
+\item[\texttt{dumptlb}] \texttt{<deg> <n\_depth> <box\_halfwidth>}
+
+
+The analytic construction, at most ten balls: one per gap of the convex hull, five gaps, a few
+trials each.
+\begin{verbatim}
+$ ./certify_arc dumptlb 45 22 1e-9
+# analytic trap-like balls (T_0) at arg=45.0000 ok=1
+#   C=11.656854 Z=0.707107 count=10
+# s = 0.50000000000000011 0.5
+# center_re center_im radius
+0.318538161 -0.191715745 0.060743600
+-0.191715745 0.318538161 0.060743600
+   ... eight more ...
+\end{verbatim}
+Ten balls of radius $0.06$ cover almost nothing, so this is for inspection, not for coverage.
+\item[\texttt{dumptlbmany}] \texttt{<deg> <n\_depth> <box\_halfwidth> <ngaps> <ntrials> <nradial>}
+
+
+The same construction swept much more widely --- \texttt{ngaps} of the largest hull gaps,
+\texttt{ntrials} sample points across each, \texttt{nradial} depths inward --- emitting every
+admissible ball it finds rather than one per gap.  At $45^\circ$ with the settings below it
+produces 1802 balls of radius up to $0.14$, and that is the difference between a fundamental
+domain closing up and stalling in the nineties.  Follow it with \texttt{prune\_tlb.py}.
+\item[\texttt{dumptlbmanyz}] \texttt{<re> <im> <n\_depth> <box\_halfwidth> <ngaps> <ntrials> <nradial>}
+
+
+Identical, but takes the parameter directly, so it reaches renormalization points off the circle
+--- which is how one gets ball sets at the CKW hexahole.
+\end{description}
+
+Both of the \texttt{many} forms write a \verb|# s = <re> <im>| provenance line, and
+\texttt{funddom} refuses a file whose parameter does not match the core it was asked about.  That
+check exists because trap-like balls are valid only at their own $s$, and a mismatched file is
+otherwise indistinguishable from a correct one --- it just quietly gives the wrong answer:
+\begin{verbatim}
+$ ./funddom s1 log 24 200 44 0.08 0 x.bin 1 tlb45_pruned.txt
+funddom: tlb45_pruned.txt holds trap-like balls for
+         s = 0.500000000000+0.500000000000i, but this core has
+         sigma = 0.250000000000+0.661437827766i (differing by 0.298).
+         Those balls are not valid here and the coverage would be
+         meaningless.
+         Regenerate them at sigma, e.g. 'certify_arc dumptlbmanyz
+         0.250000000000000 0.661437827766148 20 1e-9 40 14 8'.
+\end{verbatim}
+
+\subsubsection{Searching for trap words}
+
+Given a parameter, these look for the pair $(u,v)$ that \texttt{rigorcert} will then verify.
+They differ in which geometric criterion they use to decide that a candidate pair really is a
+trap.
+
+\begin{description}
+\item[\texttt{mixfind}] \texttt{<deg> <max\_uv> <n\_depth> <kmax> [ratio\_goal=1.5] [min\_uv=4] [max\_pixels=1024] [dmult=1.2] [verbose=0]}
+
+
+The workhorse.  Advances the two words independently, allowing their lengths to differ by up to
+\texttt{kmax}, and tests each candidate with a purely topological interleaving criterion on a
+rasterisation of the two ball clusters.  Prints \texttt{deg}, whether a trap was found, $u$, $v$,
+their lengths, and the smaller of the two cut-component counts.
+\begin{verbatim}
+$ ./certify_arc mixfind 83.6 18 16 1
+83.600000 TRAP 010111001110001101 111100111001110110 18 18 119
+\end{verbatim}
+\item[\texttt{mixscan}] \texttt{<max\_uv> <n\_depth> <kmax> [\ldots]}
+
+
+The same, over a list of angles read from standard input --- the way to survey an arc.
+\begin{verbatim}
+$ printf "45\n60\n83.6\n" | ./certify_arc mixscan 18 16 1
+45.000000 none - - 0 0 -1
+60.000000 TRAP 0100111000111 1011111111000 13 13 95
+83.600000 TRAP 010111001110001101 111100111001110110 18 18 119
+\end{verbatim}
+Again $45^\circ$ finds nothing, for the reason given above.
+\item[\texttt{ckwfind}] \texttt{<deg> <max\_uv> <n\_depth> <kmax> [\ldots]}
+
+
+Finds a topological trap as \texttt{mixfind} does, then additionally tests the round-disk
+criterion of~\cite{paper}, Definition 7.1.3, and reports its margin.  The round-disk test is
+stricter, and a pair can pass the topological test and fail it:
+\begin{verbatim}
+$ ./certify_arc ckwfind 83.6 18 16 1
+83.600000 TRAP 010111001110001101 111100111001110110 ckwFAIL -0.00163015
+\end{verbatim}
+A negative margin here means the enclosing disks are not separated enough, and that
+\texttt{rigorcert} on this pair will report \texttt{not-a-trap}.  It is worth running before
+committing a pair to a long interval-arithmetic verification.
+\item[\texttt{mixpair}] \texttt{<deg> <u\_bits> <v\_bits> <n\_depth> [max\_pixels=512] [dmult=6] [verbose=1]}
+
+
+Tests one \emph{explicit} pair, printing the ball geometry as it goes.  This isolates the
+geometric test from the search, which is what you want when a pair that ought to work does not.
+\item[\texttt{findtrap}] \texttt{<deg> <max\_uv> <max\_n> [max\_pixels=512] [verbose=1]}
+
+
+The original same-length search, kept as a check on the newer machinery.  On the circle
+$|s| = 1/\sqrt2$ it short-circuits, since there the attractor is robustly connected and the
+question is trivial --- so a \texttt{TRAP} from this command at exactly $|s| = 1/\sqrt2$ is not
+saying much.
+\end{description}
+
+\subsubsection{Self-test}
+
+\begin{description}
+\item[\texttt{hulltest}] Runs the convex-hull routine on the inputs that used to break it ---
+all-collinear points, duplicates, a single point, and a real depth-6 ball cover --- and checks
+that the result is counter-clockwise and contains every input point.  Run it after touching
+anything in that area; it should print \texttt{ALL PASS}.
+\end{description}
+
+\subsection{\texttt{funddom}}
+
+\begin{verbatim}
+funddom <core> <mode> <cmax> <RESX> <RESY> <rho> <survdepth> \
+        <out.bin> [nper] [balls.txt]
+\end{verbatim}
+
+At a renormalization point $\sigma$ --- one where there are words $u,v$ of length $a$ and $s,t$
+of length $b$ with $\pi(u s^\infty, \sigma) = \pi(v t^\infty, \sigma)$ --- the paper's Lemma
+9.2.5 gives, for each $C$, a criterion for the parameters $\sigma + C\sigma^{bn}$ to be trapped
+for all large $n$.  The criterion is invariant under $C \mapsto \sigma^b C$, so it really lives on
+the elliptic curve $E_\sigma = \mathbb{C}^*/\langle\sigma^b\rangle$, and covering a single
+fundamental domain establishes a whole punctured neighborhood of $\sigma$ in $\mathcal{M}$.  This
+program computes, for each $C$ on a raster, the least tail length $c$ at which $C$ is certified,
+and reports what fraction of a fundamental domain is covered.
+
+\subsubsection{Choosing the core}
+
+\begin{description}
+\item[\texttt{s0}] $\sigma = (1+i)/2$, the twindragon, $a = 2$, $b = 1$.
+\item[\texttt{s1}] $\sigma = (1 + i\sqrt7)/4$, the tame twindragon, $a = 1$, $b = 4$.
+\item[\texttt{hex}] the CKW hexahole, $\sigma \approx 0.37186 + 0.51941i$, $a = 8$, $b = 1$.  This
+one lies on $\partial\mathcal{M}$, so it is the control: it must \emph{not} reach full coverage,
+and if a change to the program makes it do so, the change is wrong.
+\item[\texttt{lm:<A>:<B>[:index]}] any landmark point at all, specified by the sign strings of
+$A$ and $B$ over $\{\texttt{-},\texttt{0},\texttt{+}\}$ (meaning coefficients $-1, 0, +1$) in
+$Q(z) = A(z)(1 - z^b) + z^a B(z)$, with $A$ beginning \texttt{-}; then $a = |A|$ and $b = |B|$.
+This is exactly the \texttt{spec} column that \texttt{funddom landmarks} prints, and the string
+the interactive program reports when you click a landmark, so a point found either way can be
+handed straight here.  Unlike \texttt{coin:} it reaches the infinite coincidences: the three named
+cores are \texttt{lm:-+:-:0}, \texttt{lm:-:+--+:0} and \texttt{lm:-+---+++:-:1}.
+\item[\texttt{coin:<u>:<v>[:k]}] a \emph{finite} coincidence $u(0) = v(0)$, given as two
+equal-length $f$/$g$ words beginning with different letters.  The program solves for $\sigma$
+itself and derives everything else.
+\end{description}
+
+Run a \texttt{lm:} or \texttt{coin:} selector with no further arguments and it just reports what
+it found, which is the quickest way to check a specification:
+\begin{verbatim}
+$ ./funddom lm:-+:-:0
+lm: A=-+ B=-  a=2 b=1  Q(z) = -1 z^0 +2 z^1 -2 z^2
+    admissible roots (1/2<|z|<1, Im z>0): 1
+     [0] 0.500000000000000+0.500000000000000i  |z|=0.707106781
+         arg=45.00000 deg
+sigma = 0.500000000000000+0.500000000000000i
+  |sigma| = 0.707106781187   arg = 45.000000 deg
+  a = 2, b = 1;  Delta = -1.000000000+1.000000000i;
+  P'(sigma) = 4.000000000-4.000000000i
+
+$ ./funddom coin:fgff:gfgg
+coincidence u = fgff , v = gfgg   (m = 4)
+  d = (-1,+1,-1,-1)
+  polynomial (degree 3):  -1 + z - z^2 - z^3  =  0
+  admissible roots (1/2 < |sigma| < 1, Im sigma > 0): 1
+   [0] sigma = 0.419643377607081+0.606290729207199i
+       |sigma| = 0.737352705760
+       arg = 55.311003 deg
+       a = 4, b = 1, s = t = f;  Delta = 0;
+       P'(sigma) = 1.470353793-5.478273590i
+\end{verbatim}
+Only roots with $1/2 < |\sigma| < 1$ and $\operatorname{Im}\sigma > 0$ are admissible: outside
+that annulus the attractor is either a Cantor set or has no interior, and conjugate parameters
+give mirror-image pictures.  If a polynomial has several admissible roots, \texttt{k} or
+\texttt{index} chooses one, counting from zero.
+
+\subsubsection{The two modes}
+
+\begin{description}
+\item[\texttt{ann}] the pixels are the $C$ in the square $[-\rho,\rho]^2$, so the picture is an
+annular neighborhood of $\sigma$ in the $C$ plane, with the fundamental domain between the
+circles $|C| = \rho$ and $|C| = \rho|\sigma|^b$.
+\item[\texttt{log}] the pixels are $x = \arg C$ and $y = \log|C|$, descending from $\log\rho$
+through \texttt{nper} fundamental periods, each of height $b\log(1/|\sigma|)$.  This unrolls the
+annulus into a ribbon, so one period fills the raster and the resolution is not wasted.  It is the
+right mode for measuring coverage; \texttt{ann} is the right mode for a picture.
+\end{description}
+
+\subsubsection{The other arguments}
+
+\begin{description}
+\item[\texttt{cmax}] the largest tail length $c$ to try, at most $253$.  Cost grows like
+$(3/2)^{\texttt{cmax}}$.  There is a real trade-off with $\rho$: certification at tail length $c$
+implies certification of $\sigma^b C$ at $c + b$, so every factor of $|\sigma|^b$ further in costs
+$b$ more levels, and a small $\rho$ therefore \emph{requires} a large \texttt{cmax}.
+\item[\texttt{RESX RESY}] the raster size.
+\item[\texttt{rho}] in \texttt{ann}, the half-width of the square; in \texttt{log}, the outer
+radius.  It must satisfy $\rho \le (R_\Gamma - |Y_0|)/|dY/dC|$, which the program prints; beyond
+that bound every sampled $C$ is out of range and the result is vacuous rather than negative.  It
+says so if that happens.
+\item[\texttt{survdepth}] the depth of the test for whether $C$ lies in $T_\sigma$ at all, which
+is what the second percentage reports.  Zero does not switch the test off: it leaves the single
+check $|Y(C)| \le R_\Gamma$, which is sound but so weak that the column tends to read
+$100\%$.  At \texttt{s0} with $\rho = 0.16$ it gives $100.0000\%$ at \texttt{survdepth} $0$
+against $95.4972\%$ at $8$.  Use $8$ or more when that number is meant to mean something.
+\item[\texttt{nper}] how many fundamental periods to stack in \texttt{log} mode, at most $64$.
+Each is reported separately, which is the direct way to see whether the picture is really
+scale-invariant.
+\item[\texttt{balls.txt}] the trap-like ball set.  Optional only for \texttt{s0} and \texttt{s1},
+which have ten balls compiled in --- far too few to cover anything, so in practice always supply
+one.
+\end{description}
+
+\subsubsection{Enumerating the landmark points}
+
+\begin{verbatim}
+funddom landmarks <Nmax>
+\end{verbatim}
+
+lists every renormalization point of complexity $a + b \le \texttt{Nmax}$: the roots in
+$1/2 < |\sigma| < 1$, $\operatorname{Im}\sigma > 0$ of $Q(z) = A(z)(1-z^b) + z^aB(z)$ over all
+$A, B$ with coefficients in $\{0,\pm1\}$ and $A_0 = -1$.  Each line carries everything a coverage
+run needs, plus the reusable \texttt{lm:} specification.
+\begin{verbatim}
+$ ./funddom landmarks 4
+# sigma_re sigma_im |sigma| arg_deg a b deg
+#   Delta_re Delta_im Pp_re Pp_im spec
+0.500000000000000 0.500000000000000  0.707106781   45.00000  2 1 2
+   +1.000000000  +4.000000000 -4.000000000  lm:-+:-:0   <== s0 (twindragon)
+-0.419643377607081 0.606290729207199  0.737352706  124.68900  1 3 3
+   ...  lm:-:--0:0
+   ... sixteen more ...
+18 landmark points with a+b <= 4
+\end{verbatim}
+The counts are $1, 18, 99, 533, 2421, 10958, 46201$ for $\texttt{Nmax} = 3,\ldots,9$.  Cost grows
+like $(N-1)3^{N-1}$ polynomials, so $8$ takes under a second, $9$ a few seconds and $10$ about
+sixteen.  Note that the hexahole first appears at $a + b = 9$.
+
+\subsection{File formats}
+
+\begin{description}
+\item[Ball files] plain text, one ball per line as \texttt{center\_re center\_im radius}, with
+\texttt{\#} comments.  The line \verb|# s = <re> <im>| records the parameter the balls were
+computed at and is checked, as described above.  Coordinates are in the program's own
+normalization; \texttt{funddom} applies the $2/(1-\sigma)$ conjugation as it reads.  Files of more
+than 200000 balls are truncated, with a warning saying so and that the resulting coverage is
+therefore a lower bound.
+\item[\texttt{out.bin}] the raster \texttt{funddom} writes: no header, two bytes per pixel, in
+row-major order.  The first byte is the least tail length $c$ that certified the pixel, with
+$255$ meaning never certified up to \texttt{cmax} and $254$ meaning the pixel lies outside the
+plotted region (which happens only in \texttt{ann} mode).  The second byte is $1$ if $C$ appears
+to lie in $T_\sigma$.  Turn it into a picture with \texttt{render\_funddom.py}.
+\end{description}
+
+\subsection{The Python helpers}
+
+Each prints its own documentation when run with no arguments.
+
+\begin{description}
+\item[\texttt{prune\_tlb.py}] reduces a ball file to its maximal balls --- the ones not contained
+in another.  This is not cosmetic: \texttt{dumptlbmany} emits a great many redundant balls, and
+pruning typically cuts the count by a third to a half while covering exactly the same set, which
+makes every later coverage run proportionally faster.
+\item[\texttt{render\_funddom.py}] turns an \texttt{out.bin} raster into a PNG, coloring by first
+certified level: blue for shallow, orange for deep, white for uncertified, gray for outside
+$T_\sigma$.  With \verb|--annulus| it draws the two bounding circles of the fundamental domain.
+\texttt{render\_funddom.py bar out.png} writes the color key.
+\item[\texttt{holes.py}] rigorous detection of holes in $\mathcal{M}$, via
+$s \in \mathcal{M} \iff 2/s \in \Lambda - \Lambda$.
+\item[\texttt{spiral.py}] follows the renormalization spiral $\sigma + C\sigma^{bn}$ at a
+renormalization point.
+\item[\texttt{diffset\_test.py}] asks whether a given difference is an \emph{interior} point of
+$\Lambda - \Lambda$, which is the difference-set signature of $s \in \operatorname{int}\mathcal{M}$.
+\item[\texttt{diffset\_selfcover.py}] a prototype of the difference-set self-covering argument.
+It is a prototype and has a known limitation, documented in its own header.
+\end{description}
+
+\subsection{Use cases}
+
+\subsubsection{Is this parameter in the interior of $\mathcal{M}$?}
+
+Search, then verify.  Find a trap pair, check its round-disk margin, and only then spend interval
+arithmetic on it:
+\begin{verbatim}
+./certify_arc mixfind 83.6 18 16 1          # -> TRAP with an explicit (u,v)
+./certify_arc ckwfind 83.6 18 16 1       # -> round-disk margin positive?
+./certify_arc rigorcert 83.625 83.626 010010001001 111100110111 6
+\end{verbatim}
+If the last step says \texttt{interval-FAILED} the pair is right and the box is too wide: halve it.
+If it says \texttt{not-a-trap} the pair is wrong: search again, or try
+\texttt{rigorcertseg}, whose criterion is weaker and which certifies wider boxes.
+
+\subsubsection{Certify a whole arc}
+
+Plan the covering in floating point first, then do it rigorously:
+\begin{verbatim}
+$ ./certify_arc cover 59.9 60.1 16 18 1e-4
+# cover [59.9000,60.1000] deg  n=16 uv=18 d0=1.00e-04 beam=3000
+#   min_gap=5.0e-04 deg
+boxes=11  balls=233  checks=247
+covered 0.064000 of 0.200000 deg  (32.0000%);
+   4 gap-interval(s), total 0.136000 deg
+   GAP [59.90000, 60.02750] deg  (0.12750 deg)
+   GAP [60.08102, 60.08152] deg  (0.00050 deg)
+   GAP [60.08464, 60.08514] deg  (0.00050 deg)
+   GAP [60.08542, 60.09292] deg  (0.00750 deg)
+certificate log: cover_cert.log ; gaps: cover_gaps.log
+\end{verbatim}
+Doing this first is worth it because it is far cheaper and it says where the hard points are: here
+a tenth of a degree at the low end resists entirely, and raising \texttt{n\_depth} and
+\texttt{uv\_depth} is what to try next.  \texttt{cover\_cert.log} records the actual $(u,v)$ for
+every disk, so each line of it can be handed to \texttt{rigorcert} independently.  Widening the arc
+costs time quickly --- a few degrees can run for many minutes --- so start narrow.
+
+Then \texttt{rigorcover} does the real work in interval arithmetic:
+\begin{verbatim}
+./certify_arc rigorcover 1 59.9 60.1 16
+\end{verbatim}
+checkpointing every certified box to \texttt{cov\_1.jsonl}, so it can be killed and resumed.
+Different chunk ids in different directories run in parallel.
+
+\subsubsection{Does a renormalization point have a punctured neighborhood in $\mathcal{M}$?}
+
+This is the limit-trap computation, and the ball set is the thing that matters.  At the twindragon:
+\begin{verbatim}
+./certify_arc dumptlbmany 45 22 1e-9 40 14 8 > tlb45.txt
+python3 prune_tlb.py tlb45.txt tlb45_pruned.txt
+./funddom s0 log 24 700 155 0.08 0 s0.bin 1 tlb45_pruned.txt
+\end{verbatim}
+which reports
+\begin{verbatim}
+  read 1118 trap-like balls from tlb45_pruned.txt
+core s0: sigma=0.500000000+0.500000000i a=2 b=1
+  Delta=-1.000000+1.000000i  P'(sigma)=4.000000-4.000000i
+  Y0 = -2.000000-2.000000i  |Y0|=2.828427
+  dY/dC = 8.000000+8.000000i (|.|=11.313708)
+  R_Gamma=6.828427  trap-like balls: 1118,
+  radii 0.3891 0.3891 0.3891 0.3891 0.3526 0.3526
+s0 log cmax=24 rho=0.08 nper=1 :
+   covered 99.9991%   in T_sigma 100.0000%   (n=108500)
+  period 0 (|C| ~ 0.05657..0.08000): covered 99.999%  in T_sigma 100.000%
+\end{verbatim}
+--- a fundamental domain of $E_\sigma$ essentially covered, so the twindragon has a punctured
+neighborhood in $\mathcal{M}$.  The cumulative histogram printed underneath shows where the work
+went: half the domain is certified by tail length $3$, and the last hundredth of a percent needs
+twenty.
+
+Now the control.  The hexahole is on the boundary, so the same computation must fail:
+\begin{verbatim}
+./certify_arc dumptlbmanyz 0.371858680074136 0.519411153747943 \
+     20 1e-9 40 14 8 > tlbhex.txt
+python3 prune_tlb.py tlbhex.txt tlbhex_pruned.txt
+./funddom hex log 24 400 90 0.0003 26 hex.bin 1 tlbhex_pruned.txt
+# covered 99.7389%   in T_sigma 99.8806%
+\end{verbatim}
+and it does: the coverage stalls just under the $T_\sigma$ ceiling and stays there however far
+\texttt{cmax} is pushed, because the uncovered part is scale-invariant --- it is the hole spiral.
+A coverage figure means nothing without this comparison, since $99.7\%$ looks like success until
+one knows that the answer for a boundary point is also $99.7\%$.
+
+\subsubsection{Make a figure for a paper}
+
+\begin{verbatim}
+./funddom lm:-+:-:0 ann 27 700 700 0.005 8 fig.bin 1 tlb45_pruned.txt
+python3 render_funddom.py fig.bin 700 700 fig.png \
+     --annulus 0.005 0.707106781 1
+\end{verbatim}
+Use \texttt{ann} for a picture and \texttt{log} for a number.  Choose $\rho$ small enough to be
+inside the asymptotic regime, where the picture is genuinely invariant under
+$C \mapsto \sigma^bC$ --- about $\rho_{\max}/70$ is a reasonable rule --- and remember that a
+small $\rho$ needs a large \texttt{cmax}.  The interactive program's ``Limit traps in annulus''
+button does all of this at a selected landmark and writes PNG, EPS and PDF together with a sidecar
+recording the settings, which is usually less work.
 
 \begin{thebibliography}{99}
 \bibitem{paper}

@@ -1,13 +1,146 @@
-#include <map>
-#include <set>
 #include <cstdlib>
+#include <cmath>
 
 #include "ifs_gui.h"
 
 
 #include "movie.h"
+#include "figure_export.h"
+#include <fstream>
+#include <cstdio>
+#include <sstream>
 
 
+/***************************************************************************
+ * bounds for the spinners
+ *
+ * Every +/- pair in this file used to step without a bound in at least one
+ * direction, and several of the resulting values are not merely useless but
+ * fatal: draw_mand computes 100/mand_trap_depth, mand_reset_mesh divides the
+ * plot width by the mesh size, and movie.cc divides by the frame count and
+ * loops forever at zero.  So each stepper now goes through clamp_int.
+ *
+ * The upper bound on a word length is 64 because that is the width of
+ * Bitword's std::bitset (ifs.h:101); past that the words that name a trap or
+ * a uv pair silently lose their leading letters.
+ ***************************************************************************/
+#define MAX_WORD_DEPTH 64
+#define MAX_UV_GRAPH_DEPTH 16    //2^depth labelled circles get drawn, one per ball
+#define MAX_MOVIE_LENGTH 100000
+#define MIN_PICTURE_SIZE 50
+#define MAX_PICTURE_SIZE 10000   //10000^2 pixels of RGB is already 300MB
+//the initial parameter-space view is [-1,1]^2, which already contains all of |s| < 1;
+//outside that the maps are not contractions, so there is nothing to draw
+#define MAND_MAX_RADIUS 1.0
+
+static int clamp_int(int v, int lo, int hi) {
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v;
+}
+
+
+/***************************************************************************
+ * parsing the parameter entry (W_point_param_entry)
+ *
+ * Accepted forms:
+ *   re im       -- two numbers, whitespace separated
+ *   re+imi      -- ordinary complex notation (re-imi, imi, i, -i also work)
+ *   deg         -- a bare number: that many degrees on the circle
+ *                  |s| = 1/sqrt(2), the convention certify_arc and funddom
+ *                  use (certify_arc.cc: static const double R0 = 1/sqrt(2);
+ *                  th = deg*M_PI/180; s = R0*(cos th, sin th))
+ *   deg@r       -- degrees at radius r, off that circle
+ ***************************************************************************/
+static std::string trim_ws(const std::string& s) {
+  size_t a = s.find_first_not_of(" \t\r\n");
+  if (a == std::string::npos) return "";
+  size_t b = s.find_last_not_of(" \t\r\n");
+  return s.substr(a, b-a+1);
+}
+
+//strtod, but rejects anything that leaves unparsed (non-whitespace) junk,
+//so a typo reports "cannot parse" instead of silently becoming 0
+static bool parse_double_strict(const std::string& tok, double& out) {
+  if (tok.empty()) return false;
+  const char* cs = tok.c_str();
+  char* endp = 0;
+  double v = std::strtod(cs, &endp);
+  if (endp == cs) return false;
+  while (*endp == ' ' || *endp == '\t') ++endp;
+  if (*endp != '\0') return false;
+  out = v;
+  return true;
+}
+
+bool parse_parameter(const std::string& raw, cpx& out) {
+  static const double R0 = 0.7071067811865476;  //1/sqrt(2), certify_arc.cc's R0
+  std::string s = trim_ws(raw);
+  if (s.empty()) return false;
+
+  //"deg@r"
+  size_t at = s.find('@');
+  if (at != std::string::npos) {
+    double deg, r;
+    if (!parse_double_strict(trim_ws(s.substr(0,at)), deg)) return false;
+    if (!parse_double_strict(trim_ws(s.substr(at+1)), r))   return false;
+    if (r <= 0.0) return false;
+    double th = deg*M_PI/180.0;
+    out = cpx(r*std::cos(th), r*std::sin(th));
+    return true;
+  }
+
+  //"re im" -- exactly two whitespace-separated tokens
+  {
+    std::istringstream iss(s);
+    std::string a, b, extra;
+    if ((iss >> a) && (iss >> b) && !(iss >> extra)) {
+      double re, im;
+      if (!parse_double_strict(a, re) || !parse_double_strict(b, im)) return false;
+      out = cpx(re, im);
+      return true;
+    }
+  }
+
+  //"re+imi" / "re-imi" / "imi" / "i" / "-i" -- ordinary complex notation
+  if (s[s.size()-1] == 'i' || s[s.size()-1] == 'I') {
+    std::string body = s.substr(0, s.size()-1);
+    //the last +/- that is not the leading sign and not an exponent sign
+    //(as in "1e-5") separates the real part from the imaginary coefficient
+    int split = -1;
+    for (int i=(int)body.size()-1; i>0; --i) {
+      char c = body[i];
+      if ((c == '+' || c == '-') && body[i-1] != 'e' && body[i-1] != 'E') { split = i; break; }
+    }
+    double re, im;
+    if (split < 0) {
+      //pure imaginary: "0.3i", "-0.3i", "i", "-i"
+      std::string im_s = body;
+      if (im_s.empty() || im_s == "+") im_s = "1";
+      else if (im_s == "-")            im_s = "-1";
+      if (!parse_double_strict(im_s, im)) return false;
+      re = 0.0;
+    } else {
+      std::string re_s = body.substr(0, split);
+      std::string im_s = body.substr(split);   //keeps the sign
+      if (im_s == "+") im_s = "1";
+      else if (im_s == "-") im_s = "-1";
+      if (!parse_double_strict(re_s, re)) return false;
+      if (!parse_double_strict(im_s, im)) return false;
+    }
+    out = cpx(re, im);
+    return true;
+  }
+
+  //bare "deg"
+  {
+    double deg;
+    if (!parse_double_strict(s, deg)) return false;
+    double th = deg*M_PI/180.0;
+    out = cpx(R0*std::cos(th), R0*std::sin(th));
+    return true;
+  }
+}
 
 
 
@@ -64,7 +197,7 @@ WidgetButton::WidgetButton(IFSGui* i, const std::string& t, int w, int h, void (
   
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
   
-  XFontStruct* font = XLoadQueryFont(ifsg->display, "fixed");
+  XFontStruct* font = ifsg->gui_font();
   XSetFont(ifsg->display, gc, font->fid);  
   XCharStruct te;
   int fdir, fdescent, fascent;
@@ -111,6 +244,49 @@ void WidgetButton::redraw() {
 }
 
 
+/* The interface font, loaded once.
+   Every widget used to call XLoadQueryFont(display, "fixed") for itself: 83 widgets, 83
+   font loads, none ever freed, and -- worse -- none checking the result before
+   dereferencing font->fid, so a machine without "fixed" would have segfaulted rather
+   than complained.  Load one font, keep it, and fall back down a list.
+
+   "fixed" is a 6x13 bitmap and looks like 1987.  Helvetica at 12 is a large visible
+   improvement for no new dependency, since it ships with XQuartz and every X11 install.
+   Every candidate is deliberately iso8859-1: the iso10646-1 versions of the same faces
+   are 16-bit fonts, and XDrawString -- which is how every widget here draws -- would
+   render nothing at all on one. */
+XFontStruct* IFSGui::gui_font() {
+  if (the_gui_font != NULL) return the_gui_font;
+  /* THE WIDTH BUDGET IS 85 PIXELS, and it decides this list.
+     A WidgetCheck is built at a fixed width of 105 with its text starting at x=20, and
+     update_text never resizes, so any label wider than 85 is silently clipped.  Bold 12 is
+     wanted for legibility -- medium 11 was too thin to read comfortably -- and it only fits
+     because the longest labels were shortened at the same time ("Connectedness:" became
+     "Connected:", "Plot uv graph" became "uv graph").  Widths of the worst survivor,
+     "Contains 1/2:", measured:
+         helvetica medium 11   63
+         helvetica bold 11     67
+         helvetica bold 12     77   <- used; 8px of margin
+         lucida bold sans 11   85   exactly at the limit
+         lucida bold sans 12   91   CLIPPED
+     Check any new candidate, and any new label, against 85 before adding it. */
+  static const char* candidates[] = {
+    "-*-helvetica-bold-r-normal--12-*-iso8859-1",
+    "-*-helvetica-bold-r-normal--11-*-iso8859-1",
+    "-*-helvetica-medium-r-normal--11-*-iso8859-1",
+    "fixed",
+    NULL
+  };
+  for (int i=0; candidates[i] != NULL; ++i) {
+    the_gui_font = XLoadQueryFont(display, candidates[i]);
+    if (the_gui_font != NULL) return the_gui_font;
+  }
+  std::cerr << "schottky: could not load any font, not even \"fixed\".\n";
+  exit(1);
+  return NULL;
+}
+
+
 WidgetText::WidgetText(IFSGui* i, const std::string& t, int w, int h) {
   ifsg = i;
   text = t;
@@ -118,7 +294,7 @@ WidgetText::WidgetText(IFSGui* i, const std::string& t, int w, int h) {
   click_signal = NULL;
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
   
-  XFontStruct* font = XLoadQueryFont(ifsg->display, "fixed");
+  XFontStruct* font = ifsg->gui_font();
   XSetFont(ifsg->display, gc, font->fid);  
   XCharStruct te;
   int fdir, fdescent, fascent;
@@ -180,7 +356,7 @@ WidgetCheck::WidgetCheck(IFSGui* i, const std::string& t, int w, int h, bool c, 
   
   gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
   
-  XFontStruct* font = XLoadQueryFont(ifsg->display, "fixed");
+  XFontStruct* font = ifsg->gui_font();
   XSetFont(ifsg->display, gc, font->fid);  
   XCharStruct te;
   int fdir, fdescent, fascent;
@@ -235,6 +411,103 @@ void WidgetCheck::redraw() {
 
 void WidgetCheck::initial_draw() {
   XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
+}
+
+
+//A one-line editable field: static "label" prefix, then editable "text".
+//Setup is WidgetText's ctor verbatim (GC, "fixed" font, XTextExtents,
+//autosize, pixmap); the rendering itself is new and lives in redraw(), which
+//this ctor just calls once to fill in the pixmap (harmless to do before ul
+//is assigned by pack_widget_upper_right: redraw's XCopyArea targets whatever
+//ul happens to be at the time, but nothing flushes to the screen until the
+//final initial_draw() pass in reset_and_pack_window overwrites it anyway).
+WidgetEntry::WidgetEntry(IFSGui* i, const std::string& lab, const std::string& init,
+                          int w, int h, void (IFSGui::*on_enter)(XEvent*)) {
+  ifsg = i;
+  label = lab;
+  text = init;
+  committed = init;
+  height = h;
+  click_signal = &IFSGui::S_entry_click;  //must be non-NULL, or hit-testing skips this widget entirely
+  enter_signal = on_enter;
+  focused = false;
+  caret = (int)text.size();
+  max_chars = 80;
+
+  gc = XCreateGC(ifsg->display, RootWindow(ifsg->display, ifsg->screen), 0, NULL);
+
+  XFontStruct* font = ifsg->gui_font();
+  XSetFont(ifsg->display, gc, font->fid);
+  XCharStruct te;
+  int fdir, fdescent, fascent;
+  std::string measure = label + text;
+  XTextExtents(font, measure.c_str(), measure.size(), &fdir, &fascent, &fdescent, &te);
+
+  int desired_width = te.rbearing - te.lbearing;
+  int height_offset = (te.ascent - te.descent)/2;
+  if (w > 0) {
+    width = w;
+  } else {
+    width = desired_width + 10;
+  }
+  text_position = Point2d<int>(5, height/2 + height_offset);
+  ascent = te.ascent;
+  descent = te.descent;
+  char_w = XTextWidth(font, "0", 1);
+  label_px = XTextWidth(font, label.c_str(), (int)label.size());
+
+  p = XCreatePixmap(ifsg->display, ifsg->main_window,
+                    width, height, DefaultDepth(ifsg->display, ifsg->screen));
+
+  redraw();
+}
+
+void WidgetEntry::initial_draw() {
+  XCopyArea(ifsg->display, p, ifsg->main_window, gc, 0, 0, width, height, ul.x, ul.y);
+}
+
+//Re-renders the whole pixmap from (label, text, caret, focused) every time --
+//the WidgetCheck pattern, the only precedent this toolkit has for a widget
+//whose appearance depends on mutable state rather than being fixed at
+//construction.
+void WidgetEntry::redraw() {
+  XSetForeground(ifsg->display, gc, WhitePixel(ifsg->display, ifsg->screen));
+  XFillRectangle(ifsg->display, p, gc, 0, 0, width, height);
+  XSetForeground(ifsg->display, gc, BlackPixel(ifsg->display, ifsg->screen));
+  XDrawRectangle(ifsg->display, p, gc, 0, 0, width-1, height-1);
+  //focus is shown by a second, inset rectangle -- 2px "thicker" -- rather
+  //than a color, since X pixel values here are opaque (see get_rgb_color)
+  //and every other widget already relies on shape, not color, to read.
+  if (focused) {
+    XDrawRectangle(ifsg->display, p, gc, 1, 1, width-3, height-3);
+  }
+  XDrawString(ifsg->display, p, gc, text_position.x, text_position.y, label.c_str(), label.size());
+  XDrawString(ifsg->display, p, gc, text_position.x + label_px, text_position.y, text.c_str(), text.size());
+  if (focused) {
+    int cx = text_position.x + label_px + caret*char_w;
+    XDrawLine(ifsg->display, p, gc, cx, text_position.y - ascent, cx, text_position.y + descent);
+  }
+  initial_draw();
+}
+
+//KeyReleaseMask is not in the XSelectInput mask, so auto-repeat arrives as
+//ordinary repeated KeyPress events and needs no special handling here.
+void WidgetEntry::handle_key(XEvent* e) {
+  char buf[16]; KeySym ks; int n = XLookupString(&e->xkey, buf, sizeof buf, &ks, NULL);
+  if      (ks == XK_Return || ks == XK_KP_Enter) { committed = text;
+                                                   if (enter_signal) (ifsg->*enter_signal)(e); redraw(); return; }
+  else if (ks == XK_Escape)    { text = committed; caret = (int)text.size(); focused = false;
+                                 ifsg->focus_widget = NULL; redraw(); return; }
+  else if (ks == XK_Tab)       { ifsg->focus_next_entry(); return; }   //walks `widgets` for wants_keys()
+  else if (ks == XK_BackSpace) { if (caret > 0) { text.erase(--caret, 1); } }
+  else if (ks == XK_Delete)    { if (caret < (int)text.size()) text.erase(caret, 1); }
+  else if (ks == XK_Left)      { if (caret > 0) --caret; }
+  else if (ks == XK_Right)     { if (caret < (int)text.size()) ++caret; }
+  else if (ks == XK_Home)      { caret = 0; }
+  else if (ks == XK_End)       { caret = (int)text.size(); }
+  else if (n == 1 && buf[0] >= 32 && buf[0] < 127 && (int)text.size() < max_chars)
+                               { text.insert(text.begin()+caret, buf[0]); ++caret; }
+  redraw();
 }
 
 
@@ -357,7 +630,9 @@ void IFSGui::S_limit_draw(XEvent* e) {
 
 void IFSGui::S_limit_increase_depth(XEvent* e) {
   if (e->type == MotionNotify) return;
-  ++limit_depth;
+  int d = clamp_int(limit_depth+1, 1, MAX_WORD_DEPTH);
+  if (d == limit_depth) return;
+  limit_depth = d;
   std::stringstream T; T.str(""); T << limit_depth;
   W_limit_depth_label.update_text(T.str());
   draw_limit();
@@ -365,7 +640,9 @@ void IFSGui::S_limit_increase_depth(XEvent* e) {
 
 void IFSGui::S_limit_decrease_depth(XEvent* e) {
   if (e->type == KeyPress || e->type == MotionNotify) return;
-  --limit_depth;
+  int d = clamp_int(limit_depth-1, 1, MAX_WORD_DEPTH);
+  if (d == limit_depth) return;
+  limit_depth = d;
   std::stringstream T; T.str(""); T << limit_depth;
   W_limit_depth_label.update_text(T.str());
   draw_limit();
@@ -421,6 +698,117 @@ void IFSGui::S_limit_zoom_out(XEvent* e) {
   }
 }
 
+/* The trap search, in one place.
+   A trap at s is a pair of words (u,v) -- u beginning f, v beginning g -- whose balls
+   u(B) and v(B) meet and whose displacement, renormalized by s^{-|u|}, lands strictly
+   inside the trap-like set T_0.  Finding one certifies a whole disk of parameters about
+   s inside M, which is the point of the whole exercise.
+
+   Both the point panel and the limit-set overlay need this, and they must not disagree,
+   so neither computes it for itself.  The box is deliberately tiny: we are asking about
+   this parameter, not about a neighborhood of it. */
+bool IFSGui::find_trap_words(int uv_depth,
+                             std::vector<std::pair<Bitword,Bitword> >& out,
+                             std::string& why) {
+  if (trap_cache_valid && trap_cache_depth == uv_depth && trap_cache_z == IFS.z) {
+    out = trap_cache_words;
+    why = trap_cache_why;
+    return trap_cache_ok;
+  }
+  out.resize(0);
+  why.clear();
+  std::vector<Ball> TLB;
+  /* TLB_BUILD_DEPTH was 15, which was measurably too shallow: at 15 the trap-like set
+     has only 2 balls and the first trap at 60 degrees needs words of length 20, while at
+     18 it has 10 -- as many as this construction yields -- and the trap appears at length
+     9.  Cost doubles per level (0.08s at 18, 1.4s at 22), so 18 is where the ball count
+     saturates and the search is still interactive.  Measured over 40..90 degrees in 2.5
+     degree steps: a trap at 16 of 21 angles, worst case 0.09s.  The misses are real, not
+     an artefact -- 45 degrees is the twindragon coincidence core, where no finite trap
+     exists and certify_arc's own sweep fails too. */
+  const int TLB_BUILD_DEPTH = 18;
+  const double TLB_BOX_HALFWIDTH = 1e-9;
+  cpx box_ll = IFS.z - cpx(TLB_BOX_HALFWIDTH, TLB_BOX_HALFWIDTH);
+  cpx box_ur = IFS.z + cpx(TLB_BOX_HALFWIDTH, TLB_BOX_HALFWIDTH);
+  double TLB_Z, TLB_C;
+  trap_cache_valid = true; trap_cache_z = IFS.z; trap_cache_depth = uv_depth;
+  if (!IFS.TLB_for_region(TLB, box_ll, box_ur, TLB_BUILD_DEPTH, &TLB_C, &TLB_Z, 0)) {
+    why = "no trap-like balls at this parameter";
+    trap_cache_ok = false; trap_cache_words.resize(0); trap_cache_why = why;
+    return false;
+  }
+  double trap_radius;
+  int diff = IFS.check_TLB(TLB, &TLB_C, &TLB_Z, trap_radius, &out, uv_depth);
+  /* check_TLB has one exit (TLB_C == NULL) that reports a depth without recording a
+     word, so a non-negative answer does not by itself mean the list is populated. */
+  if (diff < 0 || out.empty()) {
+    out.resize(0);
+    std::stringstream T;
+    T << "no trap with words of length <= " << uv_depth;
+    why = T.str();
+    trap_cache_ok = false; trap_cache_words.resize(0); trap_cache_why = why;
+    return false;
+  }
+  trap_cache_ok = true; trap_cache_words = out; trap_cache_why.clear();
+  return true;
+}
+
+
+void IFSGui::S_limit_trap(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  limit_trap = !limit_trap;
+  W_limit_trap.checked = limit_trap;
+  W_limit_trap.redraw();
+  draw_limit();
+}
+
+void IFSGui::S_limit_trap_increase_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  int d = clamp_int(limit_trap_depth+1, 1, MAX_WORD_DEPTH);
+  if (d == limit_trap_depth) return;
+  limit_trap_depth = d;
+  std::stringstream T; T << limit_trap_depth;
+  W_limit_trap_depth_label.update_text(T.str());
+  if (limit_trap) draw_limit();
+}
+
+void IFSGui::S_limit_trap_decrease_depth(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  int d = clamp_int(limit_trap_depth-1, 1, MAX_WORD_DEPTH);
+  if (d == limit_trap_depth) return;
+  limit_trap_depth = d;
+  std::stringstream T; T << limit_trap_depth;
+  W_limit_trap_depth_label.update_text(T.str());
+  if (limit_trap) draw_limit();
+}
+
+
+/* Take the limit-set view to the trap.  Not a convenience: the certifying balls have
+   radius about min_r*|s|^|u|, which at |u| = 9 and |s| = 0.7 is a couple of hundredths
+   against a view three units wide -- a few pixels.  Without this the user has to find a
+   four-pixel mark by eye before the drawing tells them anything. */
+void IFSGui::S_limit_trap_zoom(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  if (!limit_trap) {                     /* switch it on rather than do nothing */
+    limit_trap = true;
+    W_limit_trap.checked = true;
+    W_limit_trap.redraw();
+    draw_limit();
+  }
+  if (!limit_trap_located) {
+    set_status("no trap to go to at this parameter");
+    return;
+  }
+  /* four ball-radii of margin: enough to see both clusters and the gap they interleave
+     across, without losing the surrounding limit set entirely */
+  double radius = 4.0*limit_trap_radius;
+  limit_ll = limit_trap_center - cpx(radius, radius);
+  limit_ur = limit_trap_center + cpx(radius, radius);
+  limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(W_limit_plot.width);
+  draw_limit();
+}
+
+
 void IFSGui::S_limit_uv_graph(XEvent* e) {
   if (e->type != ButtonPress) return;
   limit_uv_graph = !limit_uv_graph;
@@ -431,8 +819,9 @@ void IFSGui::S_limit_uv_graph(XEvent* e) {
 
 void IFSGui::S_limit_uv_graph_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  if (limit_uv_graph_depth == 1) return;
-  --limit_uv_graph_depth;
+  int d = clamp_int(limit_uv_graph_depth-1, 1, MAX_UV_GRAPH_DEPTH);
+  if (d == limit_uv_graph_depth) return;
+  limit_uv_graph_depth = d;
   std::stringstream T; T.str(""); T << limit_uv_graph_depth;
   W_limit_uv_graph_depth_label.update_text(T.str());
   draw_limit();
@@ -440,7 +829,9 @@ void IFSGui::S_limit_uv_graph_decrease_depth(XEvent* e) {
 
 void IFSGui::S_limit_uv_graph_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  ++limit_uv_graph_depth;
+  int d = clamp_int(limit_uv_graph_depth+1, 1, MAX_UV_GRAPH_DEPTH);
+  if (d == limit_uv_graph_depth) return;
+  limit_uv_graph_depth = d;
   std::stringstream T; T.str(""); T << limit_uv_graph_depth;
   W_limit_uv_graph_depth_label.update_text(T.str());
   draw_limit();
@@ -529,6 +920,32 @@ void IFSGui::S_mand_draw(XEvent* e) {
               (e->type == MotionNotify && ((e->xmotion.state >> 8)&1)) ) {
     int widget_x = e->xbutton.x - W_mand_plot.ul.x;
     int widget_y = e->xbutton.y - W_mand_plot.ul.y;
+    /* With landmarks shown, a click within a few pixels of one SNAPS to it, rather
+       than to wherever the pointer happened to land.  That matters because a limit
+       trap only exists at an exact renormalization point: landing near sigma is not
+       good enough, and a hand-placed click never hits it.  Only on a real
+       ButtonPress -- a drag must still sweep the parameter freely. */
+    if (mand_landmarks && e->type == ButtonPress) {
+      int k = mand_landmark_near(widget_x, widget_y, 6);
+      if (k >= 0) {
+        /* A second click on the landmark already selected means "zoom to it".  The
+           asymptotic self-similarity only becomes visible once you are deep in, and
+           clicking twice is a lot less work than repeated Recenter and Zoom. */
+        bool again = (mand_landmark_selected == k);
+        mand_landmark_selected = k;
+        const fd_landmark& L = mand_landmark_list[k];
+        cpx sig(L.sigma_re, L.sigma_im);
+        std::stringstream T;
+        T.precision(15);
+        T << "landmark " << L.spec << "  sigma = " << L.sigma_re << " " << L.sigma_im
+          << "  a=" << L.a << " b=" << L.b << " deg=" << L.deg;
+        set_status(T.str());
+        change_highlighted_ifs(sig);
+        if (again) { IFS.set_params(sig, sig); mand_recenter(); mand_zoom(0.25); }
+        else draw_mand();
+        return;
+      }
+    }
     cpx c = mand_pixel_to_cpx(Point2d<int>(widget_x, widget_y));
     //std::cout << "Moving IFS to " << widget_x << " " << widget_y << "=" << c << "\n";
     change_highlighted_ifs(c);
@@ -570,7 +987,16 @@ void IFSGui::S_mand_zoom_in(XEvent* e) {
 }
 
 void IFSGui::S_mand_zoom_out(XEvent* e) {
-  if (e->type == ButtonPress) mand_zoom(2.0);
+  if (e->type != ButtonPress) return;
+  /* There is nothing to see outside |s| = 1: the maps are not contractions there, so no
+     attractor is defined and the picture is blank by construction.  The initial view is
+     already the whole meaningful region, so stop rather than pan out into white space. */
+  double radius = (mand_ur.real() - mand_ll.real())/2.0;
+  if (radius >= MAND_MAX_RADIUS - 1e-12) {
+    set_status("already showing all of |s| < 1; there is nothing outside it");
+    return;
+  }
+  mand_zoom(2.0);
 }
 
 void IFSGui::S_mand_decrease_mesh(XEvent* e) {
@@ -586,7 +1012,12 @@ void IFSGui::S_mand_decrease_mesh(XEvent* e) {
 
 void IFSGui::S_mand_increase_mesh(XEvent* e) {
   if (e->type == ButtonPress) {
-    mand_pixel_group_size *= 2;
+    //a group wider than an eighth of the plot leaves fewer than 8 groups across,
+    //and doubling without a bound eventually makes mand_num_pixel_groups zero,
+    //at which point the grid is empty and "Find boundary path" indexes into it
+    int g = clamp_int(mand_pixel_group_size*2, 1, W_mand_plot.width/8);
+    if (g == mand_pixel_group_size) return;
+    mand_pixel_group_size = g;
     std::stringstream T; T.str(""); T << mand_pixel_group_size;
     W_mand_mesh_label.update_text(T.str());
     mand_reset_mesh();
@@ -605,7 +1036,9 @@ void IFSGui::S_mand_connected(XEvent* e) {
 
 void IFSGui::S_mand_connected_increase_depth(XEvent* e) {
   if (e->type == ButtonPress) {
-    ++mand_connected_depth;
+    int d = clamp_int(mand_connected_depth+1, 1, MAX_WORD_DEPTH);
+    if (d == mand_connected_depth) return;
+    mand_connected_depth = d;
     std::stringstream T; T.str(""); T << mand_connected_depth;
     W_mand_connected_depth_label.update_text(T.str());
     mand_grid_connected_valid = false;
@@ -615,7 +1048,9 @@ void IFSGui::S_mand_connected_increase_depth(XEvent* e) {
 
 void IFSGui::S_mand_connected_decrease_depth(XEvent* e) {
   if (e->type == ButtonPress) {
-    --mand_connected_depth;
+    int d = clamp_int(mand_connected_depth-1, 1, MAX_WORD_DEPTH);
+    if (d == mand_connected_depth) return;
+    mand_connected_depth = d;
     std::stringstream T; T.str(""); T << mand_connected_depth;
     W_mand_connected_depth_label.update_text(T.str());
     mand_grid_connected_valid = false;
@@ -634,7 +1069,9 @@ void IFSGui::S_mand_contains_half(XEvent* e) {
 
 void IFSGui::S_mand_contains_half_increase_depth(XEvent* e) {
   if (e->type == ButtonPress) {
-    ++mand_contains_half_depth;
+    int d = clamp_int(mand_contains_half_depth+1, 1, MAX_WORD_DEPTH);
+    if (d == mand_contains_half_depth) return;
+    mand_contains_half_depth = d;
     std::stringstream T; T.str(""); T << mand_contains_half_depth;
     W_mand_contains_half_depth_label.update_text(T.str());
     mand_grid_contains_half_valid = false;
@@ -644,7 +1081,9 @@ void IFSGui::S_mand_contains_half_increase_depth(XEvent* e) {
 
 void IFSGui::S_mand_contains_half_decrease_depth(XEvent* e) {
   if (e->type == ButtonPress) {
-    --mand_contains_half_depth;
+    int d = clamp_int(mand_contains_half_depth-1, 1, MAX_WORD_DEPTH);
+    if (d == mand_contains_half_depth) return;
+    mand_contains_half_depth = d;
     std::stringstream T; T.str(""); T << mand_contains_half_depth;
     W_mand_contains_half_depth_label.update_text(T.str());
     mand_grid_contains_half_valid = false;
@@ -663,7 +1102,9 @@ void IFSGui::S_mand_trap(XEvent* e) {
 
 void IFSGui::S_mand_trap_increase_depth(XEvent* e) {
   if (e->type == ButtonPress) {
-    ++mand_trap_depth;
+    int d = clamp_int(mand_trap_depth+1, 1, MAX_WORD_DEPTH);
+    if (d == mand_trap_depth) return;
+    mand_trap_depth = d;
     std::stringstream T; T.str(""); T << mand_trap_depth;
     W_mand_trap_depth_label.update_text(T.str());
     mand_grid_trap_valid = false;
@@ -672,7 +1113,10 @@ void IFSGui::S_mand_trap_increase_depth(XEvent* e) {
 }
 void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
   if (e->type == ButtonPress) {
-    --mand_trap_depth;
+    //draw_mand divides 100 by this, so zero is a SIGFPE and not just a bad picture
+    int d = clamp_int(mand_trap_depth-1, 1, MAX_WORD_DEPTH);
+    if (d == mand_trap_depth) return;
+    mand_trap_depth = d;
     std::stringstream T; T.str(""); T << mand_trap_depth;
     W_mand_trap_depth_label.update_text(T.str());
     mand_grid_trap_valid = false;
@@ -680,101 +1124,408 @@ void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
   }
 }
 
-void IFSGui::S_mand_limit_trap(XEvent* e) {
-  if (e->type == ButtonPress) {
-    mand_limit_trap = !mand_limit_trap;
-    W_mand_limit_trap_check.checked = mand_limit_trap;
-    W_mand_limit_trap_check.redraw();
-    mand_grid_trap_valid = false;
-    if (mand_trap) draw_mand();
+/* Landmark points -- the renormalization points where CKW Lemma 9.2.5 applies, so
+   the parameters at which a limit-trap search is meaningful at all.  Enumerated by
+   funddom's kernel (fd_landmarks), cached because the list depends only on the
+   complexity bound and not on the window. */
+void IFSGui::mand_rebuild_landmarks() {
+  if (mand_landmark_list_N == mand_landmarks_N) return;   //cache is current
+  mand_landmark_list.clear();
+  mand_landmark_selected = -1;
+  //room for every landmark at N = 9; fd_landmarks returning exactly the cap means
+  //it truncated, so size generously rather than silently showing a partial set
+  std::vector<fd_landmark> buf(60000);
+  int n = fd_landmarks(mand_landmarks_N, &buf[0], (int)buf.size());
+  if (n < 0) {
+    set_status("landmarks: bad complexity bound");
+    mand_landmark_list_N = mand_landmarks_N;
+    return;
+  }
+  buf.resize(n);
+  mand_landmark_list = buf;
+  mand_landmark_list_N = mand_landmarks_N;
+  std::stringstream T;
+  T << "landmarks: " << n << " renormalization points with a+b <= " << mand_landmarks_N;
+  if (n == 60000) T << " (list truncated)";
+  set_status(T.str());
+}
+
+/* |s| = 1/2 and |s| = 1/sqrt2, on demand.  Drawn in the overlay pass so they sit on
+   top of the raster and survive a repaint of the cached grid. */
+/* mand_get_color applies the layers in a fixed PRIORITY order and returns the first
+   that has a value, so with two layers on a given color is ambiguous unless you know
+   which won.  Nothing on screen said so; this does. */
+void IFSGui::mand_update_legend() {
+  /* The column is only ~190px, and update_text does not resize, so this has to stay
+     under about 27 characters; the full sentence is in the hover help. */
+  std::string t = "col: ";
+  bool any = false;
+  if (mand_trap)          { t += "trap";                 any = true; }
+  if (mand_contains_half) { t += (any ? ">" : ""); t += "half"; any = true; }
+  if (mand_connected)     { t += (any ? ">" : ""); t += "conn"; any = true; }
+  if (!any) t += "none on";
+  W_mand_legend.update_text(t);
+}
+
+void IFSGui::mand_draw_guide_circles() {
+  if (window_mode == LIMIT) return;
+  if (!mand_circle_half && !mand_circle_sqrt2) return;
+  Widget& MW = W_mand_plot;
+  for (int k = 0; k < 2; ++k) {
+    if (k == 0 && !mand_circle_half) continue;
+    if (k == 1 && !mand_circle_sqrt2) continue;
+    double r = (k == 0 ? 0.5 : 1.0/sqrt(2.0));
+    //both red: a blue circle vanishes against the dark blue of the connected region
+    XSetForeground(display, MW.gc, get_rgb_color(0.90, 0.10, 0.10));
+    Point2d<int> c0 = mand_cpx_to_pixel(cpx(0.0, 0.0));
+    int rp = (int)(r/mand_pixel_width);
+    XDrawArc(display, MW.p, MW.gc, c0.x-rp, c0.y-rp, 2*rp, 2*rp, 0, 360*64);
   }
 }
 
+/* A scale bar, and the coordinate axes when they are in view.
+   Parameter space is self-similar under the renormalization at a landmark, so a deep zoom
+   looks very much like a shallow one and there is nothing on screen to say which it is.
+   The bar is given a round length -- 1, 5, or 2 times a power of ten -- chosen so that it
+   comes out between about a sixth and a third of the pane, and labelled with that length,
+   so the label is always exact rather than the bar being a fixed size with an awkward
+   number attached. */
+void IFSGui::mand_draw_scale() {
+  if (!mand_scale || window_mode == LIMIT) return;
+  Widget& MW = W_mand_plot;
 
-void IFSGui::S_mand_dirichlet(XEvent* e) {
+  /* the axes, in gray, drawn first so the bar and the picture sit on top */
+  int gray = get_rgb_color(0.55, 0.55, 0.55);
+  XSetForeground(display, MW.gc, gray);
+  Point2d<int> origin = mand_cpx_to_pixel(cpx(0.0, 0.0));
+  if (origin.y >= 0 && origin.y < MW.height)
+    XDrawLine(display, MW.p, MW.gc, 0, origin.y, MW.width-1, origin.y);
+  if (origin.x >= 0 && origin.x < MW.width)
+    XDrawLine(display, MW.p, MW.gc, origin.x, 0, origin.x, MW.height-1);
+
+  /* choose a round length whose bar is a reasonable fraction of the pane */
+  double span = mand_pixel_width * MW.width;
+  double target = span/4.0;
+  double p10 = pow(10.0, floor(log10(target)));
+  double mant = target/p10;
+  double nice = (mant >= 5.0 ? 5.0 : (mant >= 2.0 ? 2.0 : 1.0)) * p10;
+  int barpx = (int)(nice/mand_pixel_width);
+  if (barpx < 8 || barpx > MW.width - 40) return;    /* degenerate: say nothing */
+
+  std::stringstream T;
+  T.precision(10);
+  T << nice;
+  std::string lab = T.str();
+
+  int x0 = 12, y0 = MW.height - 14;
+  int black = BlackPixel(display, screen);
+  int white = WhitePixel(display, screen);
+  /* a white pad under the bar and its label, so both stay readable over a dark region */
+  XFontStruct* font = gui_font();
+  int tw = XTextWidth(font, lab.c_str(), lab.size());
+  int padw = (barpx > tw ? barpx : tw) + 8;
+  XSetForeground(display, MW.gc, white);
+  XFillRectangle(display, MW.p, MW.gc, x0-4, y0-font->ascent-6, padw, font->ascent+14);
+  XSetForeground(display, MW.gc, black);
+  XDrawLine(display, MW.p, MW.gc, x0, y0, x0+barpx, y0);
+  XDrawLine(display, MW.p, MW.gc, x0, y0-3, x0, y0+3);
+  XDrawLine(display, MW.p, MW.gc, x0+barpx, y0-3, x0+barpx, y0+3);
+  XDrawString(display, MW.p, MW.gc, x0, y0-5, lab.c_str(), lab.size());
+}
+
+void IFSGui::S_mand_scale(XEvent* e) {
   if (e->type != ButtonPress) return;
-  mand_dirichlet = !mand_dirichlet;
-  W_mand_dirichlet_check.checked = mand_dirichlet;
-  W_mand_dirichlet_check.redraw();
+  mand_scale = !mand_scale;
+  W_mand_scale_check.checked = mand_scale;
+  W_mand_scale_check.redraw();
   draw_mand();
 }
 
-void IFSGui::S_mand_dirichlet_decrease_depth(XEvent* e) {
+void IFSGui::S_mand_circle_half(XEvent* e) {
   if (e->type != ButtonPress) return;
-  --mand_dirichlet_depth;
-  std::stringstream T;
-  T.str(""); T << mand_dirichlet_depth;
-  W_mand_dirichlet_depth_label.update_text(T.str());
-  mand_grid_dirichlet_valid = false;
-  if (mand_dirichlet) draw_mand();
-}
-
-void IFSGui::S_mand_dirichlet_increase_depth(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  ++mand_dirichlet_depth;
-  std::stringstream T;
-  T.str(""); T << mand_dirichlet_depth;
-  W_mand_dirichlet_depth_label.update_text(T.str());
-  mand_grid_dirichlet_valid = false;
-  if (mand_dirichlet) draw_mand();
-}
-
-
-void IFSGui::S_mand_set_C(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  mand_set_C = !mand_set_C;
-  W_mand_set_C_check.checked = mand_set_C;
-  W_mand_set_C_check.redraw();
+  mand_circle_half = !mand_circle_half;
+  W_mand_circle_half_check.checked = mand_circle_half;
+  W_mand_circle_half_check.redraw();
   draw_mand();
 }
 
-void IFSGui::S_mand_set_C_decrease_depth(XEvent* e) {
+void IFSGui::S_mand_circle_sqrt2(XEvent* e) {
   if (e->type != ButtonPress) return;
-  --mand_set_C_depth;
-  std::stringstream T;
-  T.str(""); T << mand_set_C_depth;
-  W_mand_set_C_depth_label.update_text(T.str());
-  mand_grid_set_C_valid = false;
-  if (mand_set_C) draw_mand();
-}
-
-void IFSGui::S_mand_set_C_increase_depth(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  ++mand_set_C_depth;
-  std::stringstream T;
-  T.str(""); T << mand_set_C_depth;
-  W_mand_set_C_depth_label.update_text(T.str());
-  mand_grid_set_C_valid = false;
-  if (mand_set_C) draw_mand();
-}
-
-void IFSGui::S_mand_theta(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  mand_theta = !mand_theta;
-  W_mand_theta_check.checked = mand_theta;
-  W_mand_theta_check.redraw();
+  mand_circle_sqrt2 = !mand_circle_sqrt2;
+  W_mand_circle_sqrt2_check.checked = mand_circle_sqrt2;
+  W_mand_circle_sqrt2_check.redraw();
   draw_mand();
 }
 
-void IFSGui::S_mand_theta_decrease_depth(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  --mand_theta_depth;
-  std::stringstream T;
-  T.str(""); T << mand_theta_depth;
-  W_mand_theta_depth_label.update_text(T.str());
-  mand_grid_theta_valid = false;
-  if (mand_theta) draw_mand();
+void IFSGui::mand_draw_landmarks() {
+  if (!mand_landmarks || window_mode == LIMIT) return;
+  Widget& MW = W_mand_plot;
+  int col = get_rgb_color(0.05, 0.85, 0.1);       //green: distinct from every layer
+  int sel = get_rgb_color(1.0, 0.1, 0.9);
+  for (int i = 0; i < (int)mand_landmark_list.size(); ++i) {
+    cpx c(mand_landmark_list[i].sigma_re, mand_landmark_list[i].sigma_im);
+    if (c.real() < mand_ll.real() || c.real() > mand_ur.real() ||
+        c.imag() < mand_ll.imag() || c.imag() > mand_ur.imag()) continue;
+    Point2d<int> p = mand_cpx_to_pixel(c);
+    bool is_sel = (i == mand_landmark_selected);
+    XSetForeground(display, MW.gc, is_sel ? sel : col);
+    int r = is_sel ? 4 : 1;
+    XFillArc(display, MW.p, MW.gc, p.x-r, p.y-r, 2*r, 2*r, 0, 23040);
+    if (is_sel)   //a ring, so the selection stays visible against a dense field
+      XDrawArc(display, MW.p, MW.gc, p.x-7, p.y-7, 14, 14, 0, 23040);
+  }
 }
 
-void IFSGui::S_mand_theta_increase_depth(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  ++mand_theta_depth;
-  std::stringstream T;
-  T.str(""); T << mand_theta_depth;
-  W_mand_theta_depth_label.update_text(T.str());
-  mand_grid_theta_valid = false;
-  if (mand_theta) draw_mand();
+/* index of the landmark nearest to a click in W_mand_plot coordinates, or -1 */
+int IFSGui::mand_landmark_near(int wx, int wy, int tol_px) {
+  int best = -1;
+  double best_d2 = (double)tol_px*tol_px;
+  for (int i = 0; i < (int)mand_landmark_list.size(); ++i) {
+    cpx c(mand_landmark_list[i].sigma_re, mand_landmark_list[i].sigma_im);
+    Point2d<int> p = mand_cpx_to_pixel(c);
+    double dx = p.x - wx, dy = p.y - wy;
+    double d2 = dx*dx + dy*dy;
+    if (d2 <= best_d2) { best_d2 = d2; best = i; }
+  }
+  return best;
 }
+
+void IFSGui::S_mand_landmarks(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  mand_landmarks = !mand_landmarks;
+  W_mand_landmarks_check.checked = mand_landmarks;
+  W_mand_landmarks_check.redraw();
+  if (mand_landmarks) mand_rebuild_landmarks();
+  draw_mand();
+}
+
+void IFSGui::S_mand_landmarks_decrease(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  int N = clamp_int(mand_landmarks_N - 1, 3, 9);
+  if (N == mand_landmarks_N) return;
+  mand_landmarks_N = N;
+  std::stringstream T; T << mand_landmarks_N;
+  W_mand_landmarks_label.update_text(T.str());
+  if (mand_landmarks) { mand_rebuild_landmarks(); draw_mand(); }
+}
+
+void IFSGui::S_mand_landmarks_increase(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  /* 9 is the ceiling on purpose: it is 46201 points, about 14% of the pane's
+     pixels and some seconds to enumerate, which reads as noise rather than as a
+     set of marks.  7 (2421 points, 0.12s) is the default. */
+  int N = clamp_int(mand_landmarks_N + 1, 3, 9);
+  if (N == mand_landmarks_N) return;
+  mand_landmarks_N = N;
+  std::stringstream T; T << mand_landmarks_N;
+  W_mand_landmarks_label.update_text(T.str());
+  if (mand_landmarks) { mand_rebuild_landmarks(); draw_mand(); }
+}
+
+/* The limit traps of a whole fundamental annulus at the selected landmark point.
+ *
+ * At a renormalization point sigma the set of limit-trap parameters C is invariant
+ * under C -> sigma^b C, so the annulus rho|sigma|^b <= |C| <= rho is a fundamental
+ * domain for that action on E_sigma = the quotient of C^* by <sigma^b>.  Covering
+ * one such annulus therefore settles EVERY C, which is what puts sigma in the
+ * interior of M.  This is the picture of Figure 25 of the paper: the disc of C
+ * colored by the least tail length c at which each is certified, with the two
+ * bounding circles of one annulus drawn in red.
+ *
+ * The mathematics is funddom's, reached through funddom_core.h, so there is only one
+ * implementation of it.  The two things this has to get right locally are the
+ * trap-like balls -- which must be computed at sigma, and there must be MANY of
+ * them, since the ten that trap_like_balls_from_balls yields cover essentially
+ * nothing -- and rho, which has to sit inside the range where Y(C) can still land
+ * in the difference set at all. */
+void IFSGui::S_mand_annulus(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  if (mand_landmark_selected < 0 ||
+      mand_landmark_selected >= (int)mand_landmark_list.size()) {
+    set_status("no landmark selected: switch Landmarks on and click one first");
+    return;
+  }
+  const fd_landmark& L = mand_landmark_list[mand_landmark_selected];
+  cpx sigma(L.sigma_re, L.sigma_im);
+
+  /* the renormalization data, rebuilt from the landmark's own spec so that this and
+     the command line cannot disagree */
+  std::string spec(L.spec);           //"lm:<A>:<B>:<k>"
+  std::string A, B; int pick = 0;
+  { size_t p1 = spec.find(':'), p2 = spec.find(':', p1+1), p3 = spec.find(':', p2+1);
+    A = spec.substr(p1+1, p2-p1-1);
+    B = spec.substr(p2+1, (p3==std::string::npos ? spec.size() : p3) - p2 - 1);
+    if (p3 != std::string::npos) pick = atoi(spec.c_str()+p3+1); }
+  fd_core core;
+  if (fd_core_from_lm(A.c_str(), B.c_str(), pick, &core) <= 0) {
+    set_status("could not rebuild the renormalization data for " + spec);
+    return;
+  }
+
+  set_status("annulus: finding trap-like balls at sigma ...");
+  ifs F; F.set_params(sigma, sigma); F.depth = mand_annulus_ball_depth;
+  std::vector<Ball> TLB;
+  double d = 1e-9;
+  if (!F.trap_like_balls_many(TLB, sigma-cpx(d,d), sigma+cpx(d,d),
+                              mand_annulus_ball_depth, 40, 8, 6, true, 0)
+      || TLB.size() == 0) {
+    set_status("annulus: no trap-like balls at this landmark");
+    return;
+  }
+  std::vector<double> balls3;
+  balls3.reserve(3*TLB.size());
+  for (int i=0; i<(int)TLB.size(); ++i) {
+    balls3.push_back(TLB[i].center.real());
+    balls3.push_back(TLB[i].center.imag());
+    balls3.push_back(TLB[i].radius);
+  }
+  if (fd_solver_init(&core, &balls3[0], (int)TLB.size()) != 0) {
+    set_status("annulus: could not initialise the limit-trap solver");
+    return;
+  }
+  fd_info info;
+  fd_solver_info(&info);
+  if (!(info.rho_max > 0.0)) {
+    fd_solver_free(); set_status("annulus: no usable rho at this landmark"); return;
+  }
+  /* THE ASYMPTOTIC REGIME, and why rho cannot simply be a fraction of rho_max.
+   *
+   * The true statement is about sigma + C sigma^{bn} as n -> infinity, and the set
+   * of C admitting a limit trap is exactly invariant under C -> sigma^b C.  Near
+   * |C| = rho_max, though, the picture still remembers the finite scale: what one
+   * sees there is the limit-trap structure in a small but nontrivial NEIGHBOURHOOD
+   * of sigma, not the scale-invariant asymptotic object the red annulus is meant to
+   * be a fundamental domain OF.  To get the asymptotic picture one has to go deep,
+   * which is what make_asymp_fig.py does for the paper's figure: at s0 it uses
+   * rho = 5e-3 against rho_max = 0.354, i.e. about rho_max/70.
+   *
+   * That is not free.  Certified at tail length c implies sigma^b C certified at
+   * c + b, so each factor |sigma|^b inward costs b more levels; descending from
+   * rho_max to rho costs about log(rho_max/rho)/log(1/|sigma|) extra levels.  So
+   * cmax is derived from the descent rather than guessed -- a small rho with a
+   * cmax chosen for rho_max would show a spuriously uncovered picture. */
+  const double ASYMP_FRACTION = 1.0/70.0;
+  double rho = ASYMP_FRACTION*info.rho_max;
+  double abs_sigma = std::abs(sigma);
+  int extra = 0;
+  if (abs_sigma > 0.0 && abs_sigma < 1.0)
+    extra = (int)std::ceil(std::log(info.rho_max/rho)/std::log(1.0/abs_sigma));
+  const int RES = mand_annulus_res;
+  int cmax = mand_annulus_cmax + extra;
+  if (cmax > 45) cmax = 45;          /* the raster byte reserves 254/255 */
+  figexp::Figure fig;
+  fig.title = "limit traps at " + spec;
+  fig.set_window(-rho, -rho, rho, rho);
+  fig.raster.set_size(RES, RES);
+  /* Coverage is quoted over the FUNDAMENTAL ANNULUS, not the whole disc.  The disc
+     runs in to C = 0, where certification needs unboundedly deep c (each factor
+     |sigma|^b inward costs b more levels), so a disc figure can never reach 100% at
+     finite cmax and quoting it understates the result.  One annulus is a fundamental
+     domain of E_sigma, so covering it settles every C -- that is the number the
+     mathematics is about, and the one comparable with the paper. */
+  double inner_r = rho*std::pow(abs_sigma, core.b);
+  long inside = 0, covered = 0;          /* over the whole disc, for reference */
+  long ann_inside = 0, ann_covered = 0;  /* over one fundamental annulus */
+  bool aborted = false;
+  for (int iy = 0; iy < RES && !aborted; ++iy) {
+    if ((iy % 16) == 0) {
+      std::stringstream T;
+      T << "annulus at " << spec << ": row " << iy << " of " << RES
+        << "  (" << TLB.size() << " balls, rho=" << rho << ", Escape to stop)";
+      set_progress(double(iy)/double(RES), T.str());
+      XEvent ev;
+      while (XCheckMaskEvent(display, KeyPressMask, &ev))
+        if (XLookupKeysym(&ev.xkey, 0) == XK_Escape) aborted = true;
+    }
+    for (int ix = 0; ix < RES; ++ix) {
+      double x = (2.0*(ix+0.5)/RES - 1.0)*rho;
+      double y = (2.0*(iy+0.5)/RES - 1.0)*rho;
+      unsigned char r = 255, g = 255, b = 255;      //white: not certified
+      double q2 = x*x + y*y;
+      if (q2 <= rho*rho) {
+        ++inside;
+        bool in_annulus = (q2 >= inner_r*inner_r);
+        if (in_annulus) ++ann_inside;
+        int lev = fd_level(x, y, cmax);
+        if (lev < 0) {
+          if (!fd_survives(x, y, 8)) { r = g = b = 205; }   //gray: outside T_sigma
+        } else {
+          ++covered;
+          if (in_annulus) ++ann_covered;
+          /* viridis by tail length: dark for shallow, bright yellow for deep.  Same
+             ramp as render_funddom.py, which is why it lives in figure_export. */
+          double t = (cmax > 1 ? double(lev)/double(cmax) : 0.0);
+          unsigned char rgb[3];
+          figexp::viridis(t, rgb);
+          r = rgb[0]; g = rgb[1]; b = rgb[2];
+        }
+      }
+      fig.raster.set_pixel(ix, iy, r, g, b);
+    }
+  }
+  fd_solver_free();
+  if (aborted) { set_status("annulus: stopped, nothing written"); return; }
+
+  /* the two bounding circles of one fundamental annulus, as true vector paths */
+  fig.add_circle(0.0, 0.0, rho,     figexp::Style::stroke(0.85, 0.05, 0.05, 1.2));
+  fig.add_circle(0.0, 0.0, inner_r, figexp::Style::stroke(0.85, 0.05, 0.05, 1.2));
+
+  static int annulus_counter = 0;
+  char base[64];
+  std::snprintf(base, sizeof base, "schottky_annulus_%03d", annulus_counter++);
+  figexp::Options opt;
+  opt.raster_px = RES;
+  opt.draw_frame = true;
+  std::string wrote, err, failed;
+  const char* ext[3] = {".png", ".eps", ".pdf"};
+  for (int k=0; k<3; ++k) {
+    std::string name = std::string(base) + ext[k];
+    if (figexp::write_auto(fig, opt, name, &err)) wrote += (wrote.empty()?"":" ") + name;
+    else failed += (failed.empty()?"":"; ") + err;
+  }
+  { std::ofstream sc((std::string(base) + ".txt").c_str());
+    if (sc) {
+      sc.precision(17);
+      sc << "# limit traps over a fundamental annulus of E_sigma\n";
+      sc << "spec        " << spec << "\n";
+      sc << "sigma       " << L.sigma_re << " " << L.sigma_im << "\n";
+      sc << "a b         " << core.a << " " << core.b << "\n";
+      sc << "Delta       " << core.Delta_re << " " << core.Delta_im << "\n";
+      sc << "Pprime      " << core.Pp_re << " " << core.Pp_im << "\n";
+      sc << "rho         " << rho << "\n";
+      sc << "rho_max     " << info.rho_max << "\n";
+      sc << "inner_rho   " << inner_r << "\n";
+      sc << "cmax        " << cmax << "  (" << mand_annulus_cmax << " + "
+         << (cmax - mand_annulus_cmax) << " for the descent to rho)\n";
+      sc << "regime      asymptotic: rho = rho_max/" << (int)(1.0/ASYMP_FRACTION)
+         << ", so the picture should be invariant under C -> sigma^b C\n";
+      sc << "resolution  " << RES << "\n";
+      sc << "ball_depth  " << mand_annulus_ball_depth << "\n";
+      sc << "balls       " << TLB.size() << "\n";
+      sc << "R_Gamma     " << info.R_Gamma << "\n";
+      sc << "annulus_certified_percent " << (ann_inside ? 100.0*ann_covered/ann_inside : 0.0) << "\n";
+      sc << "disc_certified_percent    " << (inside ? 100.0*covered/inside : 0.0) << "\n";
+    } }
+
+  std::stringstream T;
+  T.precision(4);
+  T << "asymptotic annulus at " << spec << ": "
+    << (ann_inside ? 100.0*ann_covered/ann_inside : 0.0)
+    << "% of the fundamental annulus certified (" << (inside ? 100.0*covered/inside : 0.0)
+    << "% of the disc; rho=" << rho << " = rho_max/" << (int)(1.0/ASYMP_FRACTION)
+    << ", " << TLB.size() << " balls, cmax " << cmax << ") -- wrote "
+    << base << ".{png,eps,pdf,txt}";
+  if (!failed.empty()) T << "  [" << failed << "]";
+  set_status(T.str());
+  /* and keep a short form on screen: the status line is transient, and this is the
+     number the whole exercise exists to produce */
+  { std::stringstream R;
+    R.precision(4);
+    R << (ann_inside ? 100.0*ann_covered/ann_inside : 0.0) << "% " << spec;
+    mand_annulus_last = R.str();
+    W_mand_annulus_result.update_text(mand_annulus_last); }
+}
+
 
 void IFSGui::S_mand_output_window(XEvent* e) {
   if (e->type != ButtonPress) return;
@@ -801,22 +1552,86 @@ void IFSGui::S_mand_output_picture(XEvent* e) {
   //                              PI/2.0, 0.04,
   //                              (mand_connected ? mand_connected_depth : 0), 
   //                              (mand_contains_half ? mand_contains_half_depth : 0));
-  write_bitmap(bmp, "mandelbrot_output.bmp");
-  std::cout << "Wrote bitmap\n";
+  /* Export through figure_export rather than write_bitmap.  Three things this buys:
+     the vector formats a paper wants, overlays that stay vector (the circle |s|=1/sqrt2
+     and the current parameter, which no bitmap could carry sharply), and a sidecar .txt
+     recording the window and every enabled layer, which is what makes a published figure
+     regenerable.  All three formats are written from one click -- there is no format
+     widget yet, and offering the choice this way costs nothing and never overwrites,
+     since the basename auto-increments. */
+  static int export_counter = 0;
+  char base[64];
+  std::snprintf(base, sizeof base, "schottky_mand_%03d", export_counter++);
+
+  figexp::Figure F;
+  F.title = "schottky parameter space";
+  F.set_window(mand_ll.real(), mand_ll.imag(), mand_ur.real(), mand_ur.imag());
+  int np = mand_output_picture_size;
+  F.raster.set_size(np, np);
+  //draw_mand_to_array indexes bmp[column][row] with the row increasing UPWARD
+  //(ifs_picture.cc: y = region_ll.imag() + (j+0.5)*pixel_width), which is already
+  //figexp::Raster's convention, so there is no flip here
+  for (int i=0; i<np; ++i)
+    for (int j=0; j<np; ++j)
+      F.raster.set_pixel(i, j, bmp[i][j].x, bmp[i][j].y, bmp[i][j].z);
+
+  //the circle |s| = 1/sqrt2, on which all the certified-arc work lives
+  F.add_circle(0.0, 0.0, 1.0/sqrt(2.0), figexp::Style::stroke(0.85, 0.1, 0.1, 0.7));
+  //and where the highlighted parameter currently sits
+  F.add_dot(IFS.z.real(), IFS.z.imag(), figexp::Style::fill(0.0, 0.35, 0.9), 2.5);
+
+  figexp::Options opt;
+  opt.raster_px = np;
+  opt.draw_frame = true;
+  std::string wrote, failed, err;
+  const char* ext[3] = {".png", ".eps", ".pdf"};
+  for (int k=0; k<3; ++k) {
+    std::string name = std::string(base) + ext[k];
+    if (figexp::write_auto(F, opt, name, &err)) wrote += (wrote.empty() ? "" : " ") + name;
+    else { failed += (failed.empty() ? "" : "; ") + err; }
+  }
+
+  //the sidecar: everything needed to reproduce this picture
+  {
+    std::string sname = std::string(base) + ".txt";
+    std::ofstream sc(sname.c_str());
+    if (sc) {
+      sc.precision(17);
+      sc << "# schottky parameter-space figure\n";
+      sc << "lower_left  " << mand_ll.real() << " " << mand_ll.imag() << "\n";
+      sc << "upper_right " << mand_ur.real() << " " << mand_ur.imag() << "\n";
+      sc << "pixels      " << np << "\n";
+      sc << "parameter   " << IFS.z.real() << " " << IFS.z.imag() << "\n";
+      sc << "mesh_size   " << mand_pixel_group_size << "\n";
+      sc << "connected   " << (mand_connected ? mand_connected_depth : 0) << "\n";
+      sc << "contains_half " << (mand_contains_half ? mand_contains_half_depth : 0) << "\n";
+      sc << "trap        " << (mand_trap ? mand_trap_depth : 0) << "\n";
+      wrote += " " + sname;
+    }
+  }
+
+  if (failed.empty()) set_status("wrote " + wrote);
+  else                set_status("export failed: " + failed);
 }
   
   
 void IFSGui::S_mand_output_picture_increase_size(XEvent* e) {
-  if (e->type != ButtonPress) return; 
-  mand_output_picture_size += 50;
+  if (e->type != ButtonPress) return;
+  int s = clamp_int(mand_output_picture_size + 50, MIN_PICTURE_SIZE, MAX_PICTURE_SIZE);
+  if (s == mand_output_picture_size) return;
+  mand_output_picture_size = s;
   std::stringstream T;
   T.str(""); T << mand_output_picture_size;
   W_mand_output_picture_size_label.update_text(T.str());
 }
-  
+
 void IFSGui::S_mand_output_picture_decrease_size(XEvent* e) {
   if (e->type != ButtonPress) return;
-  if (mand_output_picture_size >= 50) mand_output_picture_size -= 50;
+  //the old guard was >= 50, which let the size land on exactly 0 and then
+  //asked draw_mand_to_array to fill an empty array
+  int s = clamp_int(mand_output_picture_size - 50, MIN_PICTURE_SIZE, MAX_PICTURE_SIZE);
+  if (s == mand_output_picture_size) return;
+  mand_output_picture_size = s;
   std::stringstream T;
   T.str(""); T << mand_output_picture_size;
   W_mand_output_picture_size_label.update_text(T.str());
@@ -830,6 +1645,37 @@ void IFSGui::S_mand_output_picture_decrease_size(XEvent* e) {
 
 
 //point
+
+//enter_signal for W_point_param_entry.  The widget owns only the text typed
+//into it; parsing and acting on it is entirely this handler's job (see the
+//"Reading the value" note on WidgetEntry).
+void IFSGui::S_point_param_entered(XEvent* e) {
+  cpx c;
+  if (!parse_parameter(W_point_param_entry.text, c)) {
+    set_status("cannot parse: " + W_point_param_entry.text);
+    return;
+  }
+  if (window_mode == LIMIT) {
+    //no mandelbrot plot exists in this mode to repaint a patch of or
+    //recenter on -- just move the highlighted parameter and redraw the
+    //limit set, which is the only picture on screen.
+    IFS.set_params(c,c);
+    draw_limit();
+    recompute_point_data();
+    return;
+  }
+  if (c.real() < mand_ll.real() || c.real() > mand_ur.real() ||
+      c.imag() < mand_ll.imag() || c.imag() > mand_ur.imag()) {
+    //outside the current mandelbrot window: recenter on it rather than
+    //moving the highlighted parameter somewhere off screen with no feedback
+    IFS.set_params(c,c);
+    mand_recenter();
+  } else {
+    change_highlighted_ifs(c);   //repaints only a small patch (ifs_gui.cc)
+  }
+  set_status("moved to " + W_point_param_entry.text);
+}
+
 void IFSGui::S_point_connected(XEvent* e) {
   if (e->type != ButtonPress) return;
   point_connected_check = !point_connected_check;
@@ -840,7 +1686,9 @@ void IFSGui::S_point_connected(XEvent* e) {
 
 void IFSGui::S_point_connected_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  ++point_connected_depth;
+  int d = clamp_int(point_connected_depth+1, 1, MAX_WORD_DEPTH);
+  if (d == point_connected_depth) return;
+  point_connected_depth = d;
   std::stringstream T; T.str(""); T << point_connected_depth;
   W_point_connected_depth_label.update_text(T.str());
   recompute_point_data();
@@ -848,7 +1696,9 @@ void IFSGui::S_point_connected_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_connected_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  --point_connected_depth;
+  int d = clamp_int(point_connected_depth-1, 1, MAX_WORD_DEPTH);
+  if (d == point_connected_depth) return;
+  point_connected_depth = d;
   std::stringstream T; T.str(""); T << point_connected_depth;
   W_point_connected_depth_label.update_text(T.str());
   recompute_point_data();
@@ -864,7 +1714,9 @@ void IFSGui::S_point_contains_half(XEvent* e) {
 
 void IFSGui::S_point_contains_half_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  ++point_contains_half_depth;
+  int d = clamp_int(point_contains_half_depth+1, 1, MAX_WORD_DEPTH);
+  if (d == point_contains_half_depth) return;
+  point_contains_half_depth = d;
   std::stringstream T; T.str(""); T << point_contains_half_depth;
   W_point_contains_half_depth_label.update_text(T.str());
   recompute_point_data();
@@ -872,7 +1724,9 @@ void IFSGui::S_point_contains_half_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_contains_half_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  --point_contains_half_depth;
+  int d = clamp_int(point_contains_half_depth-1, 1, MAX_WORD_DEPTH);
+  if (d == point_contains_half_depth) return;
+  point_contains_half_depth = d;
   std::stringstream T; T.str(""); T << point_contains_half_depth;
   W_point_contains_half_depth_label.update_text(T.str());
   recompute_point_data();
@@ -888,7 +1742,9 @@ void IFSGui::S_point_uv_words(XEvent* e) {
 
 void IFSGui::S_point_uv_words_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  ++point_uv_words_depth;
+  int d = clamp_int(point_uv_words_depth+1, 1, MAX_WORD_DEPTH);
+  if (d == point_uv_words_depth) return;
+  point_uv_words_depth = d;
   std::stringstream T; T.str(""); T << point_uv_words_depth;
   W_point_uv_words_depth_label.update_text(T.str());
   recompute_point_data();
@@ -896,7 +1752,9 @@ void IFSGui::S_point_uv_words_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_uv_words_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  --point_uv_words_depth;
+  int d = clamp_int(point_uv_words_depth-1, 1, MAX_WORD_DEPTH);
+  if (d == point_uv_words_depth) return;
+  point_uv_words_depth = d;
   std::stringstream T; T.str(""); T << point_uv_words_depth;
   W_point_uv_words_depth_label.update_text(T.str());
   recompute_point_data();
@@ -913,7 +1771,9 @@ void IFSGui::S_point_trap(XEvent* e) {
 
 void IFSGui::S_point_trap_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  ++point_trap_depth;
+  int d = clamp_int(point_trap_depth+1, 1, MAX_WORD_DEPTH);
+  if (d == point_trap_depth) return;
+  point_trap_depth = d;
   std::stringstream T; T.str(""); T << point_trap_depth;
   W_point_trap_depth_label.update_text(T.str());
   recompute_point_data();
@@ -921,33 +1781,11 @@ void IFSGui::S_point_trap_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_trap_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  --point_trap_depth;
+  int d = clamp_int(point_trap_depth-1, 1, MAX_WORD_DEPTH);
+  if (d == point_trap_depth) return;
+  point_trap_depth = d;
   std::stringstream T; T.str(""); T << point_trap_depth;
   W_point_trap_depth_label.update_text(T.str());
-  recompute_point_data();
-}
-
-
-void IFSGui::S_point_coordinates(XEvent* e) {  
-  if (e->type != ButtonPress) return;
-  point_coordinates_check = !point_coordinates_check;
-  W_point_coordinates_check.checked = point_coordinates_check;
-  W_point_coordinates_check.redraw();
-  recompute_point_data();
-}
-void IFSGui::S_point_coordinates_increase_depth(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  ++point_coordinates_depth;
-  std::stringstream T; T.str(""); T << point_coordinates_depth;
-  W_point_coordinates_depth_label.update_text(T.str());
-  recompute_point_data();
-}
-
-void IFSGui::S_point_coordinates_decrease_depth(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  --point_coordinates_depth;
-  std::stringstream T; T.str(""); T << point_coordinates_depth;
-  W_point_coordinates_depth_label.update_text(T.str());
   recompute_point_data();
 }
 
@@ -1023,11 +1861,6 @@ void IFSGui::S_mand_path_find_traps(XEvent* e) {
   find_traps_along_path(0);
 }
 
-void IFSGui::S_mand_path_find_coordinates(XEvent* e) {
-  if (e->type != ButtonPress) return;
-  find_coordinates_along_path(0);
-}
-
 void IFSGui::S_mand_path_create_movie(XEvent* e) {
   if (e->type != ButtonPress || !path.is_valid) return;
   //create the mandelbrot connectedness grid
@@ -1049,15 +1882,19 @@ void IFSGui::S_mand_path_create_movie(XEvent* e) {
 
 void IFSGui::S_mand_path_movie_decrease_length(XEvent* e) {
   if (e->type != ButtonPress) return;
-  if (path.movie_length >= 1) {
-    --path.movie_length;
-    std::stringstream T; T.str(""); T << path.movie_length;
-    W_mand_path_movie_length_label.update_text(T.str());
-  }
+  //the old guard was >= 1, which let the length land on 0; movie.cc then
+  //divides by it and its frame loop never terminates
+  int n = clamp_int(path.movie_length-1, 1, MAX_MOVIE_LENGTH);
+  if (n == path.movie_length) return;
+  path.movie_length = n;
+  std::stringstream T; T.str(""); T << path.movie_length;
+  W_mand_path_movie_length_label.update_text(T.str());
 }
 void IFSGui::S_mand_path_movie_increase_length(XEvent* e) {
   if (e->type != ButtonPress) return;
-  ++path.movie_length;
+  int n = clamp_int(path.movie_length+1, 1, MAX_MOVIE_LENGTH);
+  if (n == path.movie_length) return;
+  path.movie_length = n;
   std::stringstream T; T.str(""); T << path.movie_length;
   W_mand_path_movie_length_label.update_text(T.str());
 }
@@ -1095,7 +1932,9 @@ void IFSGui::S_mand_path_find_half_words(XEvent* e) {
 
 void IFSGui::S_mand_path_half_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  ++path.half_depth;
+  int d = clamp_int(path.half_depth+1, 1, MAX_WORD_DEPTH);
+  if (d == path.half_depth) return;
+  path.half_depth = d;
   std::stringstream T; T.str(""); T << path.half_depth;
   W_mand_path_half_depth_label.update_text(T.str());
   draw_mand();
@@ -1103,55 +1942,48 @@ void IFSGui::S_mand_path_half_increase_depth(XEvent* e) {
 
 void IFSGui::S_mand_path_half_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  --path.half_depth; 
-  if (path.half_depth < 0) {
-    path.half_depth = 0;
-    return;
-  }
+  int d = clamp_int(path.half_depth-1, 1, MAX_WORD_DEPTH);
+  if (d == path.half_depth) return;
+  path.half_depth = d;
   std::stringstream T; T.str(""); T << path.half_depth;
   W_mand_path_half_depth_label.update_text(T.str());
   draw_mand();
 }
 
+//the four start/stop steppers below only wrapped when has_half_words was set,
+//so before "Find half words along path" has run they walked away from 0 with
+//nothing to bound them -- and each step paid for a full draw_mand
 void IFSGui::S_mand_path_half_increase_start(XEvent* e) {
-  if (e->type != ButtonPress) return;
+  if (e->type != ButtonPress || !path.has_half_words) return;
   ++path.half_start;
-  if (path.has_half_words && path.half_start >= (int)path.half_words.size()) {
-    path.half_start = 0;
-  }
+  if (path.half_start >= (int)path.half_words.size()) path.half_start = 0;
   std::stringstream T; T.str(""); T << path.half_start;
   W_mand_path_half_start_label.update_text(T.str());
   draw_mand();
 }
 
 void IFSGui::S_mand_path_half_decrease_start(XEvent* e) {
-  if (e->type != ButtonPress) return;
+  if (e->type != ButtonPress || !path.has_half_words) return;
   --path.half_start;
-  if (path.has_half_words && path.half_start < 0) {
-    path.half_start = path.half_words.size() - 1;
-  }
+  if (path.half_start < 0) path.half_start = path.half_words.size() - 1;
   std::stringstream T; T.str(""); T << path.half_start;
   W_mand_path_half_start_label.update_text(T.str());
   draw_mand();
 }
 
 void IFSGui::S_mand_path_half_increase_end(XEvent* e) {
-  if (e->type != ButtonPress) return;
+  if (e->type != ButtonPress || !path.has_half_words) return;
   ++path.half_end;
-  if (path.has_half_words && path.half_end >= (int)path.half_words.size()) {
-    path.half_end = 0;
-  }
+  if (path.half_end >= (int)path.half_words.size()) path.half_end = 0;
   std::stringstream T; T.str(""); T << path.half_end;
   W_mand_path_half_end_label.update_text(T.str());
   draw_mand();
 }
 
 void IFSGui::S_mand_path_half_decrease_end(XEvent* e) {
-  if (e->type != ButtonPress) return;
+  if (e->type != ButtonPress || !path.has_half_words) return;
   --path.half_end;
-  if (path.has_half_words && path.half_end < 0) {
-    path.half_end = path.half_words.size()-1;
-  }
+  if (path.half_end < 0) path.half_end = path.half_words.size()-1;
   std::stringstream T; T.str(""); T << path.half_end;
   W_mand_path_half_end_label.update_text(T.str());
   draw_mand();
@@ -1184,7 +2016,6 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_tasks_title);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
-  pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_coordinates_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
   pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_length_title);
   pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);
@@ -1208,7 +2039,6 @@ void IFSGui::make_path_task_buttons(bool created_by_drawing) {
   W_mand_path_tasks_title.initial_draw();
   W_mand_path_delete_button.initial_draw();
   W_mand_path_find_traps_button.initial_draw();
-  W_mand_path_find_coordinates_button.initial_draw();
   W_mand_path_create_movie_button.initial_draw();
   W_mand_path_movie_length_title.initial_draw();
   W_mand_path_movie_decrease_length.initial_draw();
@@ -1246,7 +2076,6 @@ void IFSGui::make_path_creation_buttons(bool cancelling) {
     detach_widget(&W_mand_path_tasks_title);
     detach_widget(&W_mand_path_delete_button);
     detach_widget(&W_mand_path_find_traps_button);
-    detach_widget(&W_mand_path_find_coordinates_button);
     detach_widget(&W_mand_path_create_movie_button);
     detach_widget(&W_mand_path_movie_length_title);
     detach_widget(&W_mand_path_movie_decrease_length);
@@ -1678,7 +2507,7 @@ void IFSGui::draw_limit() {
     IFS.compute_uv_graph(uv_graph_edges, uv_graph_balls, limit_uv_graph_depth, 0);
   
     //get the size of a text string of this length
-    XFontStruct* font = XLoadQueryFont(display, "fixed");
+    XFontStruct* font = gui_font();
     XCharStruct te;
     int fdir, fdescent, fascent;
     T << Bitword(uv_graph_balls[0].word, uv_graph_balls[0].word_len);
@@ -1739,8 +2568,116 @@ void IFSGui::draw_limit() {
     }
   }
   
+  if (limit_trap) draw_limit_trap();
+
   LW.redraw();
 }
+
+
+/* Draw the trap certifying the current parameter, on top of the limit set.
+   What makes the picture a proof rather than a decoration is the INTERLEAVING: it is
+   not enough that the two balls u(B) and v(B) overlap, the two Cantor clusters inside
+   them have to link, so that no perturbation can pull them apart.  So we draw both the
+   enclosing balls (outlined, so the limit set stays visible through them) and enough of
+   each cluster's descendants to see them alternate.
+
+   The balls are rebuilt from the words rather than carried out of the search, because
+   check_TLB reports Bitwords.  act_on_right shifts the word left and ORs the new letter
+   into bit 0, and Bitword::reverse_get(n) returns the n-th letter reading outermost
+   first, so replaying reverse_get(0..len-1) through act_on_right reproduces exactly the
+   ball the search found.  Getting that order backwards would draw a different, wrong
+   pair of balls and look entirely plausible. */
+void IFSGui::draw_limit_trap() {
+  Widget& LW = W_limit_plot;
+  std::vector<std::pair<Bitword,Bitword> > tw;
+  std::string why;
+  limit_trap_located = false;
+  if (!find_trap_words(limit_trap_depth, tw, why)) {
+    set_status("trap: " + why);
+    return;
+  }
+  double min_r;
+  if (!IFS.minimal_enclosing_radius(min_r)) return;
+  /* the same seed ball as check_TLB uses, or the words would not name these balls */
+  Ball base(0.5, (IFS.z-1.0)/2.0, (1.0-IFS.w)/2.0, 1.01*min_r);
+  const Bitword& u = tw[0].first;
+  const Bitword& v = tw[0].second;
+  Ball bu = base, bv = base;
+  for (int i=0; i<u.len; ++i) bu = IFS.act_on_right(u.reverse_get(i), bu);
+  for (int i=0; i<v.len; ++i) bv = IFS.act_on_right(v.reverse_get(i), bv);
+
+  /* Descendants, to show the clusters rather than just their hulls.  How many levels is
+     not a free choice: each level shrinks the balls by |s|, so drawing past the point
+     where they fall below a pixel costs 2^k arcs and adds nothing, while stopping too
+     early at a deep zoom leaves a blank disk.  So take the depth from the geometry --
+     enough levels for the smallest ball to be about a pixel -- and cap it, since this
+     overlay is redrawn on every pan. */
+  int cluster_depth = 0;
+  if (IFS.az > 0.0 && IFS.az < 1.0) {
+    double want = std::log(bu.radius / limit_pixel_width) / std::log(1.0/IFS.az);
+    if (want > 0.0) cluster_depth = (int)std::floor(want);
+  }
+  if (cluster_depth > 10) cluster_depth = 10;      /* 1024 arcs a side */
+  std::vector<Ball> CU, CV;
+  IFS.compute_balls_right(CU, bu, cluster_depth);
+  IFS.compute_balls_right(CV, bv, cluster_depth);
+
+  int u_col = get_rgb_color(0.85, 0.0, 0.85);      /* magenta: the u side  */
+  int v_col = get_rgb_color(0.0, 0.55, 0.15);      /* green:   the v side  */
+  int line_col = BlackPixel(display, screen);
+
+  /* Interleave the two clusters rather than drawing one and then the other: the two
+     overlap, X11 has no alpha, and whichever went second would hide the other
+     everywhere they meet -- which is exactly the region the picture is about. */
+  int nmax = (int)(CU.size() > CV.size() ? CU.size() : CV.size());
+  for (int i=0; i<nmax; ++i) {
+    for (int side=0; side<2; ++side) {
+      const std::vector<Ball>& C = (side==0 ? CU : CV);
+      if (i >= (int)C.size()) continue;
+      XSetForeground(display, LW.gc, (side==0 ? u_col : v_col));
+      Point2d<int> p = limit_cpx_to_pixel(C[i].center);
+      double r = C[i].radius / limit_pixel_width;
+      if (r < 1.0) r = 1.0;
+      XFillArc(display, LW.p, LW.gc, p.x-int(r), p.y-int(r),
+               int(2.0*r), int(2.0*r), 0, 23040);
+    }
+  }
+
+  /* the two enclosing balls, outlined so what is underneath still reads */
+  for (int pass=0; pass<2; ++pass) {
+    const Ball& B = (pass==0 ? bu : bv);
+    XSetForeground(display, LW.gc, (pass==0 ? u_col : v_col));
+    Point2d<int> p = limit_cpx_to_pixel(B.center);
+    double r = B.radius / limit_pixel_width;
+    if (r < 2.0) r = 2.0;
+    XDrawArc(display, LW.p, LW.gc, p.x-int(r), p.y-int(r),
+             int(2.0*r), int(2.0*r), 0, 23040);
+    XDrawArc(display, LW.p, LW.gc, p.x-int(r)-1, p.y-int(r)-1,
+             int(2.0*r)+2, int(2.0*r)+2, 0, 23040);
+    XSetForeground(display, LW.gc, line_col);
+    XDrawString(display, LW.p, LW.gc, p.x+int(r)+3, p.y,
+                (pass==0 ? "u" : "v"), 1);
+  }
+
+  /* the displacement that the trap-like set has to contain */
+  XSetForeground(display, LW.gc, line_col);
+  Point2d<int> pu = limit_cpx_to_pixel(bu.center);
+  Point2d<int> pv = limit_cpx_to_pixel(bv.center);
+  XDrawLine(display, LW.p, LW.gc, pu.x, pu.y, pv.x, pv.y);
+
+  limit_trap_located = true;
+  limit_trap_center = (bu.center + bv.center)/2.0;
+  limit_trap_radius = (bu.radius > bv.radius ? bu.radius : bv.radius);
+
+  std::stringstream T;
+  T << "trap: u=" << u.str() << " v=" << v.str() << "  |u|=" << u.len
+    << " (" << tw.size() << " pair" << (tw.size()==1 ? "" : "s") << " found)";
+  /* the balls are usually a few pixels across in a default view, so say how to see them */
+  double on_screen = 2.0*limit_trap_radius/limit_pixel_width;
+  if (on_screen < 40.0) T << " -- press 'to trap' to zoom in";
+  set_status(T.str());
+}
+
 
 void IFSGui::recenter_limit(cpx c) {
   double radius = (limit_ur.real() - limit_ll.real())/2.0;
@@ -1774,34 +2711,13 @@ Point2d<int> IFSGui::mand_cpx_to_pixel(const cpx& c) {
                        W_mand_plot.height - ((c.imag() - mand_ll.imag()) / mand_pixel_width) );
 }
 
-int IFSGui::mand_get_color(PointNd<6,int>& p) {
-/*
+int IFSGui::mand_get_color(PointNd<4,int>& p) {
   if (mand_trap && p.z > 0) { //use the trap color
     return p.z;
-  } else if (mand_set_C && p[4] > 0) {
-    return p[4];  
-  } else if (mand_connected && p.x >= 0) {
-    return p.x*0x000001;
   } else if (mand_contains_half && p.y > 0) {
     return p.y;
-  } else if (mand_dirichlet && p.w >= 0) {
-    return p.w;
-  } else {
-    return WhitePixel(display, screen);
-  }
-*/
-  if (mand_trap && p.z > 0) { //use the trap color
-    return p.z;
-  } else if (mand_set_C && p[4] > 0) {
-    return p[4];
-  } else if (mand_contains_half && p.y > 0) {
-    return p.y;
-  } else if (mand_theta && p[5] > 0) {
-    return p[5];
   } else if (mand_connected && p.x >= 0) {
     return p.x*0x000001;
-  } else if (mand_dirichlet && p.w >= 0) {
-    return p.w;
   } else {
     return WhitePixel(display, screen);
   }
@@ -1835,15 +2751,48 @@ void IFSGui::draw_mand() {
     found_TLB = (TLB.size() != 0);
   }
   
-  //set up the dirichlet stuff
-  std::map<std::set<std::pair<Bitword,Bitword> >, int> sets_to_colors;
-  std::map<std::set<std::pair<Bitword,Bitword> >, int>::iterator it;
-  
+  //is any layer actually being recomputed?  if not this is a cheap repaint from
+  //the cache and there is no point in advertising progress through it
+  bool computing = ((mand_connected && !mand_grid_connected_valid) ||
+                    (mand_contains_half && !mand_grid_contains_half_valid) ||
+                    (mand_trap && !mand_grid_trap_valid));
+  bool aborted = false;
+
   for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
+
+    if (computing) {
+      std::stringstream S;
+      S << "mandelbrot: column " << i+1 << " of " << mand_num_pixel_groups
+        << "   (Escape to stop)";
+      set_progress(double(i+1)/double(mand_num_pixel_groups), S.str());
+      //Poll for an abort.  This pane is the only thing in the program that can
+      //take minutes, and until now there was no way out of it but to kill the
+      //process.  Draining KeyPressMask here does swallow other keystrokes typed
+      //during the repaint, which is a fair trade for being able to stop it.
+      XEvent ev;
+      while (XCheckMaskEvent(display, KeyPressMask, &ev)) {
+        if (XLookupKeysym(&ev.xkey, 0) == XK_Escape) aborted = true;
+      }
+      if (aborted) break;
+    }
+
     for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
-      
+
       //do the necessary computations
       cpx c = mand_pixel_group_to_cpx(Point2d<int>(i,j));
+      /* Nothing outside the closed unit disc is meaningful: for |s| >= 1 the maps
+         are not contractions, so there is no attractor and every layer below would
+         be reporting on an object that does not exist.  Leaving those pixels the
+         background color makes the picture stop at a circle instead of fading into
+         black, and saves computing them at all. */
+      if (std::abs(c) > 1.0) {
+        XSetForeground(display, MW.gc, WhitePixel(display, screen));
+        XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size,
+                                             j*mand_pixel_group_size,
+                                             mand_pixel_group_size,
+                                             mand_pixel_group_size);
+        continue;
+      }
       temp_IFS.set_params(c,c);
       
       if (mand_connected && !mand_grid_connected_valid) {
@@ -1887,46 +2836,10 @@ void IFSGui::draw_mand() {
       if (mand_trap && !mand_grid_trap_valid && found_TLB) {
         double trap_radius;
         int multiplier = 100/mand_trap_depth;
-        int diff;
-        if (mand_limit_trap) {
-          diff = multiplier*temp_IFS.check_limit_TLB_recursive(TLB, &TLB_C, &TLB_Z, trap_radius, NULL, mand_trap_depth);
-        } else {
-          diff = multiplier*temp_IFS.check_TLB(TLB,NULL,NULL,trap_radius,NULL,mand_trap_depth);
-        }
+        int diff = multiplier*temp_IFS.check_TLB(TLB,NULL,NULL,trap_radius,NULL,mand_trap_depth);
         mand_data_grid[i][j].z = (diff < 0 ? -1 : get_rgb_color(0, double(diff)/100, 1.0));
       }
-      if (mand_dirichlet && 
-          (!mand_connected || mand_data_grid[i][j].x == -1) && 
-          (!mand_grid_dirichlet_valid || mand_data_grid[i][j].w == -1)) {
-        std::vector<std::pair<Bitword,Bitword> > uv_words;
-        temp_IFS.find_closest_uv_words(uv_words, mand_dirichlet_depth, 0.00000001,4097);
-        std::set<std::pair<Bitword,Bitword> > uv_words_set(uv_words.begin(), uv_words.end());
-        it = sets_to_colors.find(uv_words_set);
-        if (it == sets_to_colors.end()) { //need to add a new color
-          //double r = 0.5*((double)rand()/(double)RAND_MAX) + 0.5;
-          //mand_data_grid[i][j].w = (uv_words.size() == 1 ? get_rgb_color(0, r, r) : get_rgb_color(r, 0, 0) );
-          double r = 1.0/(1+2*log2((double)uv_words.size()));
-          mand_data_grid[i][j].w = get_rgb_color(r, r, r);
-          sets_to_colors[uv_words_set] = mand_data_grid[i][j].w;
-        } else {
-          mand_data_grid[i][j].w = it->second;
-        }
-      }
-      if (mand_set_C && !mand_grid_set_C_valid) {
-        if (temp_IFS.close_to_set_C(mand_set_C_depth, 
-                                    0.707107*mand_pixel_group_width)) {
-          mand_data_grid[i][j][4] = get_rgb_color(1.0,0.0,1.0);
-        }
-      }
-      if (mand_theta && !mand_grid_theta_valid) {
-        double th, lam;
-        if (temp_IFS.compute_coordinates(&th, &lam, mand_theta_depth)) {
-          mand_data_grid[i][j][5] = (int)((th+0.6)*100000.0);
-        } else {
-          mand_data_grid[i][j][5] = -1;
-        }
-      }
-      
+
       //draw the pixel for the impatient
       int col = mand_get_color(mand_data_grid[i][j]);
       XSetForeground(display, MW.gc, col);
@@ -1943,51 +2856,14 @@ void IFSGui::draw_mand() {
     }
   }
   
-  //if we're drawing theta, we need to go back over and get the real values
-  if (mand_theta && !mand_grid_theta_valid) {
-    int min_theta=-1;
-    int max_theta=-1;
-    for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
-      for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
-        if (mand_data_grid[i][j][5] > 0) {
-          if (min_theta==-1 || mand_data_grid[i][j][5] < min_theta) 
-            min_theta = mand_data_grid[i][j][5];
-          if (max_theta==-1 || mand_data_grid[i][j][5] > max_theta) 
-            max_theta = mand_data_grid[i][j][5];
-        }
-      }
-    }
-    int theta_range = double(max_theta - min_theta);
-    for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
-      for (int j=0; j<(int)mand_num_pixel_groups; ++j) {
-        int v = mand_data_grid[i][j][5];
-        if (v > 0) {
-          double amount = double((v-min_theta)%(theta_range/30)) / double(theta_range/30) ;
-          mand_data_grid[i][j][5] = get_rgb_color( 1, amount, amount );
-        }
-        int col = mand_get_color(mand_data_grid[i][j]);
-        XSetForeground(display, MW.gc, col);
-        XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
-                                             j*mand_pixel_group_size, 
-                                             mand_pixel_group_size, 
-                                             mand_pixel_group_size);
-        XCopyArea(display, MW.p, main_window, MW.gc, i*mand_pixel_group_size, 
-                                                     j*mand_pixel_group_size, 
-                                                     mand_pixel_group_size, 
-                                                     mand_pixel_group_size, 
-                                                     MW.ul.x + i*mand_pixel_group_size,
-                                                     MW.ul.y + j*mand_pixel_group_size);
-      }
-    }
+  //an aborted pass left most of the grid at its -1 fill, so the layers must stay
+  //invalid or the half-finished picture becomes the cached answer forever
+  if (!aborted) {
+    if (mand_connected && !mand_grid_connected_valid) mand_grid_connected_valid = true;
+    if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_contains_half_valid = true;
+    if (mand_trap && !mand_grid_trap_valid) mand_grid_trap_valid = true;
   }
-  
-  if (mand_connected && !mand_grid_connected_valid) mand_grid_connected_valid = true;
-  if (mand_contains_half && !mand_grid_contains_half_valid) mand_grid_contains_half_valid = true;
-  if (mand_trap && !mand_grid_trap_valid) mand_grid_trap_valid = true;
-  if (mand_dirichlet && !mand_grid_dirichlet_valid) mand_grid_dirichlet_valid = true;
-  if (mand_set_C && !mand_grid_set_C_valid) mand_grid_set_C_valid = true;
-  if (mand_theta && !mand_grid_theta_valid) mand_grid_theta_valid = true;
-  
+
   //now draw the highlighted point
   Point2d<int> h = mand_cpx_to_pixel(IFS.z);
   int rcol = get_rgb_color(1.0,0.1,0.0);
@@ -2063,11 +2939,22 @@ void IFSGui::draw_mand() {
         if (i == (int)path.half_words.size()) i = 0;
       } while (num_done < num_to_do);
     }
-                                             
-                                             
+
+
   }
-  
+
+  mand_update_legend();
+  mand_draw_scale();
+  mand_draw_guide_circles();
+  mand_draw_landmarks();
   MW.redraw();
+
+  if (aborted) {
+    set_status("mandelbrot: stopped -- the picture is incomplete, so nothing was cached");
+  } else if (computing) {
+    if (mand_trap && !found_TLB) set_status("mandelbrot: done (no trap-like balls in this window)");
+    else                         set_status("mandelbrot: done");
+  }
 }
 
 
@@ -2087,7 +2974,9 @@ void IFSGui::change_highlighted_ifs(cpx c) {
   
   for (int i=pg_i; i<upper_limit_i; ++i) {
     for (int j=pg_j; j<upper_limit_j; ++j) {
-      int col = mand_get_color(mand_data_grid[i][j]);
+      int col = (std::abs(mand_pixel_group_to_cpx(Point2d<int>(i,j))) > 1.0
+                 ? WhitePixel(display, screen)
+                 : mand_get_color(mand_data_grid[i][j]));
       XSetForeground(display, MW.gc, col);
       XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
                                            j*mand_pixel_group_size, 
@@ -2123,6 +3012,8 @@ void IFSGui::mand_zoom(double radius_multiplier) {
   double radius = (mand_ur.real() - mand_ll.real())/2.0;
   cpx c = IFS.z;
   radius *= radius_multiplier;
+  /* clamp, so no path into this function can wander outside the unit disc */
+  if (radius > MAND_MAX_RADIUS) radius = MAND_MAX_RADIUS;
   mand_ll = c - cpx(radius, radius);
   mand_ur = c + cpx(radius, radius);
   mand_reset_mesh();
@@ -2138,9 +3029,6 @@ void IFSGui::mand_recenter() {
   mand_grid_connected_valid = false;
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
-  mand_grid_dirichlet_valid = false;
-  mand_grid_set_C_valid = false;
-  mand_grid_theta_valid = false;
   draw_mand();
 }
 
@@ -2150,14 +3038,11 @@ void IFSGui::mand_reset_mesh() {
   mand_num_pixel_groups = W_mand_plot.width / mand_pixel_group_size;
   mand_data_grid.resize(mand_num_pixel_groups);
   for (int i=0; i<mand_num_pixel_groups; ++i) {
-    mand_data_grid[i] = std::vector<PointNd<6,int> >(mand_num_pixel_groups, PointNd<6,int>(-1));
+    mand_data_grid[i] = std::vector<PointNd<4,int> >(mand_num_pixel_groups, PointNd<4,int>(-1));
   }
   mand_grid_connected_valid = false;
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
-  mand_grid_dirichlet_valid = false;
-  mand_grid_set_C_valid = false;
-  mand_grid_theta_valid = false;
 }
 
 
@@ -2167,7 +3052,12 @@ void IFSGui::recompute_point_data() {
   std::stringstream T;
   T.precision(15);
   int difficulty;
-  T.str(""); T << "Location: " << IFS.z;
+  //full precision and plain space-separated, so the line can be selected and
+  //pasted elsewhere (e.g. back into W_point_param_entry as "re im") -- a
+  //labelled "Location: (a,b)" string could not be reused that way
+  T.str("");
+  T << IFS.z.real() << " " << IFS.z.imag() << "  " << std::abs(IFS.z)
+    << "  " << std::arg(IFS.z)*180.0/M_PI;
   W_point_point.update_text(T.str());
   
   if (!point_connected_check) {
@@ -2203,82 +3093,28 @@ void IFSGui::recompute_point_data() {
   } else {
     IFS.find_closest_uv_words(point_uv_words, point_uv_words_depth);
     T.str("");
-    T << point_uv_words[0].first << " " << point_uv_words[0].second;
+    //find_closest_uv_words gives up and leaves the list empty when the IFS has
+    //no minimal enclosing ball, which happens in the corners of the default view
+    if (point_uv_words.empty()) {
+      T << "invalid (|s| >= 1)";
+    } else {
+      T << point_uv_words[0].first << " " << point_uv_words[0].second;
+    }
   }
   W_point_uv_words_status.update_text(T.str());
   
   if (!point_trap_check) {
     T.str(""); T << "(disabled)";
   } else {
-    std::vector<Ball> TLB;
-    cpx box_ll = IFS.z - cpx(0.0000001, 0.0000001);
-    cpx box_ur = IFS.z + cpx(0.0000001, 0.0000001);
-    double TLB_Z,TLB_C;
+    std::string why;
     T.str("");
-    if (!IFS.TLB_for_region(TLB, box_ll, box_ur, 15, &TLB_C, &TLB_Z, 0)) {
-      T << "Couldn't find TLB for box " << box_ll << " " << box_ur << " at depth " << 15;
-    } else {        
-      double trap_radius;
-      std::vector<std::pair<Bitword,Bitword> > tw;
-      point_trap_words.resize(1);
-      int diff;
-      if (mand_limit_trap) {
-        diff = IFS.check_limit_TLB_recursive(TLB, &TLB_C, &TLB_Z,trap_radius,&tw,point_trap_depth);
-      } else {
-        diff = IFS.check_TLB(TLB, &TLB_C, &TLB_Z,trap_radius,&tw,point_trap_depth);
-      }
-      point_trap_words = tw;
-      if (diff < 0) {
-        T << "not found";
-      } else {
-        T << point_trap_words[0].first << " " << point_trap_words[0].second;
-      }
+    if (!find_trap_words(point_trap_depth, point_trap_words, why)) {
+      T << why;
+    } else {
+      T << point_trap_words[0].first << " " << point_trap_words[0].second;
     }
   }
   W_point_trap_status.update_text(T.str());
-  
-  //std::cout << "Close to set C: ";
-  //if (IFS.close_to_set_C(mand_set_C_depth, 0.707107*mand_pixel_group_width)) {
-  //  std::cout << "yes\n";
-  //} else {
-  //  std::cout << "no\n";
-  //}
-  
-  if (!point_coordinates_check) {
-    T.str(""); T << "(disabled)";
-  } else {    
-    point_coordinates_theta = -1;
-    point_coordinates_lambda = -1;
-    (void) IFS.compute_coordinates(&point_coordinates_theta, 
-                                &point_coordinates_lambda, 
-                                point_coordinates_depth);
-    T.str("");
-    T << "Theta: " << point_coordinates_theta << " Lambda: " << point_coordinates_lambda;
-  }
-  W_point_coordinates_status.update_text(T.str());
-}
-
-
-void IFSGui::find_coordinates_along_path(int verbose) {
-  if (!path.is_valid || currently_drawing_path || path.path.size() == 0) return;
-  ifs temp_IFS;
-  path.coordinates.resize(0);
-  for (int i=0; i<(int)path.path.size(); ++i) {
-    temp_IFS.set_params(path.path[i], path.path[i]);
-    double t1, ell1;
-    double t2, ell2;
-    if (temp_IFS.compute_coordinates( &t1, &ell1, mand_theta_depth ) &&
-        temp_IFS.compute_coordinates( &t2, &ell2, mand_theta_depth+1) ) {
-      if (abs(t1) < 1 && abs(t2) < 1 && abs(ell1) < 3 && abs(ell2) < 3) {
-        path.coordinates.push_back( std::make_pair( 0.5*(t1+t2), 0.5*(ell1+ell2)) );
-      }
-    }
-  }
-  for (int i=0; i<(int)path.coordinates.size(); ++i) {
-    std::cout << "{" << path.coordinates[i].first << "," << 
-                        path.coordinates[i].second << "},";
-  }
-  std::cout << "\n";
 }
 
 
@@ -2337,11 +3173,7 @@ void IFSGui::find_traps_along_path(int verbose) {
       double epsilon = -1;
       int difficulty = -1;
       temp_IFS.set_params(current_z, current_z);
-      if (mand_limit_trap) {
-        difficulty = temp_IFS.check_limit_TLB_recursive(TLB, &TLB_C, &TLB_Z, epsilon, NULL, mand_trap_depth);
-      } else {
-        difficulty = temp_IFS.check_TLB(TLB, &TLB_C, &TLB_Z, epsilon, NULL, mand_trap_depth);
-      }
+      difficulty = temp_IFS.check_TLB(TLB, &TLB_C, &TLB_Z, epsilon, NULL, mand_trap_depth);
       if ( difficulty < 0 ) {
         std::cout << "Failed to find trap at " << current_z << "\n";
         return;
@@ -2381,46 +3213,80 @@ void IFSGui::pack_widget_upper_right(const Widget* w1, Widget* w2) {
     desired_x = 0;
     desired_y = 0;
   }
-  
-  
+
+
   //std::cout << "Packing widget of size " << w2->width << " " << w2->height << "\n";
   //std::cout << "Desired x: " << desired_x << "\n";
-  
-  //go through and check the other widgets to see how 
-  //far down they obstruct this one
-  int greatest_y_obstruction = 0;
-  for (int i=0; i<(int)widgets.size(); ++i) {
-    if (widgets[i] == w1) continue;
-    if (widgets[i]->ul.x == desired_x && 
-        widgets[i]->ul.y + widgets[i]->height > greatest_y_obstruction) {
-      greatest_y_obstruction = widgets[i]->ul.y + widgets[i]->height;
-      //std::cout << "Found widget " << i << " obstructs to height " << greatest_y_obstruction << "\n";
+
+  //Try the desired column, and if it overflows the bottom of the window,
+  //retry exactly once more in a new column just to the right of everything
+  //already stacked in the old one.  "Column" means what it always meant here:
+  //the set of widgets sharing this exact ul.x -- at ul.x==0 that is the plot,
+  //the whole point panel, and the status row all at once, so the widest of
+  //those (not just w2's own desired_x) is where the new column has to start.
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    //go through and check the other widgets to see how
+    //far down they obstruct this one, and how far right this column extends
+    int greatest_y_obstruction = 0;
+    int greatest_column_x = desired_x;
+    for (int i=0; i<(int)widgets.size(); ++i) {
+      if (widgets[i] == w1) continue;
+      if (widgets[i]->ul.x == desired_x) {
+        if (widgets[i]->ul.y + widgets[i]->height > greatest_y_obstruction) {
+          greatest_y_obstruction = widgets[i]->ul.y + widgets[i]->height;
+          //std::cout << "Found widget " << i << " obstructs to height " << greatest_y_obstruction << "\n";
+        }
+        if (widgets[i]->ul.x + widgets[i]->width > greatest_column_x) {
+          greatest_column_x = widgets[i]->ul.x + widgets[i]->width;
+        }
+      }
+    }
+    if (greatest_y_obstruction + w2->height <= main_window_height) {
+      int y = (desired_y > greatest_y_obstruction ? desired_y : greatest_y_obstruction);
+
+      //now determine whether we have to shove it over to make room
+      int greatest_x_obstruction = desired_x;
+      for (int i=0; i<(int)widgets.size(); ++i) {
+        if (widgets[i]->ul.y + widgets[i]->height > y &&
+            widgets[i]->ul.y < y + w2->height &&
+            widgets[i]->ul.x + widgets[i]->width > greatest_x_obstruction) {
+          greatest_x_obstruction = widgets[i]->ul.x + widgets[i]->width;
+        }
+      }
+      int x = greatest_x_obstruction;
+
+      //find the position
+      w2->ul = Point2d<int>(x, y);
+
+      //std::cout << "Packed widget at " << w2->ul << "\n";
+
+      //record it in the list of widgets
+      widgets.push_back(w2);
+      return;
+    }
+    //it didn't fit -- on the first attempt, try again one column over;
+    //if that column is no wider than this one (nothing to gain by moving),
+    //or this was already the second attempt, fall through to the warning.
+    if (attempt == 0 && greatest_column_x > desired_x) {
+      desired_x = greatest_column_x;
+    } else {
+      break;
     }
   }
-  if (greatest_y_obstruction + w2->height > main_window_height) {
-    //std::cout << "Cannot pack widget -- too tall\n";
-    return;
-  }
-  int y = (desired_y > greatest_y_obstruction ? desired_y : greatest_y_obstruction);
-  
-  //now determine whether we have to shove it over to make room
-  int greatest_x_obstruction = desired_x;
-  for (int i=0; i<(int)widgets.size(); ++i) {
-    if (widgets[i]->ul.y + widgets[i]->height > y && 
-        widgets[i]->ul.y < y + w2->height && 
-        widgets[i]->ul.x + widgets[i]->width > greatest_x_obstruction) {
-      greatest_x_obstruction = widgets[i]->ul.x + widgets[i]->width;
-    }
-  }
-  int x = greatest_x_obstruction;
-  
-  //find the position
-  w2->ul = Point2d<int>(x, y);
-  
-  //std::cout << "Packed widget at " << w2->ul << "\n";
-  
-  //record it in the list of widgets
-  widgets.push_back(w2);
+
+  //It still doesn't fit.  This used to return here silently, with only a
+  //commented-out std::cout diagnostic, so a widget could vanish with no clue
+  //why and no visible symptom beyond "the control does nothing".  Now: warn
+  //on stderr, and give the widget a well-defined off-screen ul.  Without
+  //this, ul is left however it was before this call -- zero on the very
+  //first pack, or, on a later mode switch, a stale on-screen position from
+  //the last time this member packed successfully -- and anything packed
+  //relative to it (pack_widget_upper_right(w2, w3)) would silently inherit
+  //that stale position instead of also landing off-screen.
+  std::cerr << "pack_widget_upper_right: widget (w=" << w2->width << ", h=" << w2->height
+            << ") does not fit in column x=" << desired_x << " (main_window_height="
+            << main_window_height << ") even in a new column; it will not be shown.\n";
+  w2->ul = Point2d<int>(1000000, 1000000);
 }
 
 
@@ -2431,7 +3297,81 @@ void IFSGui::detach_widget(Widget* w) {
       break;
     }
   }
+  //if the widget being pulled out from under the layout was the one
+  //receiving keys, drop focus -- otherwise it would keep receiving KeyPress
+  //events after its pixmap/ul may no longer mean anything.
+  if (w == focus_widget) focus_widget = NULL;
   w->clear();
+}
+
+//Shared click_signal for every WidgetEntry: a click just moves the caret to
+//the nearest character boundary under the pointer.  By the time this runs,
+//the ButtonPress branch in main_loop has already made this widget
+//focus_widget (see the hit-test loop), so focus_widget IS the widget that
+//was clicked.
+void IFSGui::S_entry_click(XEvent* e) {
+  if (e->type != ButtonPress || focus_widget == NULL) return;
+  WidgetEntry* W = (WidgetEntry*)focus_widget;
+  int wx = e->xbutton.x - W->ul.x - W->text_position.x - W->label_px;
+  W->caret = clamp_int((wx + W->char_w/2)/W->char_w, 0, (int)W->text.size());
+  W->redraw();
+}
+
+//Tab from an entry: walk the packed widgets (in packing order, which is a
+//reasonable proxy for visual order) for the next one that wants keys, and
+//move focus there.  Wraps around; a no-op if focus_widget isn't packed or no
+//other entry exists.
+void IFSGui::focus_next_entry() {
+  int n = (int)widgets.size();
+  if (n == 0) return;
+  int start = 0;
+  for (int i=0; i<n; ++i) {
+    if (widgets[i] == focus_widget) { start = i; break; }
+  }
+  for (int k=1; k<=n; ++k) {
+    Widget* w = widgets[(start+k)%n];
+    if (w->wants_keys()) {
+      if (focus_widget != NULL) {
+        ((WidgetEntry*)focus_widget)->focused = false;
+        focus_widget->redraw();
+      }
+      focus_widget = w;
+      ((WidgetEntry*)focus_widget)->focused = true;
+      focus_widget->redraw();
+      return;
+    }
+  }
+}
+
+
+
+//Say what we are doing, and make it appear NOW.  Nothing else in this file
+//flushes, so without the XFlush a progress message drawn inside a long loop
+//would only reach the server when the loop ended and main_loop called
+//XNextEvent again -- i.e. exactly when it is no longer of any use.
+void IFSGui::set_status(const std::string& s) {
+  if (!status_widget_ready) return;
+  W_status.update_text(s);
+  XFlush(display);
+}
+
+/* set_status plus a thin bar along the bottom of the status row.  A long recompute
+   reporting "row 403 of 565" is legible only if you read it; a bar is legible at a
+   glance, which is the point of a progress indicator. */
+void IFSGui::set_progress(double frac, const std::string& t) {
+  set_status(t);
+  if (!status_widget_ready) return;
+  if (frac < 0.0) frac = 0.0;
+  if (frac > 1.0) frac = 1.0;
+  Widget& S = W_status;
+  int h = 3, y = S.height - h - 1;
+  int w = (int)(frac*(S.width - 2));
+  XSetForeground(display, S.gc, get_rgb_color(0.80, 0.80, 0.80));
+  XFillRectangle(display, S.p, S.gc, 1, y, S.width - 2, h);
+  XSetForeground(display, S.gc, get_rgb_color(0.10, 0.45, 0.85));
+  if (w > 0) XFillRectangle(display, S.p, S.gc, 1, y, w, h);
+  XCopyArea(display, S.p, main_window, S.gc, 0, 0, S.width, S.height, S.ul.x, S.ul.y);
+  XFlush(display);
 }
 
 
@@ -2466,17 +3406,22 @@ void IFSGui::reset_and_pack_window() {
   int ss = (limit_sidebar_size > mand_sidebar_size ? limit_sidebar_size : mand_sidebar_size);
   int width_rest = (window_mode == BOTH ? (display_width-2*ss)/2 :
                                                  display_width - ss );
-  int height_rest = display_height - 170;
+  //the bottom panel is 9 rows of 20 (7 of point data, a status line, and one
+  //spare); it used to be exactly the 7 rows, which meant any new row silently
+  //vanished in pack_widget_upper_right.  The height allowance below went up by
+  //the same 40, so a window that is limited by the screen height rather than
+  //its width still fits on the screen.
+  int height_rest = display_height - 210;
   int x = (width_rest > height_rest ? height_rest : width_rest);
-  
+
   if (window_mode == MANDELBROT) {
-    main_window_height = x + 140;
+    main_window_height = x + 180;
     main_window_width = x + mand_sidebar_size;
   } else if (window_mode == LIMIT) {
-    main_window_height = x + 140;
+    main_window_height = x + 180;
     main_window_width = x + limit_sidebar_size;
   } else {
-    main_window_height = x + 140;
+    main_window_height = x + 180;
     main_window_width = 2*x + mand_sidebar_size + limit_sidebar_size;
   }
   
@@ -2488,6 +3433,13 @@ void IFSGui::reset_and_pack_window() {
                                     RootWindow(display, screen), 20, 20,
                                     main_window_width, main_window_height, 4,
                                     BlackPixel(display, screen), WhitePixel(display, screen));
+  //the window used to have no name at all, so window lists and screenshot tools
+  //had nothing to call it
+  XStoreName(display, main_window, "schottky");
+  XSetIconName(display, main_window, "schottky");
+  //and ask to be told about the close button rather than being killed by it
+  wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", False);
+  XSetWMProtocols(display, main_window, &wm_delete_window, 1);
   XSelectInput(display, main_window, ExposureMask |
                                      PointerMotionMask |
                                      KeyPressMask |
@@ -2504,18 +3456,29 @@ void IFSGui::reset_and_pack_window() {
   
   //create the buttons and stuff and pack them
   widgets.resize(0);
-  
+  hover_widget = NULL;   //the old pointer would dangle across a relayout
+  //every widget member is about to be reassigned (new ul, new pixmap in some
+  //cases), so a focus left pointing at one of them would mean typing goes to
+  //a widget whose position or pixmap no longer belongs to this window mode.
+  focus_widget = NULL;
+
   //used to fill the text
   std::stringstream T; 
   
+  //the status line spans the whole window, so a long message or filename fits
+  W_status = WidgetText(this, "ready", main_window_width, 20);
+
   //stuff for the IFS computations
   W_switch_to_limit = WidgetButton(this, "Switch to limit", -1, 20, &IFSGui::S_switch_to_limit);
   W_switch_to_mandelbrot = WidgetButton(this, "Switch to mandelbrot", -1,20, &IFSGui::S_switch_to_mandelbrot);
   W_switch_to_combined = WidgetButton(this, "Switch to combined", -1, 20, &IFSGui::S_switch_to_combined);
   
   W_point_title = WidgetText(this, "Current IFS status:", -1, 20);
-  W_point_point = WidgetText(this, "Location: initializing", 500, 20);
-  W_point_connected_check = WidgetCheck(this, "Connectedness", 105, 20, point_connected_check, &IFSGui::S_point_connected);
+  //wide enough for "re im |s| arg" at 15 digits of precision each, with room
+  //to spare, so nothing is clipped and the line stays pasteable in full
+  W_point_point = WidgetText(this, "initializing", 700, 20);
+  W_point_param_entry = WidgetEntry(this, "s = ", "", 340, 20, &IFSGui::S_point_param_entered);
+  W_point_connected_check = WidgetCheck(this, "Connected", 105, 20, point_connected_check, &IFSGui::S_point_connected);
   W_point_connected_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_connected_decrease_depth);
   T.str(""); T << point_connected_depth;
   W_point_connected_depth_label = WidgetText(this, T.str(), -1, 20);
@@ -2542,14 +3505,7 @@ void IFSGui::reset_and_pack_window() {
   W_point_trap_depth_label = WidgetText(this, T.str(), -1, 20);
   W_point_trap_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_trap_increase_depth);
   W_point_trap_status = WidgetText(this, "initializing", x, 20);
-  
-  W_point_coordinates_check = WidgetCheck(this, "Coordinates", 105, 20, point_coordinates_check, &IFSGui::S_point_coordinates);
-  W_point_coordinates_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_coordinates_decrease_depth);
-  T.str(""); T << point_coordinates_depth;
-  W_point_coordinates_depth_label = WidgetText(this, T.str(), -1, 20);
-  W_point_coordinates_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_coordinates_increase_depth);
-  W_point_coordinates_status = WidgetText(this, "initializing", x, 20);
-  
+
   //if the limit set is shown:
   if (window_mode != MANDELBROT) {
     W_limit_plot = WidgetDraw(this, x,x, &IFSGui::S_limit_draw);
@@ -2565,12 +3521,18 @@ void IFSGui::reset_and_pack_window() {
     W_limit_zoom_in = WidgetButton(this, "in", 30, 20, &IFSGui::S_limit_zoom_in);
     W_limit_zoom_out = WidgetButton(this, "out", 30, 20, &IFSGui::S_limit_zoom_out);
     W_limit_center_title = WidgetText(this, "(Click to center)", -1, 20);
-    W_limit_uv_graph = WidgetCheck(this, "Plot uv graph", -1, 20, limit_uv_graph, &IFSGui::S_limit_uv_graph);
+    W_limit_uv_graph = WidgetCheck(this, "uv graph", -1, 20, limit_uv_graph, &IFSGui::S_limit_uv_graph);
     W_limit_uv_graph_depth_title = WidgetText(this, "Depth:", -1, 20);
     W_limit_uv_graph_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_limit_uv_graph_decrease_depth);
     T.str(""); T << limit_uv_graph_depth;
     W_limit_uv_graph_depth_label = WidgetText(this, T.str(), -1, 20);
     W_limit_uv_graph_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_limit_uv_graph_increase_depth);
+    W_limit_trap = WidgetCheck(this, "Trap:", -1, 20, limit_trap, &IFSGui::S_limit_trap);
+    W_limit_trap_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_limit_trap_decrease_depth);
+    T.str(""); T << limit_trap_depth;
+    W_limit_trap_depth_label = WidgetText(this, T.str(), 20, 20);
+    W_limit_trap_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_limit_trap_increase_depth);
+    W_limit_trap_zoom = WidgetButton(this, "to trap", -1, 20, &IFSGui::S_limit_trap_zoom);
     W_limit_nifs = WidgetCheck(this, "nIFS", -1, 20, limit_nifs, &IFSGui::S_limit_nifs);
     //W_limit_gifs = WidgetCheck(this, "gIFS", -1, 20, limit_gifs, &IFSGui::S_limit_gifs);
     W_limit_2d = WidgetCheck(this, "2d IFS", -1, 20, limit_2d, &IFSGui::S_limit_2d);
@@ -2596,6 +3558,11 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_limit_uv_graph_depth_title, &W_limit_uv_graph_depth_leftarrow);
     pack_widget_upper_right(&W_limit_uv_graph_depth_leftarrow, &W_limit_uv_graph_depth_label);
     pack_widget_upper_right(&W_limit_uv_graph_depth_label, &W_limit_uv_graph_depth_rightarrow);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_trap);
+    pack_widget_upper_right(&W_limit_trap, &W_limit_trap_depth_leftarrow);
+    pack_widget_upper_right(&W_limit_trap_depth_leftarrow, &W_limit_trap_depth_label);
+    pack_widget_upper_right(&W_limit_trap_depth_label, &W_limit_trap_depth_rightarrow);
+    pack_widget_upper_right(&W_limit_plot, &W_limit_trap_zoom);
     pack_widget_upper_right(&W_limit_plot, &W_limit_nifs);
     //pack_widget_upper_right(&W_limit_plot, &W_limit_gifs);
     pack_widget_upper_right(&W_limit_plot, &W_limit_2d);
@@ -2615,7 +3582,7 @@ void IFSGui::reset_and_pack_window() {
     std::stringstream T;  T.str("");  T << mand_pixel_group_size;
     W_mand_mesh_label = WidgetText(this, T.str(), -1, 20);
     W_mand_mesh_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_increase_mesh);
-    W_mand_connected_check = WidgetCheck(this, "Connectedness:", 105, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
+    W_mand_connected_check = WidgetCheck(this, "Connected:", 105, 20, (mand_connected ? 1 : 0), &IFSGui::S_mand_connected);
     W_mand_connected_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_connected_decrease_depth);
     T.str("");  T << mand_connected_depth;
     W_mand_connected_depth_label = WidgetText(this, T.str(), -1, 20);
@@ -2630,23 +3597,18 @@ void IFSGui::reset_and_pack_window() {
     T.str("");  T << mand_trap_depth;
     W_mand_trap_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_trap_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_trap_increase_depth);
-    W_mand_limit_trap_check = WidgetCheck(this, "Limit traps", 105, 20, (mand_limit_trap ? 1 : 0), &IFSGui::S_mand_limit_trap);
-    W_mand_dirichlet_check = WidgetCheck(this, "Dirichlet:", 105, 20, mand_dirichlet, &IFSGui::S_mand_dirichlet);
-    W_mand_dirichlet_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_dirichlet_decrease_depth);
-    T.str(""); T << mand_dirichlet_depth;
-    W_mand_dirichlet_depth_label = WidgetText(this, T.str(), -1, 20);
-    W_mand_dirichlet_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_dirichlet_increase_depth);
-    W_mand_set_C_check = WidgetCheck(this, "Set C:", 105, 20, mand_set_C, &IFSGui::S_mand_set_C);
-    W_mand_set_C_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_set_C_decrease_depth);
-    T.str(""); T << mand_set_C_depth;
-    W_mand_set_C_depth_label = WidgetText(this, T.str(), -1, 20);
-    W_mand_set_C_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_set_C_increase_depth);
-    W_mand_theta_check = WidgetCheck(this, "Theta:", 105, 20, mand_set_C, &IFSGui::S_mand_theta);
-    W_mand_theta_depth_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_theta_decrease_depth);
-    T.str(""); T << mand_theta_depth;
-    W_mand_theta_depth_label = WidgetText(this, T.str(), -1, 20);
-    W_mand_theta_depth_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_theta_increase_depth);
-    
+    W_mand_scale_check = WidgetCheck(this, "Scale + axes", 105, 20, (mand_scale ? 1 : 0), &IFSGui::S_mand_scale);
+    W_mand_circle_half_check = WidgetCheck(this, "|s|=1/2", 105, 20, (mand_circle_half ? 1 : 0), &IFSGui::S_mand_circle_half);
+    W_mand_circle_sqrt2_check = WidgetCheck(this, "|s|=1/sqrt2", 105, 20, (mand_circle_sqrt2 ? 1 : 0), &IFSGui::S_mand_circle_sqrt2);
+    W_mand_landmarks_check = WidgetCheck(this, "Landmarks:", 105, 20, (mand_landmarks ? 1 : 0), &IFSGui::S_mand_landmarks);
+    W_mand_landmarks_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_landmarks_decrease);
+    T.str("");  T << mand_landmarks_N;
+    W_mand_landmarks_label = WidgetText(this, T.str(), 20, 20);
+    W_mand_landmarks_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_landmarks_increase);
+    W_mand_annulus_button = WidgetButton(this, "Limit traps in annulus", -1, 20, &IFSGui::S_mand_annulus);
+    W_mand_annulus_result = WidgetText(this, mand_annulus_last, 190, 20);
+    W_mand_legend = WidgetText(this, "color:", 190, 20);
+
     W_mand_mouse_label = WidgetText(this, "Mouse:", 50, 20);
     W_mand_mouse_X = WidgetText(this, "Re: initializing", 200, 20);
     W_mand_mouse_Y = WidgetText(this, "Im: initializing", 200, 20);
@@ -2666,7 +3628,6 @@ void IFSGui::reset_and_pack_window() {
     W_mand_path_tasks_title = WidgetText(this, "Path options:", -1, 20);
     W_mand_path_delete_button = WidgetButton(this, "Delete path", -2, 20, &IFSGui::S_mand_path_delete);
     W_mand_path_find_traps_button = WidgetButton(this, "Find traps along path", -1, 20, &IFSGui::S_mand_path_find_traps);
-    W_mand_path_find_coordinates_button = WidgetButton(this, "Find coords along path", -1, 20, &IFSGui::S_mand_path_find_coordinates);
     W_mand_path_create_movie_button = WidgetButton(this, "Create movie along path", -1, 20, &IFSGui::S_mand_path_create_movie);
     W_mand_path_movie_length_title = WidgetText(this, "Movie length: ", -1, 20);
     W_mand_path_movie_decrease_length = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_path_movie_decrease_length);
@@ -2724,19 +3685,16 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_trap_check, &W_mand_trap_depth_leftarrow);
     pack_widget_upper_right(&W_mand_trap_depth_leftarrow, &W_mand_trap_depth_label);
     pack_widget_upper_right(&W_mand_trap_depth_label, &W_mand_trap_depth_rightarrow);
-    pack_widget_upper_right(&W_mand_plot, &W_mand_limit_trap_check);
-    pack_widget_upper_right(&W_mand_plot, &W_mand_dirichlet_check);
-    pack_widget_upper_right(&W_mand_dirichlet_check, &W_mand_dirichlet_depth_leftarrow);
-    pack_widget_upper_right(&W_mand_dirichlet_depth_leftarrow, &W_mand_dirichlet_depth_label);
-    pack_widget_upper_right(&W_mand_dirichlet_depth_label, &W_mand_dirichlet_depth_rightarrow);
-    pack_widget_upper_right(&W_mand_plot, &W_mand_set_C_check);
-    pack_widget_upper_right(&W_mand_set_C_check, &W_mand_set_C_depth_leftarrow);
-    pack_widget_upper_right(&W_mand_set_C_depth_leftarrow, &W_mand_set_C_depth_label);
-    pack_widget_upper_right(&W_mand_set_C_depth_label, &W_mand_set_C_depth_rightarrow);
-    pack_widget_upper_right(&W_mand_plot, &W_mand_theta_check);
-    pack_widget_upper_right(&W_mand_theta_check, &W_mand_theta_depth_leftarrow);
-    pack_widget_upper_right(&W_mand_theta_depth_leftarrow, &W_mand_theta_depth_label);
-    pack_widget_upper_right(&W_mand_theta_depth_label, &W_mand_theta_depth_rightarrow);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_scale_check);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_circle_half_check);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_circle_sqrt2_check);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_landmarks_check);
+    pack_widget_upper_right(&W_mand_landmarks_check, &W_mand_landmarks_leftarrow);
+    pack_widget_upper_right(&W_mand_landmarks_leftarrow, &W_mand_landmarks_label);
+    pack_widget_upper_right(&W_mand_landmarks_label, &W_mand_landmarks_rightarrow);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_annulus_button);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_annulus_result);
+    pack_widget_upper_right(&W_mand_plot, &W_mand_legend);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_label);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_X);
     pack_widget_upper_right(&W_mand_plot, &W_mand_mouse_Y);
@@ -2754,7 +3712,6 @@ void IFSGui::reset_and_pack_window() {
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_tasks_title);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_delete_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_traps_button);
-      pack_widget_upper_right(&W_mand_plot, &W_mand_path_find_coordinates_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_create_movie_button);
       pack_widget_upper_right(&W_mand_plot, &W_mand_path_movie_length_title);
       pack_widget_upper_right(&W_mand_path_movie_length_title, &W_mand_path_movie_decrease_length);
@@ -2803,13 +3760,20 @@ void IFSGui::reset_and_pack_window() {
   pack_widget_upper_right(&W_point_trap_leftarrow, &W_point_trap_depth_label);
   pack_widget_upper_right(&W_point_trap_depth_label, &W_point_trap_rightarrow);
   pack_widget_upper_right(&W_point_trap_rightarrow, &W_point_trap_status);
-  pack_widget_upper_right(NULL, &W_point_coordinates_check);
-  pack_widget_upper_right(&W_point_coordinates_check, &W_point_coordinates_leftarrow);
-  pack_widget_upper_right(&W_point_coordinates_leftarrow, &W_point_coordinates_depth_label);
-  pack_widget_upper_right(&W_point_coordinates_depth_label, &W_point_coordinates_rightarrow);
-  pack_widget_upper_right(&W_point_coordinates_rightarrow, &W_point_coordinates_status);
-  
-  
+  //this is the one spare 20px row the bottom panel's height budget sets
+  //aside (see the comment on height_rest above); if a later row is ever
+  //added here too, pack_widget_upper_right now wraps it into a new column
+  //instead of silently dropping it, but it is worth keeping this panel
+  //inside its budget rather than relying on that.
+  pack_widget_upper_right(NULL, &W_point_param_entry);
+
+  //the status line is the last row, under everything else.  If there was no
+  //room for it, leave set_status inert rather than blitting to a stale position.
+  status_widget_ready = false;
+  pack_widget_upper_right(NULL, &W_status);
+  status_widget_ready = (!widgets.empty() && widgets.back() == &W_status);
+
+
   
   //invalidate the grids and stuff
   if (window_mode != LIMIT) {
@@ -2822,6 +3786,52 @@ void IFSGui::reset_and_pack_window() {
   }
   
   //plot the limit set
+
+
+  /* One-line hover help per control (see Widget::help).  Assigned here, after the
+     widgets are constructed and before they are packed, so the list stays in one
+     place rather than scattered through the construction code. */
+  W_switch_to_limit.help = "show only the limit set Lambda_s of the selected parameter";
+  W_switch_to_mandelbrot.help = "show only parameter space";
+  W_switch_to_combined.help = "show the limit set and parameter space side by side";
+  W_limit_plot.help = "the limit set Lambda_s; click to recenter";
+  W_limit_depth_title.help = "word length n: the picture is the image of a point (or disk) under all words in f,g of length n";
+  W_limit_depth_auto.help = "adjust n automatically so the picture stays sharp while zooming";
+  W_limit_chunky.help = "draw disks instead of points; then the picture provably CONTAINS the limit set";
+  W_limit_colors.help = "color f(Lambda) and g(Lambda) differently";
+  W_limit_uv_graph.help = "label the balls at the given depth and join closest f/g pairs; paths in this graph are short-hop paths";
+  W_limit_trap.help = "draw the trap certifying this parameter: the two words u,v whose clusters interleave, in magenta and green";
+  W_limit_trap_depth_leftarrow.help = "shorter trap words: faster, but a trap may exist only at greater length";
+  W_limit_trap_depth_rightarrow.help = "longer trap words: finds traps closer to the boundary of M, and costs more";
+  W_limit_trap_zoom.help = "take the view to the trap, which is only a few pixels across at this scale";
+  W_limit_nifs.help = "plot the 3-generator IFS of DIFFERENCES of points of Lambda; s is in M exactly when 2/s lies in it";
+  W_limit_2d.help = "the affine limit set; only meaningful for real part of s between 0.6 and 0.68";
+  W_mand_plot.help = "parameter space: left-click picks a parameter (drag to sweep), right-click picks and zooms in";
+  W_mand_recenter.help = "recenter the window on the selected parameter";
+  W_mand_mesh_title.help = "how many screen pixels make up one computed cell; smaller is sharper and slower";
+  W_mand_connected_check.help = "plot M, the set where Lambda_s is connected; the shade shows how hard a touching pair was to find";
+  W_mand_contains_half_check.help = "plot M_0, the parameters whose limit set contains the point 1/2";
+  W_mand_trap_check.help = "search for CKW traps, which certify a whole disk of parameters inside M; needs a well zoomed-in window and works best near the boundary of M";
+  W_mand_scale_check.help = "draw a scale bar and the coordinate axes; a deep zoom is otherwise impossible to place";
+  W_mand_circle_half_check.help = "draw the circle |s| = 1/2; below it the attractor is a Cantor set, so dM lies outside";
+  W_mand_circle_sqrt2_check.help = "draw the circle |s| = 1/sqrt2; at or above it the attractor is robustly connected, so dM lies inside";
+  W_mand_landmarks_check.help = "mark the renormalization points of complexity a+b <= N, where the limit-trap mechanism applies; click one to select it exactly";
+  W_mand_landmarks_leftarrow.help = "lower the complexity bound N (fewer, simpler landmark points)";
+  W_mand_landmarks_rightarrow.help = "raise the complexity bound N; 9 gives 46201 points, which reads as noise";
+  W_mand_annulus_button.help = "at the selected landmark, certify limit traps over one fundamental annulus of E_sigma and write the figure as png/eps/pdf; Escape aborts";
+  W_mand_annulus_result.help = "result of the last annulus run; it stays here after the status line moves on";
+  W_mand_legend.help = "priority order of the color layers: the first one with a value wins; white means disconnected, or |s| > 1 where there is no attractor";
+  W_mand_output_window.help = "print the current window corners to the terminal";
+  W_mand_output_picture.help = "recompute this view at the chosen resolution and write it as png, eps and pdf plus a .txt sidecar";
+  W_mand_path_create_by_drawing_button.help = "draw a path in parameter space by clicking a sequence of points";
+  W_mand_path_create_by_boundary_button.help = "trace the boundary of the component of the complement of M containing the selected parameter";
+  W_point_param_entry.help = "type a parameter and press Enter: 're im', 're+imi', a bare angle in degrees on |s|=1/sqrt2, or 'deg@r'";
+  W_point_point.help = "the selected parameter: real, imaginary, |s|, arg in degrees -- select and copy it";
+  W_point_connected_check.help = "test whether Lambda_s is connected at the selected parameter";
+  W_point_contains_half_check.help = "test whether Lambda_s contains the point 1/2";
+  W_point_uv_words_check.help = "find the closest pair of words u,v with u(Lambda) meeting v(Lambda)";
+  W_point_trap_check.help = "search for a trap at the selected parameter, certifying a disk of parameters around it inside M";
+  W_status.help = "status line: progress, results, and this help";
   if (window_mode != MANDELBROT) draw_limit();
   if (window_mode != LIMIT) draw_mand();
   
@@ -2838,16 +3848,46 @@ void IFSGui::main_loop() {
     XNextEvent(display, &e);
     //if it was the keyboard, we deal with it here
     if (e.type == KeyPress) {
-      if(XLookupKeysym(&e.xkey, 0) == XK_q){ 
+      //an entry with focus eats every key, including 'q' -- otherwise there
+      //would be no way to type the letter q into a parameter entry
+      if (focus_widget != NULL) { focus_widget->handle_key(&e); continue; }
+      if(XLookupKeysym(&e.xkey, 0) == XK_q){
         break;
       }
-     
-    //if it involves the mouse, we find the appropriate 
+
+    //if it involves the mouse, we find the appropriate
     //widget to send it off to
     } else if (e.type == ButtonPress || e.type == MotionNotify) {
+      /* Hover help.  Its own scan rather than part of the dispatch loop below,
+         because that loop skips widgets with no click_signal -- exactly the plain
+         labels and readouts a newcomer most wants explained.  Only report when the
+         widget under the pointer CHANGES: motion events arrive in floods and
+         set_status calls XFlush. */
+      if (e.type == MotionNotify) {
+        Widget* over = NULL;
+        for (int i=0; i<(int)widgets.size(); ++i)
+          if (widgets[i]->contains_pixel(e.xbutton.x, e.xbutton.y)) { over = widgets[i]; break; }
+        if (over != hover_widget) {
+          hover_widget = over;
+          if (over != NULL && !over->help.empty()) set_status(over->help);
+        }
+      }
       for (int i=0; i<(int)widgets.size(); ++i) {
         if (widgets[i]->contains_pixel( e.xbutton.x, e.xbutton.y) &&
             widgets[i]->click_signal != NULL) {
+          //focus only ever moves on a real click, never on mere motion --
+          //otherwise the pointer passing over an entry while dragging
+          //elsewhere would steal keystrokes out from under the user.
+          if (e.type == ButtonPress) {
+            if (focus_widget != NULL && focus_widget != widgets[i]) {
+              ((WidgetEntry*)focus_widget)->focused = false; focus_widget->redraw();
+              focus_widget = NULL;
+            }
+            if (widgets[i]->wants_keys()) {
+              focus_widget = widgets[i];
+              ((WidgetEntry*)focus_widget)->focused = true;
+            }
+          }
           (this->*(widgets[i]->click_signal))(&e);
           break;
         }
@@ -2862,6 +3902,10 @@ void IFSGui::main_loop() {
           widgets[i]->redraw();
         }
       }
+
+    //the window manager's close button; quit the same way 'q' does
+    } else if (e.type == ClientMessage) {
+      if ((Atom)e.xclient.data.l[0] == wm_delete_window) break;
     }
     
   }
@@ -2887,6 +3931,16 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   limit_colors = true;
   limit_uv_graph = false;
   limit_uv_graph_depth = 3;
+  limit_trap = false;
+  /* 16 rather than 12: with the corrected TLB build depth, the first trap on the circle
+     between 40 and 90 degrees needs up to 14 letters, so 12 reported "not found" at
+     parameters where a trap exists. */
+  limit_trap_depth = 16;
+  trap_cache_valid = false;
+  trap_cache_ok = false;
+  trap_cache_depth = -1;
+  limit_trap_located = false;
+  limit_trap_radius = 0.0;
   limit_nifs = false;
   limit_gifs = false;
   limit_2d = false;
@@ -2904,13 +3958,20 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_contains_half_depth = 16;
   mand_trap = false;
   mand_trap_depth = 20;
-  mand_limit_trap = false;
-  mand_dirichlet = false;
-  mand_dirichlet_depth = 3;
-  mand_set_C = false;
-  mand_set_C_depth = 10;
-  mand_theta = false;
-  mand_theta_depth = 8;
+  /* Annulus-figure defaults.  These MUST live in the constructor: they were briefly
+     inside mand_rebuild_landmarks, which only runs if the user toggles Landmarks on,
+     so pressing the annulus button first would have used uninitialised values. */
+  mand_annulus_res = 360;
+  mand_annulus_cmax = 14;            /* base, before the descent term; see S_mand_annulus */
+  mand_annulus_ball_depth = 20;
+  mand_annulus_last = "annulus: not run yet";
+  mand_scale = true;          /* on by default: knowing the scale is never unwanted */
+  mand_circle_half = false;
+  mand_circle_sqrt2 = false;
+  mand_landmarks = false;
+  mand_landmarks_N = 7;              /* 2421 points, 0.12s -- see S_mand_landmarks_increase */
+  mand_landmark_list_N = -1;
+  mand_landmark_selected = -1;
   mand_output_picture_size = 1000;
   
   point_connected_check = true;
@@ -2923,22 +3984,41 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   point_uv_words_depth = 18;
   point_uv_words.resize(0);
   point_trap_check = false;
-  point_trap_depth = 12;
+  point_trap_depth = 16;
   point_trap_words.resize(0);
-  point_coordinates_check = false;
-  point_coordinates_depth = 12;
-  
+
   currently_drawing_path = false;
-  
-  
+
+  //no widget exists yet at all, let alone one with focus
+  focus_widget = NULL;
+  hover_widget = NULL;
+
+  //W_status has no pixmap until reset_and_pack_window builds it, so set_status
+  //must be a no-op until then
+  status_widget_ready = false;
+
   //set up the graphics
   display = XOpenDisplay(NULL);
+  if (display == NULL) {
+    //Without this check every Xlib call below dereferences a null Display* and the program
+    //dies with a segfault and no explanation.  Happens over plain ssh, with DISPLAY unset,
+    //or on macOS without XQuartz.
+    std::cerr << "schottky: cannot open an X display";
+    const char* dsp = getenv("DISPLAY");
+    if (dsp == NULL || dsp[0] == 0) std::cerr << " (DISPLAY is not set)";
+    else                            std::cerr << " (DISPLAY=" << dsp << ")";
+    std::cerr << ".\nThe interactive program needs a display.  Under ssh use 'ssh -X', on\n"
+              << "macOS install XQuartz, or use the headless tools certify_arc and funddom,\n"
+              << "which need no display.\n";
+    exit(1);
+  }
   screen = DefaultScreen(display);
   if (display == NULL) {
     std::cout << "Failed to open display\n";
     return;
   }
   main_window_initialized = false;
+  the_gui_font = NULL;
   
   //reset (set) the window
   limit_sidebar_size = 130;

@@ -20,6 +20,9 @@ halfspace halfspace_on_left(cpx x1, cpx x2) {
 
 
 
+/* a debugging window: plot several point sets in different colors and wait for
+ * a keypress.  Nothing calls it, but it is handy to drop into a computation. */
+#ifndef IFS_NO_GRAPHICS
 void show_stuff(const std::vector<cpx>* points,
                 const std::vector<cpx>* red_points,
                 const std::vector<cpx>* blue_points,
@@ -87,104 +90,13 @@ void show_stuff(const std::vector<cpx>* points,
   }
   X2.wait_for_key();
 }
+#endif /* IFS_NO_GRAPHICS */
 
 
 
 
-//this function finds the extremal x and y points and throws out any point contained 
-//in the diamond they make
-//the return value is a list of the indices which *could* be in the convex hull
-void heuristic_convex_hull(std::vector<int>& ch, const std::vector<cpx>& X) {
-  //find the four extremal points
-  int min_x_ind=0;
-  int max_x_ind=0; 
-  int min_y_ind=0; 
-  int max_y_ind=0;
-  double max_x = X[0].real();
-  double min_x = X[0].real();
-  double max_y = X[0].imag(); 
-  double min_y = X[0].imag();
-  for (int i=1; i<(int)X.size(); ++i) {
-    double x = X[i].real();
-    double y = X[i].imag();
-    if (x < min_x) {
-      min_x = x;
-      min_x_ind = i;
-    } else if (x > max_x) {
-      max_x = x;
-      max_x_ind = i;
-    }
-    if (y < min_y) {
-      min_y = y;
-      min_y_ind = i;
-    } else if (y > max_y) {
-      max_y = y;
-      max_y_ind = i;
-    }
-  }
-  if (min_x_ind == max_x_ind || min_x_ind == min_y_ind || min_x_ind == max_y_ind ||
-      max_x_ind == min_y_ind || max_x_ind == max_y_ind || 
-      min_y_ind == max_y_ind) { 
-    //just return all of them -- we don't want to think about this case
-    ch.resize(X.size());
-    for (int i=0; i<(int)X.size(); ++i) {
-      ch[i] = i;
-    }
-  }
-  halfspace UR( perp_to(X[max_y_ind] - X[max_x_ind]), X[max_x_ind] );
-  halfspace UL( perp_to(X[min_x_ind] - X[max_y_ind]), X[max_y_ind] );
-  halfspace LL( perp_to(X[min_y_ind] - X[min_x_ind]), X[min_y_ind] );
-  halfspace LR( perp_to(X[max_x_ind] - X[min_y_ind]), X[min_y_ind] );
-  ch.resize(0);
-  for (int i=0; i<(int)X.size(); ++i) {
-    if (UR.strictly_contains(X[i]) && UL.strictly_contains(X[i]) &&
-        LL.strictly_contains(X[i]) && LR.strictly_contains(X[i])) {
-      continue;
-    } else {
-      ch.push_back(i);
-    }
-  }
-}
   
 
-//return the indices into the lists ch_1 and ch_2
-//whose hyperplane to the left contains the other points
-void extreme_indices(int& ind_1, int& ind_2, 
-                    const std::vector<int>& ch_1,
-                    const std::vector<int>& ch_2,
-                    const std::vector<cpx>& X) {
-  ind_1 = ind_2 = 0;
-  while (true) {
-    halfspace H = halfspace_on_left(X[ch_1[ind_1]], X[ch_2[ind_2]]);
-    //find the point most violating
-    int largest_1_violator = -1;
-    double largest_1_violation = 0;
-    for (int i=0; i<(int)ch_1.size(); ++i) {
-      double v = H.val(X[ch_1[i]]);
-      if (v > 0 && (largest_1_violator == -1 || v > largest_1_violation)) {
-        largest_1_violator = i;
-        largest_1_violation = v;
-      }
-    }
-    int largest_2_violator = -1;
-    double largest_2_violation = 0;
-    for (int i=0; i<(int)ch_2.size(); ++i) {
-      double v = H.val(X[ch_2[i]]);
-      if (v > 0 && (largest_2_violator == -1 || v > largest_2_violation)) {
-        largest_2_violator = i;
-        largest_2_violation = v;
-      }
-    }
-    if (largest_1_violator == -1 && largest_2_violator == -1) {
-      return;
-    }
-    if (largest_1_violation > largest_2_violation) {
-      ind_1 = largest_1_violator;
-    } else {
-      ind_2 = largest_2_violator;
-    }
-  }
-}
 
   
 bool cmp_pairs(const std::pair<double, int>& a, 
@@ -198,133 +110,68 @@ bool cmp_pairs_reverse(const std::pair<double, int>& a,
 }
 
 
-//this *assumes* that the indices in initial_indices are 
-//sorted in increasing x order
-void convex_hull_recurse(std::vector<int>& ch, 
-                         const std::vector<int>& initial_indices,
-                         const std::vector<cpx>& X) {
-  if (initial_indices.size() < 2) {
-    ch = initial_indices;
-    return;
-  
-  } else if (initial_indices.size() == 2) {
-    ch = initial_indices;
-    return;
-  }
-  
-  //if we're here, we should divide it, recurse, and recombine
-  int cut_index = initial_indices.size()/2;
-  int left_over = initial_indices.size()-cut_index;
-  std::vector<int> indices_1(cut_index);
-  std::vector<int> indices_2(left_over);
-  for (int i=0; i<cut_index; ++i) {
-    indices_1[i] = initial_indices[i];
-  }
-  for (int i=0; i<left_over; ++i) {
-    indices_2[i] = initial_indices[cut_index+i];
-  }
-  
-  //std::vector<cpx> rp(indices_1.size());
-  //for (int i=0; i<(int)rp.size(); ++i) {
-  //  rp[i] = X[indices_1[i]];
-  //}
-  //std::vector<cpx> bp(indices_2.size());
-  //for (int i=0; i<(int)bp.size(); ++i) {
-  //  bp[i] = X[indices_2[i]];
-  //}
-  //show_stuff(NULL, &rp, &bp, NULL, NULL);
-  
-  //the sub convex hulls
-  std::vector<int> ch_1;
-  std::vector<int> ch_2;
-  convex_hull_recurse(ch_1, indices_1, X);
-  convex_hull_recurse(ch_2, indices_2, X);
-  
-  //std::vector<cpx> h_1(ch_1.size());
-  //for (int i=0; i<(int)ch_1.size(); ++i) {
-  //  h_1[i] = X[ch_1[i]];
-  //}  
-  //std::vector<cpx> h_2(ch_2.size());
-  //for (int i=0; i<(int)ch_2.size(); ++i) {
-  //  h_2[i] = X[ch_2[i]];
-  //}
-  //show_stuff(NULL, &rp, &bp, &h_1, &h_2);
-  
-  
-  //recombine -- there are two halfspaces to find
-  //they go top_2 - > top_1 and bottom_1 -> bottom_2
-  int top_1;
-  int top_2;
-  int bottom_1;
-  int bottom_2;
-  extreme_indices(top_2, top_1, ch_2, ch_1, X);
-  extreme_indices(bottom_1, bottom_2, ch_1, ch_2, X);
-  
-  //we get the convex hull by tracing out everything until the junctions, 
-  //then skipping over them
-  ch.resize(0);
-  if (top_1 == bottom_1) {
-    ch.push_back(ch_1[top_1]);
-  } else {
-    int i = top_1;
-    while (true) {
-      ch.push_back(ch_1[i]);
-      if (i == bottom_1) break;
-      i = (i == (int)ch_1.size()-1 ? 0 : i+1);
-    }
-  }
-  
-  if (top_2 == bottom_2) {
-    ch.push_back(ch_2[top_2]);
-  } else {
-    int i = bottom_2;
-    while (true) {
-      ch.push_back(ch_2[i]);
-      if (i == top_2) break;
-      i = (i == (int)ch_2.size()-1 ? 0 : i+1);
-    }
-  }
-  
-  //std::vector<cpx> h(ch.size());
-  //for (int i=0; i<(int)ch.size(); ++i) {
-  //  h[i] = X[ch[i]];
-  //}
-  //show_stuff(NULL, &rp, &bp, &h, NULL);
-  
+//signed area of triangle O,A,B (>0 iff O->A->B is a left turn / CCW)
+static double hull_cross(const cpx& O, const cpx& A, const cpx& B) {
+  return (A.real()-O.real())*(B.imag()-O.imag())
+       - (A.imag()-O.imag())*(B.real()-O.real());
 }
 
+//comparator for sorting point indices by (real, then imag)
+struct hull_index_less {
+  const std::vector<cpx>* X;
+  hull_index_less(const std::vector<cpx>& x) : X(&x) {}
+  bool operator()(int a, int b) const {
+    if ((*X)[a].real() != (*X)[b].real()) return (*X)[a].real() < (*X)[b].real();
+    return (*X)[a].imag() < (*X)[b].imag();
+  }
+};
 
-void convex_hull(std::vector<int>& ch, 
+//Robust convex hull via Andrew's monotone chain.
+//Returns indices of X on the hull in COUNTERCLOCKWISE order, which is REQUIRED
+//by the single caller ball_convex_hull (it uses perp_to(x2-x1) as the OUTWARD
+//normal, which only points outward for a CCW traversal).  Collinear interior
+//points are dropped (cross <= 0 is popped); exact-duplicate coordinates are
+//collapsed.  This replaced an earlier heuristic + divide-and-conquer hull pair
+//whose merge step (an unguarded while(true)) failed to terminate on the
+//near-collinear covers of the dimension-2 attractor that occur on the circle
+//|s|=1/sqrt(2).
+void convex_hull(std::vector<int>& ch,
                  const std::vector<cpx>& X) {
+  int N = (int)X.size();
+  ch.resize(0);
+  if (N == 0) return;
 
-  //std::cout << "Got input points: \n";
-  //show_stuff(&X, NULL, NULL, NULL, NULL);
-  
-  //this sets ch to list the indices that might be in the convex hull
-  heuristic_convex_hull(ch, X);
-  
-  //std::cout << "Did the heuristic: \n";
-  //std::vector<cpx> temp_X(ch.size());
-  //for (int i=0; i<(int)ch.size(); ++i) {
-  //  temp_X[i] = X[ch[i]];
-  //}
-  //show_stuff(&temp_X, NULL, NULL, NULL, NULL);
+  //sort indices by (real, then imag)
+  std::vector<int> idx(N);
+  for (int i=0; i<N; ++i) idx[i] = i;
+  std::sort(idx.begin(), idx.end(), hull_index_less(X));
 
-  //sort the points into increasing x order
-  std::vector<std::pair<double, int> > x_vals(ch.size());
-  for (int i=0; i<(int)ch.size(); ++i) {
-    x_vals[i] = std::make_pair(X[ch[i]].real(), ch[i]);
+  //collapse exact-duplicate coordinates (keep first)
+  std::vector<int> pts;
+  pts.reserve(N);
+  for (int k=0; k<N; ++k) {
+    int i = idx[k];
+    if (!pts.empty() && X[pts.back()].real()==X[i].real()
+                     && X[pts.back()].imag()==X[i].imag()) continue;
+    pts.push_back(i);
   }
-  std::sort(x_vals.begin(), x_vals.end(), cmp_pairs);
-  
-  //put them in the list
-  std::vector<int> initial_indices(ch.size());
-  for (int i=0; i<(int)ch.size(); ++i) {
-    initial_indices[i] = x_vals[i].second;
+  int n = (int)pts.size();
+  if (n < 3) { ch = pts; return; }  //0,1,2 distinct points: hull is all of them
+
+  //monotone chain: lower hull (L->R) then upper hull (R->L) gives CCW
+  std::vector<int> h(2*n);
+  int m = 0;
+  for (int k=0; k<n; ++k) {
+    while (m>=2 && hull_cross(X[h[m-2]], X[h[m-1]], X[pts[k]]) <= 0.0) --m;
+    h[m++] = pts[k];
   }
-  
-  convex_hull_recurse(ch, initial_indices, X);
-  
+  int lower = m+1;
+  for (int k=n-2; k>=0; --k) {
+    while (m>=lower && hull_cross(X[h[m-2]], X[h[m-1]], X[pts[k]]) <= 0.0) --m;
+    h[m++] = pts[k];
+  }
+  h.resize(m-1);  //drop the last point (== first)
+  ch = h;
 }
 
 
@@ -426,9 +273,11 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
     }
     ++current_gap_ind;
   }
+#ifndef IFS_NO_GRAPHICS
+  //show the hull, the balls and the trap-like balls we just found
   if (verbose > 0) {
     cpx ll, ur;
-    box_containing_balls(balls, ll, ur);  
+    box_containing_balls(balls, ll, ur);
     double drawing_width = ur.real() - ll.real();
     int num_drawing_pixels = 512;
     double pixel_diameter = drawing_width / double(num_drawing_pixels);
@@ -485,11 +334,107 @@ void ifs::trap_like_balls_from_balls(std::vector<Ball>& TLB,
       X3.wait_for_key();
     }
   }
+#endif /* IFS_NO_GRAPHICS */
 }
-    
+
+
   
-  
     
+
+//keep only the maximal balls: drop b when some kept ball contains it.  Same greedy
+//pass as prune_tlb.py -- sort by radius descending, keep a ball unless an already
+//kept one swallows it.  O(n^2) in the kept count, which is fine at ~2000 balls.
+static void prune_to_maximal(std::vector<Ball>& B) {
+  std::vector<std::pair<double,int> > order(B.size());
+  for (int i=0; i<(int)B.size(); ++i) order[i] = std::make_pair(B[i].radius, i);
+  std::sort(order.begin(), order.end());
+  std::reverse(order.begin(), order.end());
+  std::vector<Ball> kept;
+  for (int k=0; k<(int)order.size(); ++k) {
+    const Ball& b = B[order[k].second];
+    bool swallowed = false;
+    for (int j=0; j<(int)kept.size(); ++j) {
+      //b lies inside kept[j] exactly when |c_b - c_j| + r_b <= r_j
+      if (abs(b.center - kept[j].center) + b.radius <= kept[j].radius) { swallowed = true; break; }
+    }
+    if (!swallowed) kept.push_back(b);
+  }
+  B.swap(kept);
+}
+
+bool ifs::trap_like_balls_many(std::vector<Ball>& TLB,
+                               cpx ll, cpx ur, int n_depth,
+                               int ngaps, int ntrials, int nradial,
+                               bool prune,
+                               int verbose) {
+  TLB.resize(0);
+  //the region-valid radius and subtraction, exactly as TLB_for_region computes them:
+  //every ball has to stay trap-like over the whole parameter box, so the subtraction
+  //absorbs both the depth-n truncation and the box width.
+  double KK, CC, AA, ZZ;
+  get_TLB_constants(ll, ur, KK, CC, AA, ZZ);
+  cpx z0 = 0.5*(ll+ur);
+  double Rz0 = std::pow(AA,(double)n_depth)*KK + 4*KK
+             + 3.0*(1.0/std::pow(abs(z0),n_depth))*CC*sqrt(2.0)*abs(0.5*(ur-ll).real());
+  double radius_subtraction = std::pow(abs(z0),n_depth)*Rz0
+                            + 2*CC*sqrt(2.0)*abs(0.5*(ur-ll).real());
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) {
+    if (verbose>0) std::cout << "trap_like_balls_many: no minimal enclosing radius\n";
+    return false;
+  }
+  Ball initial_ball(0.5, (z-1.0)/2.0, (1.0-w)/2.0, Rz0);
+  std::vector<Ball> balls;
+  compute_balls_right(balls, initial_ball, n_depth);
+
+  std::vector<int> ch; std::vector<cpx> bp; std::vector<halfspace> H;
+  ball_convex_hull(ch, bp, H, balls);
+  if (ch.size() < 2) {
+    if (verbose>0) std::cout << "trap_like_balls_many: degenerate hull\n";
+    return false;
+  }
+  //visit the widest gaps first: those are where a trap-like ball has room to be large
+  std::vector<std::pair<double,int> > gp(ch.size());
+  for (int i=0; i<(int)ch.size(); ++i) {
+    int ip1 = (i==(int)ch.size()-1 ? 0 : i+1);
+    gp[i] = std::make_pair(abs(bp[2*ip1]-bp[2*i+1]), i);
+  }
+  std::sort(gp.begin(), gp.end());
+  std::reverse(gp.begin(), gp.end());
+
+  for (int gi=0; gi<(int)gp.size() && gi<ngaps; ++gi) {
+    int i = gp[gi].second;
+    int ip1 = (i==(int)ch.size()-1 ? 0 : i+1);
+    cpx x1 = bp[2*i+1], x2 = bp[2*ip1];
+    cpx v = -perp_to(x2-x1);
+    v = v/abs(v);                          //unit inward normal to the gap
+    for (int j=1; j<=ntrials; ++j) {
+      double lam = (double)j/(double)(ntrials+1);
+      cpx p = lam*x1 + (1.0-lam)*x2;
+      double thit = when_ray_hits_ball(p, v, balls);
+      for (int k=1; k<=nradial; ++k) {
+        cpx q = p + (thit*(double)k/(double)(nradial+1))*v;
+        double alpha = distance_from_balls(q, balls) - radius_subtraction;
+        if (alpha > 0) {
+          //the two hull contact points give the two translates, as in CKW Def 8.2.3
+          TLB.push_back(Ball(q-x1, alpha));
+          TLB.push_back(Ball(q-x2, alpha));
+        }
+      }
+    }
+  }
+  if (verbose>0)
+    std::cout << "trap_like_balls_many: " << TLB.size() << " balls from "
+              << balls.size() << " at depth " << n_depth << ", subtraction "
+              << radius_subtraction << "\n";
+  if (prune) {
+    int before = (int)TLB.size();
+    prune_to_maximal(TLB);
+    if (verbose>0)
+      std::cout << "  pruned " << before << " -> " << TLB.size() << " maximal\n";
+  }
+  return TLB.size() > 0;
+}
 
 bool ifs::trap_like_balls(std::vector<Ball>& TLB, 
                           double initial_radius, 
@@ -686,11 +631,14 @@ int ifs::check_TLB(const std::vector<Ball>& TLB,
       if (dist < -0.001) {
         if (TLB_C == NULL) return bz.word_len;
         double ep = (pow(*TLB_Z, bz.word_len)/(2.0*(*TLB_C)))*(TLB[i].radius - abs(TLB[i].center - d));
-        if (ep > best_radius) {
-          best_radius = ep;
-        }
+        //Test before updating best_radius, not after.  The comparison used to sit below
+        //the assignment, so it was always false and the best (u,v) pair was never moved
+        //to the front of trap_w -- callers that take trap_w->front() as "the" certifying
+        //pair were getting whichever pair happened to be found first instead.
+        bool is_best = (ep > best_radius);
+        if (is_best) best_radius = ep;
         if (trap_w != NULL) {
-          if (ep > best_radius) {
+          if (is_best) {
             trap_w->insert(trap_w->begin(), std::make_pair(Bitword(bz.word, bz.word_len),
                                                            Bitword(bw.word, bw.word_len)));
           } else {
@@ -716,13 +664,178 @@ int ifs::check_TLB(const std::vector<Ball>& TLB,
     }
   }
   return -1;
-  
+
 }
 
 
-int ifs::check_limit_TLB(const std::vector<Ball>& TLB, 
-                         double* TLB_C, double* TLB_Z, 
-                         double& trap_radius, 
+//Guided level-synchronous beam variant of check_TLB.  At each depth level we
+//keep only the beam_width most-promising pairs (smallest distance of the
+//renormalized displacement to the trap-like balls) and expand those.  A pair
+//is accepted as a trap by the SAME strict-containment test (dist < -0.001) and
+//its parameter-disk radius is the SAME eps = (Z^m/2C)(radius - |center - d|)
+//as in check_TLB, so a reported trap is exactly as trustworthy as check_TLB's.
+//Pruning only affects COMPLETENESS: if the beam discards the branch that led to
+//the only trap we return -1 (uncertified), never a false positive.
+int ifs::check_TLB_bestfirst(const std::vector<Ball>& TLB,
+                             double* TLB_C, double* TLB_Z,
+                             double& trap_radius,
+                             std::vector<std::pair<Bitword,Bitword> >* trap_w,
+                             int uv_depth, int beam_width) {
+  if (trap_w != NULL) trap_w->resize(0);
+  if (TLB.size() == 0) return -1;
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return -1;
+
+  struct BFNode { Ball bz; Ball bw; double key; };
+
+  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
+  Ball f0 = act_on_right(0, b);   //u starts with f
+  Ball g0 = act_on_right(1, b);   //v starts with g
+  if (f0.is_disjoint(g0)) return -1;
+
+  std::vector<BFNode> frontier;
+  {
+    cpx d = f0.center - g0.center;  d *= pow(z, -f0.word_len);
+    double key = 1e300;
+    for (int i=0; i<(int)TLB.size(); ++i) {
+      double dd = abs(TLB[i].center - d) - TLB[i].radius;
+      if (dd < key) key = dd;
+    }
+    BFNode nd; nd.bz = f0; nd.bw = g0; nd.key = key;
+    frontier.push_back(nd);
+  }
+
+  for (int depth = f0.word_len; depth <= uv_depth && !frontier.empty(); ++depth) {
+    //1) is there a trap at this level? (all frontier nodes have word_len==depth)
+    bool found = false;
+    double best_eps = 0.0;
+    for (int n=0; n<(int)frontier.size(); ++n) {
+      if (frontier[n].key >= -0.001) continue;   //displacement outside every TLB ball
+      cpx d = frontier[n].bz.center - frontier[n].bw.center;
+      d *= pow(z, -frontier[n].bz.word_len);
+      for (int i=0; i<(int)TLB.size(); ++i) {
+        double dist = abs(TLB[i].center - d) - TLB[i].radius;
+        if (dist < -0.001) {
+          if (TLB_C == NULL) { trap_radius = 0.0; return frontier[n].bz.word_len; }
+          double ep = (pow(*TLB_Z, frontier[n].bz.word_len)/(2.0*(*TLB_C)))
+                      * (TLB[i].radius - abs(TLB[i].center - d));
+          if (ep > best_eps) {
+            best_eps = ep;
+            if (trap_w != NULL) {
+              trap_w->insert(trap_w->begin(),
+                std::make_pair(Bitword(frontier[n].bz.word, frontier[n].bz.word_len),
+                               Bitword(frontier[n].bw.word, frontier[n].bw.word_len)));
+            }
+          }
+          found = true;
+        }
+      }
+    }
+    if (found) { trap_radius = best_eps; return depth; }
+
+    //2) no trap here: expand to the next level, keeping the best beam_width pairs
+    if (depth >= uv_depth) break;
+    std::vector<BFNode> children;
+    children.reserve(frontier.size()*4);
+    for (int n=0; n<(int)frontier.size(); ++n) {
+      Ball bzs[2] = { act_on_right(0, frontier[n].bz), act_on_right(1, frontier[n].bz) };
+      Ball bws[2] = { act_on_right(0, frontier[n].bw), act_on_right(1, frontier[n].bw) };
+      for (int k=0; k<4; ++k) {
+        Ball cz = bzs[k>>1];
+        Ball cw = bws[k&1];
+        if (cz.is_disjoint(cw)) continue;
+        cpx d = cz.center - cw.center;  d *= pow(z, -cz.word_len);
+        double key = 1e300;
+        for (int i=0; i<(int)TLB.size(); ++i) {
+          double dd = abs(TLB[i].center - d) - TLB[i].radius;
+          if (dd < key) key = dd;
+        }
+        BFNode nd; nd.bz = cz; nd.bw = cw; nd.key = key;
+        children.push_back(nd);
+      }
+    }
+    if (beam_width > 0 && (int)children.size() > beam_width) {
+      std::nth_element(children.begin(), children.begin()+beam_width, children.end(),
+                       [](const BFNode& a, const BFNode& b){ return a.key < b.key; });
+      children.resize(beam_width);
+    }
+    frontier.swap(children);
+  }
+  return -1;
+}
+
+
+//MIXED-LENGTH scaffold (see header).  u,v advance independently up to |len diff|<=kmax;
+//displacement renormalized by s^{-min}.  SCAFFOLD: tests same-length trap-like balls with
+//no protrusion check, so kmax>=1 is exploratory only.  kmax=0 should match check_TLB.
+int ifs::check_TLB_mixed(const std::vector<Ball>& TLB,
+                         double* TLB_C, double* TLB_Z,
+                         double& trap_radius,
+                         std::vector<std::pair<Bitword,Bitword> >* trap_w,
+                         int uv_depth, int kmax) {
+  if (trap_w != NULL) trap_w->resize(0);
+  if (TLB.size()==0) return -1;
+  double min_r;
+  if (!minimal_enclosing_radius(min_r)) return -1;
+  Ball b(0.5,(z-1.0)/2.0,(1.0-w)/2.0,1.01*min_r);
+  std::deque<std::pair<Ball,Ball> > stack;
+  stack.push_back(std::make_pair(act_on_right(0,b), act_on_right(1,b)));
+  bool found=false; double best_eps=0.0; int best_len=-1;
+  long budget=0; const long BUD=20000000;
+  while (!stack.empty()) {
+    if (++budget>BUD) break;
+    Ball bz=stack.back().first, bw=stack.back().second; stack.pop_back();
+    int a = (bz.word_len<bw.word_len ? bz.word_len : bw.word_len);   // min length
+    cpx d = (bz.center - bw.center) * pow(z, -a);
+    for (int i=0;i<(int)TLB.size();++i) {
+      double dist = abs(TLB[i].center - d) - TLB[i].radius;
+      if (dist < -0.001) {
+        if (TLB_C==NULL) { trap_radius=0.0; return a; }
+        double ep = (pow(*TLB_Z, a)/(2.0*(*TLB_C)))*(TLB[i].radius - abs(TLB[i].center - d));
+        if (ep > best_eps) {
+          best_eps=ep; best_len=a;
+          if (trap_w!=NULL) trap_w->insert(trap_w->begin(),
+            std::make_pair(Bitword(bz.word,bz.word_len), Bitword(bw.word,bw.word_len)));
+        }
+        found=true;
+      }
+    }
+    //expand: extend-both, extend-u, extend-v (respect kmax and prune disjoint)
+    Ball zc[2]={act_on_right(0,bz), act_on_right(1,bz)};
+    Ball wc[2]={act_on_right(0,bw), act_on_right(1,bw)};
+    std::pair<Ball,Ball> kids[8]; int nk=0;
+    bool cz = bz.word_len<uv_depth, cw = bw.word_len<uv_depth;
+    if (cz && cw) for(int gz=0;gz<2;++gz) for(int gw=0;gw<2;++gw) kids[nk++]=std::make_pair(zc[gz],wc[gw]);
+    if (cz)       for(int gz=0;gz<2;++gz) kids[nk++]=std::make_pair(zc[gz],bw);
+    if (cw)       for(int gw=0;gw<2;++gw) kids[nk++]=std::make_pair(bz,wc[gw]);
+    for (int c=0;c<nk;++c) {
+      int ld = kids[c].first.word_len - kids[c].second.word_len; if (ld<0) ld=-ld;
+      if (ld>kmax) continue;
+      if (kids[c].first.is_disjoint(kids[c].second)) continue;
+      stack.push_back(kids[c]);
+    }
+  }
+  if (found) { trap_radius=best_eps; return best_len; }
+  return -1;
+}
+
+
+/* HEXAHOLE-SPECIFIC.  check_limit_TLB and check_limit_TLB_recursive implement the
+   limit traps of CKW section 9 at the ONE renormalization point omega used there:
+   both hard-code omega = 0.3718586800741364 + 0.5194111537479428i below and then
+   call set_params(omega,omega), overwriting whatever parameter the caller had.  So
+   they answer a question about omega no matter what they are asked, which is why
+   nothing in the interactive program calls them any more.
+
+   For limit traps at an ARBITRARY renormalization point -- which is what covering a
+   fundamental domain of E_sigma needs -- use funddom.c, or its C API funddom_core.h
+   (fd_core_from_lm / fd_solver_init / fd_level).  That path takes the renormalization
+   data (sigma, a, b, Delta, P'(sigma)) as input instead of assuming it, and it is what
+   produces the coverage figures.  These two functions are kept as the reference
+   implementation of the section 9 argument in its original form. */
+int ifs::check_limit_TLB(const std::vector<Ball>& TLB,
+                         double* TLB_C, double* TLB_Z,
+                         double& trap_radius,
                          std::vector<std::pair<Bitword,Bitword> >* trap_w,
                          int n_limit) {
   //first, find the trap vectors
@@ -992,6 +1105,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
       return false;
     }
     trap_list[i][0] = std::make_pair(z, epsilon);
+#ifndef IFS_NO_GRAPHICS
     if (draw_it) {
       Point2d<int> p = cpx_to_point_mandelbrot(z);
       double r = trap_list[i][0].second / pixel_width;
@@ -1001,6 +1115,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
       X.draw_disk(p,r,c);
       X.flush();
     }
+#endif
     if (verbose>0) std::cout << i << ": " << trap_list[i][0].first << ", " << trap_list[i][0].second << "\n";
   }
   
@@ -1033,6 +1148,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
         return false;
       }
       //display it
+#ifndef IFS_NO_GRAPHICS
       if (draw_it) {
         Point2d<int> p = cpx_to_point_mandelbrot(z);
         double r = trap_list[i].back().second / pixel_width;
@@ -1042,6 +1158,7 @@ bool ifs::find_TLB_along_loop(const std::vector<cpx>& loop,
         X.draw_disk(p,r,c);
         X.flush();
       }
+#endif
       if (verbose>1) {
         std::cout << "Found new trap " << trap_list[i].back().first << ", " << trap_list[i].back().second << "\n";
       }

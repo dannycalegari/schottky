@@ -3,7 +3,9 @@
 #include <cmath>
 #include <cstdlib>
 
+#ifndef IFS_NO_GRAPHICS
 #include "graphics.h"
+#endif
 
 #include "trap_grid.h"
 
@@ -1399,6 +1401,11 @@ void TrapGrid::compute_pixel_extents(const std::vector<Point2d<int> >& L,
 
 
 
+/* The three show* functions below open a debug window on the grid.  They are
+ * only ever called from verbose branches, so the headless build (see
+ * IFS_NO_GRAPHICS in ifs.h) replaces them with the stubs at the #else. */
+#ifndef IFS_NO_GRAPHICS
+
 void TrapGrid::show_connected_components() {
   int pixel_group_width = -1;
   int num_drawing_pixels = -1;
@@ -1652,6 +1659,25 @@ void TrapGrid::show_distance_functions() {
   (void)X2.wait_for_key();
 }
 
+#else /* IFS_NO_GRAPHICS: no window to draw in, so say so and carry on */
+
+void TrapGrid::show_connected_components() {
+  std::cout << "(TrapGrid::show_connected_components: built without graphics)\n";
+}
+
+void TrapGrid::show(std::vector<Point2d<int> >*,
+                    std::vector<Point3d<int> >*,
+                    std::vector<Ball>*,
+                    cpx*,
+                    cpx*) {
+  std::cout << "(TrapGrid::show: built without graphics)\n";
+}
+
+void TrapGrid::show_distance_functions() {
+  std::cout << "(TrapGrid::show_distance_functions: built without graphics)\n";
+}
+
+#endif /* IFS_NO_GRAPHICS */
 
 
 

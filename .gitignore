@@ -1,0 +1,46 @@
+# build products
+*.o
+*.o.tmp
+schottky
+certify_arc
+funddom
+figure_export_test
+funddom_core_test
+test_out/
+
+# Raster and figure output, which the tools write into the working directory.
+# These patterns are anchored with a leading / so that they apply ONLY at the top
+# level: an unanchored *.pdf would also swallow doc/schottky-doc.pdf, which is the
+# program's manual and must be tracked.
+/*.bin
+/*.png
+/*.eps
+/*.pdf
+/*.bmp
+# ...and the sidecars the GUI's exports write beside each figure.  Both prefixes: the
+# figure itself is caught by the /*.png etc. patterns above, but the .txt is not.
+/schottky_mand_*.txt
+/schottky_annulus_*.txt
+
+# search output: certify_arc rigorcover/cover write these in the CWD
+/cov_*.json
+/cov_*.jsonl
+/cov_*.stuck
+/cover*.log
+/cover*.json
+/cover*.jsonl
+/cover*.stuck
+
+# trap-like ball dumps, as in the README's worked examples
+/tlb*.txt
+
+# LaTeX by-products.  Unanchored, unlike the figure patterns above: pdflatex writes
+# these beside doc/schottky-doc.tex, and none of them should ever be tracked.
+*.aux
+*.synctex.gz
+*.out
+*.log
+
+# python
+__pycache__/
+*.pyc

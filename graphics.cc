@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <vector>
 #include <iostream>
 #include <sstream>
@@ -52,6 +53,21 @@ XGraphics::XGraphics(int w, int h, float s, const Point2d<float>& t) {
 void XGraphics::initialize(int w, int h, float s, const Point2d<float>& t) {
   border_width = 4;
   display=XOpenDisplay(NULL);
+  if (display == NULL) {
+    //No X display: every call below would dereference a null Display*, so say what is
+    //wrong and stop rather than dying in Xlib.  This is what happens when a graphical
+    //program is run over a plain ssh session, or with DISPLAY unset, or when a headless
+    //tool reaches a debug-drawing path it did not mean to reach.
+    std::cerr << "schottky: cannot open an X display";
+    const char* d = getenv("DISPLAY");
+    if (d == NULL || d[0] == 0) std::cerr << " (DISPLAY is not set)";
+    else                        std::cerr << " (DISPLAY=" << d << ")";
+    std::cerr << ".\n"
+              << "This program needs a display.  Under ssh use 'ssh -X', on macOS install\n"
+              << "XQuartz, or use the headless tools (certify_arc, funddom) which do not\n"
+              << "need one.\n";
+    exit(1);
+  }
   screen_num = DefaultScreen(display);  
   display_width = DisplayWidth(display, screen_num);
   display_height = DisplayHeight(display, screen_num);
@@ -141,8 +157,36 @@ void XGraphics::list_fonts() {
 
 
 void XGraphics::setup_font(void){
-  //just use the fixed font, because it looks fine
-  font = XLoadQueryFont(display, "fixed");
+  /* Helvetica 12 rather than the 6x13 "fixed" bitmap, falling back down the list -- and
+     unlike before, the result is checked before font->fid is dereferenced.  iso8859-1 on
+     purpose: the iso10646-1 faces are 16-bit and XDrawString would draw nothing. */
+  /* Same list as IFSGui::gui_font(); see the width budget documented there.
+     A WidgetCheck is built at a fixed width of 105 with its text starting at x=20, and
+     update_text never resizes, so any label wider than 85 is silently clipped.  Bold 12 is
+     wanted for legibility -- medium 11 was too thin to read comfortably -- and it only fits
+     because the longest labels were shortened at the same time ("Connectedness:" became
+     "Connected:", "Plot uv graph" became "uv graph").  Widths of the worst survivor,
+     "Contains 1/2:", measured:
+         helvetica medium 11   63
+         helvetica bold 11     67
+         helvetica bold 12     77   <- used; 8px of margin
+         lucida bold sans 11   85   exactly at the limit
+         lucida bold sans 12   91   CLIPPED
+     Check any new candidate, and any new label, against 85 before adding it. */
+  static const char* candidates[] = {
+    "-*-helvetica-bold-r-normal--12-*-iso8859-1",
+    "-*-helvetica-bold-r-normal--11-*-iso8859-1",
+    "-*-helvetica-medium-r-normal--11-*-iso8859-1",
+    "fixed",
+    NULL
+  };
+  font = NULL;
+  for (int i=0; candidates[i] != NULL && font == NULL; ++i)
+    font = XLoadQueryFont(display, candidates[i]);
+  if (font == NULL) {
+    std::cout << "XGraphics: could not load any font, not even \"fixed\"\n";
+    return;
+  }
   XSetFont(display, gc, font->fid);
   //const char * fontname = "-*-georgia-*-r-*-*-14-*-*-*-*-*-*-*";
   //const char * fontname = "-*-times-*-r-*-*-16-*-*-*-*-*-*-*";

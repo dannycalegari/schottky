@@ -151,7 +151,9 @@ bool ifs::hole_boundary_containing_point_from_grid(std::vector<cpx>& path, bool&
   //display the boundary
   if (verbose>0) {
     std::cout << "Boundary has length " << pixel_boundary.size() << "\n";
-  
+  }
+#ifndef IFS_NO_GRAPHICS
+  if (verbose>0) {
     int pixel_group_width = (num_pixels > 512 ? 1 : 512/num_pixels);
     int X2_num_pixels = (num_pixels > 512 ? num_pixels : (512/num_pixels)*num_pixels);
     XGraphics X2(X2_num_pixels, X2_num_pixels, 1, Point2d<float>(0,0));
@@ -193,7 +195,8 @@ bool ifs::hole_boundary_containing_point_from_grid(std::vector<cpx>& path, bool&
     }
     X2.wait_for_key();
   }
-    
+#endif /* IFS_NO_GRAPHICS */
+
   return true;
 }
 

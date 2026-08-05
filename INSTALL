@@ -6,5 +6,14 @@ then:
 
 ./schottky
 
-to run. You need to have X11 installed.  On OSX, this means 
+to run. You need to have X11 installed.  On OSX, this means
 installing XQuartz from http://xquartz.macosforge.org/
+
+Only the interactive program needs X11.  The two headless tools need
+neither the headers nor the library, so on a machine with no display
+type instead:
+
+make headless
+
+which builds certify_arc and funddom only.  See "Building without X11"
+in README.md.

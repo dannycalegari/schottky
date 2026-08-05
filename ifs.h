@@ -4,7 +4,23 @@
 #include <ostream>
 #include <bitset>
 
-#include "graphics.h"
+/* Define IFS_NO_GRAPHICS to build the computational parts of the ifs class
+ * without X11.  The headless tools (certify_arc, funddom) do this; the
+ * interactive program does not.  Everything the drawing code contributes is
+ * either a debug window inside a verbose branch or one of the drawing and
+ * user-interface members, none of which the headless tools call.  See the
+ * "Building without X11" section of README.md. */
+#ifdef IFS_NO_GRAPHICS
+  /* the standard headers graphics.h would otherwise have pulled in */
+  #include <string>
+  #include <sstream>
+  #include <iostream>
+  #include <vector>
+  #include <map>
+#else
+  #include "graphics.h"
+#endif
+
 #include "cpx.h"
 
 #include "point.h"
@@ -158,7 +174,6 @@ class ifs{
     void find_closest_uv_words_along_path(const std::vector<cpx>& path, 
                                           bool closed_path, 
                                           int word_len);
-    bool close_to_set_C(int n_depth, double epsilon);
     void compute_uv_graph(std::vector<Point3d<int> >& uv_graph, 
                           std::vector<Ball>& balls, 
                           int uv_depth, 
@@ -177,14 +192,13 @@ class ifs{
     double step;           // step size to adjust z or w in ifs mode
     bool find_close_uv_words; //whether to find close uv words
     
+#ifndef IFS_NO_GRAPHICS
     void draw_dots(int depth, cpx u);
     void draw_color_dots(int d, cpx u, long color);
     void draw_color_chunky_dots(int d, cpx u, long color, double radius);
     void draw_limit_set();
-    
-    //IFS coordinate computation
-    bool compute_coordinates(double* theta, double* lambda, int n_depth);
-    
+#endif
+
     //mandelbrot mode
     cpx center;            // center of screen in mandelbrot mode
     double wind;           // size of window in mandelbrot mode
@@ -193,9 +207,11 @@ class ifs{
     bool disconnection_depth; // whether to draw the depth for disconnected sets
     bool draw_contains_half; //whether to color the points that contain 1/2
     
+#ifndef IFS_NO_GRAPHICS
     void zoom(const Point2d<int>& p);
     void draw_mandelbrot_set();
-		
+#endif
+
 		
     //connectedness testing
     int depth;             // depth to recurse to draw or detect connectedness
@@ -226,7 +242,23 @@ class ifs{
                                double* min_trap_distance,
                                int verbose);
     bool find_trap(int max_uv_depth, int max_n_depth, int max_pixels, double Cz, double* epsilon, double* difficulty, int verbose=0);
-    bool find_traps_along_loop(const std::vector<cpx>& loop, 
+    //pure topological interleaving test (arc-alternation; no robust-ball
+    //requirement) -- the practical criterion on the marginal circle |s|=1/sqrt2
+    bool trap_interleaves_topological(const std::vector<Ball>& balls,
+                                      int max_pixels, int* n_zcut, int* n_wcut);
+    //CKW round-disk point certificate (Def 7.1.3): given u,v, verify 4 poke-out
+    //points lie outside the opposite word-disk with rigorous margin
+    bool ckw_point_certificate(const std::string& us, const std::string& vs,
+                               int n_depth, int max_pixels, double dmult,
+                               double* min_margin_out, int verbose=0);
+    //mixed-length geometric trap finder (independent-advance seed + the same
+    //geometric interleaving check used for same-length traps)
+    bool find_trap_mixed(int max_uv_depth, int n_depth, int max_pixels,
+                         int kmax, double ratio_goal, int min_uv, double dmult,
+                         std::string* u_out, std::string* v_out,
+                         double* min_trap_dist_out, int verbose=0,
+                         std::vector<std::pair<std::string,std::string> >* cand_out=NULL);
+    bool find_traps_along_loop(const std::vector<cpx>& loop,
                                 bool draw_it, 
                                 int verbose);
     void draw_trap();	
@@ -238,22 +270,56 @@ class ifs{
                           double radius_subtraction,
                           int n_depth, 
                           int verbose);
-    void trap_like_balls_from_balls(std::vector<Ball>& TLB, 
-                        int num_TL_balls, 
+    void trap_like_balls_from_balls(std::vector<Ball>& TLB,
+                        int num_TL_balls,
                         int num_ball_trials,
                         const std::vector<Ball>& balls,
                         double radius_subtraction,
+                        int verbose);
+    /* The same CKW Def. 8.2.3 construction as trap_like_balls_from_balls, but emitting as
+       many admissible balls as asked for instead of one best ball per gap.  That matters:
+       trap_like_balls_from_balls is called with (5,3) and keeps one ball per gap, so it
+       yields at most 10 balls, which cover essentially nothing -- the difference decides
+       whether a fundamental domain closes up or stalls in the nineties.  Sweeps the ngaps
+       largest hull gaps, ntrials positions along each, nradial depths down the inward
+       normal.  If prune is true the result is reduced to its maximal balls (the same greedy
+       prune as prune_tlb.py), which typically cuts the count by a third at no loss of
+       covering power.  Returns false only if the enclosing radius cannot be found. */
+    bool trap_like_balls_many(std::vector<Ball>& TLB,
+                        cpx ll, cpx ur, int n_depth,
+                        int ngaps, int ntrials, int nradial,
+                        bool prune,
                         int verbose);
     bool TLB_for_region(std::vector<Ball>& TLB,
                         cpx ll, cpx ur, int n_depth, double* TLB_C, double* TLB_Z, int verbose);
     int check_TLB_and_uv_words(const std::vector<Ball>& TLB, 
                                const std::vector<std::pair<Bitword,Bitword> >& words);
-    int check_TLB(const std::vector<Ball>& TLB, 
-                  double* TLB_C, double* TLB_Z, 
-                  double& trap_radius, 
-                  std::vector<std::pair<Bitword,Bitword> >* trap_w, 
+    int check_TLB(const std::vector<Ball>& TLB,
+                  double* TLB_C, double* TLB_Z,
+                  double& trap_radius,
+                  std::vector<std::pair<Bitword,Bitword> >* trap_w,
                   int uv_depth) ;
-    bool find_TLB_along_loop(const std::vector<cpx>& loop, 
+    //guided (level-synchronous beam) variant of check_TLB.  Same soundness
+    //(each hit is re-validated by the identical strict-containment test and
+    //the identical eps formula), but the pair tree is explored best-first with
+    //a bounded beam so the search does not blow up where fLambda,gLambda
+    //overlap enormously (the circle |s|=1/sqrt2).  Returns the shallowest depth
+    //at which a trap is found within the beam, or -1 (uncertified within budget).
+    int check_TLB_bestfirst(const std::vector<Ball>& TLB,
+                            double* TLB_C, double* TLB_Z,
+                            double& trap_radius,
+                            std::vector<std::pair<Bitword,Bitword> >* trap_w,
+                            int uv_depth, int beam_width);
+    //MIXED-LENGTH scaffold: pair-DFS where u,v advance INDEPENDENTLY (|len diff|<=kmax),
+    //displacement renormalized by s^{-min(|u|,|v|)}.  kmax=0 must reproduce check_TLB.
+    //NOTE: currently tests against the same-length trap-like balls (T_0) with NO
+    //protrusion check -> NOT sound for kmax>=1; pending the size-ratio region T_k.
+    int check_TLB_mixed(const std::vector<Ball>& TLB,
+                        double* TLB_C, double* TLB_Z,
+                        double& trap_radius,
+                        std::vector<std::pair<Bitword,Bitword> >* trap_w,
+                        int uv_depth, int kmax);
+    bool find_TLB_along_loop(const std::vector<cpx>& loop,
                              bool draw_it, 
                              int verbose);
     //hardcoded spiral traps
@@ -318,17 +384,22 @@ class ifs{
                                     double theta_start, double theta_end,
                                     int connected_depth, int contains_half_depth);
     //Main interface and drawing functions
+#ifndef IFS_NO_GRAPHICS
     XGraphics X;
+#endif
     int drawing_width;
     int drawing_radius; //drawing_width/2
-    
+
     Point2d<int> cpx_to_point(cpx w); //this is for ifs mode
     int cpx_to_radius(cpx w);
     cpx point_to_cpx(const Point2d<int>& p);  //this is for mandelbrot mode
     Point2d<int> cpx_to_point_mandelbrot(cpx w); //this is for mandelbrot mode
+#ifndef IFS_NO_GRAPHICS
+    //defined in ifs_draw.cc and ifs_interface.cc, which the headless build omits
     void draw();
     void user_interface();
     void input_loop(std::vector<cpx>& loop);
+#endif
 };
 
 

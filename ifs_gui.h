@@ -4,16 +4,27 @@
 extern "C" {
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+//named explicitly rather than relied on through Xutil.h, since we test for a
+//dozen keysyms now and not just XK_q
+#include <X11/keysym.h>
 }
 
 #include <string>
 #include <vector>
 
 #include "ifs.h"
+#include "funddom_core.h"
 #include "point.h"
 
 struct IFSGui;
 
+//Parses the text typed into W_point_param_entry -- "re im", "re+imi", a bare
+//"deg" (degrees on the circle |s| = 1/sqrt(2), the certify_arc/funddom
+//convention), or "deg@r" -- into a parameter value.  Returns false (leaving
+//out untouched) if raw does not match any of those forms.  Declared here
+//(rather than kept file-static in ifs_gui.cc) so schottky.cc can parse
+//argv[1] with the exact same rules the GUI entry uses.
+bool parse_parameter(const std::string& raw, cpx& out);
 
 struct Widget {
   Point2d<int> ul; //the upper left hand corner
@@ -23,9 +34,17 @@ struct Widget {
   Pixmap p;
   GC gc;
   void (IFSGui::*click_signal)(XEvent*);
+  /* One line shown in the status bar while the pointer is over this widget.  Empty
+     means "say nothing".  This is the cheapest way to make an opaque control
+     discoverable: it costs the user no navigation and gets found by accident. */
+  std::string help;
   
   virtual void initial_draw() = 0;
   virtual void redraw() = 0;
+  //neither is pure: every widget except WidgetEntry is silent on keys, so
+  //giving both a default here means only WidgetEntry has to say anything.
+  virtual void handle_key(XEvent* e) {}
+  virtual bool wants_keys() const { return false; }
   void clear();
   bool contains_pixel(int x, int y);
   bool intersects_rectangle(const Point2d<int>& p, int w, int h);
@@ -71,6 +90,31 @@ struct WidgetCheck : Widget {
   void initial_draw();
 };
 
+//A single-line editable text field with a static label prefix (e.g. "s = ").
+//Nothing else in the toolkit takes keyboard input; see the focus model on
+//IFSGui (focus_widget) and the three main_loop edits that route KeyPress
+//and ButtonPress there.
+struct WidgetEntry : Widget {
+  std::string label;          //static prefix, e.g. "s = "
+  std::string text;           //editable content
+  std::string committed;      //snapshot for Escape-revert
+  int  caret;                 //0..text.size()
+  int  max_chars;
+  bool focused;
+  Point2d<int> text_position;  //as WidgetText: (5, height/2 + (ascent-descent)/2)
+  int  char_w, ascent, descent; //"fixed" is monospaced -> exact caret math
+  int  label_px;
+  void (IFSGui::*enter_signal)(XEvent*);   //fired on Return
+
+  WidgetEntry() {}
+  WidgetEntry(IFSGui* i, const std::string& lab, const std::string& init,
+              int w, int h, void (IFSGui::*on_enter)(XEvent*));
+  void initial_draw();
+  void redraw();
+  void handle_key(XEvent* e);
+  bool wants_keys() const { return true; }
+};
+
 struct WidgetLeftArrow : Widget {
   WidgetLeftArrow() {}
   WidgetLeftArrow(IFSGui* i, int w, int h, void (IFSGui::*f)(XEvent*));
@@ -93,8 +137,6 @@ struct IFSPath {
   bool has_traps;
   std::vector<Ball> traps;
   std::vector<int> trap_colors;
-  bool has_coordinates;
-  std::vector<std::pair<double, double> > coordinates;
   bool has_uv_words;
   std::vector<std::pair<Bitword,Bitword> > uv_words;
   bool has_half_words;
@@ -108,10 +150,9 @@ struct IFSPath {
   IFSPath() {
     is_valid = false;
     path.resize(0);
-    closed = has_traps = has_coordinates = has_uv_words = has_half_words = false;
+    closed = has_traps = has_uv_words = has_half_words = false;
     traps.resize(0);
     trap_colors.resize(0);
-    coordinates.resize(0);
     uv_words.resize(0);
     movie_length = 10;
     movie_fps = 30;
@@ -143,6 +184,25 @@ struct IFSGui {
   double limit_pixel_width;
   bool limit_uv_graph;
   int limit_uv_graph_depth;
+  /* Draw the trap that certifies the current parameter, over the limit set.  A trap
+     is what makes s a member of int(M), and until now the program could compute one
+     and print its two words but never show it. */
+  bool limit_trap;
+  int limit_trap_depth;
+  /* find_trap_words costs about 0.08s, and the limit-set overlay would otherwise redo
+     it on every zoom and pan.  Cached on the exact parameter and depth it was computed
+     for; the parameter is set exactly, so comparing cpx for equality is right here. */
+  /* where the last drawn trap was, so the view can be taken to it: at a typical
+     parameter the certifying balls are a few pixels across in the default view, and
+     hunting for them by hand is most of the work of using the feature */
+  bool limit_trap_located;
+  cpx limit_trap_center;
+  double limit_trap_radius;
+  bool trap_cache_valid, trap_cache_ok;
+  cpx trap_cache_z;
+  int trap_cache_depth;
+  std::vector<std::pair<Bitword,Bitword> > trap_cache_words;
+  std::string trap_cache_why;
   bool limit_nifs;
   bool limit_gifs;
   bool limit_2d;
@@ -163,30 +223,41 @@ struct IFSGui {
   int mand_contains_half_depth;
   bool mand_trap;
   int mand_trap_depth;
-  bool mand_limit_trap;
-  bool mand_dirichlet;
-  int mand_dirichlet_depth;
-  bool mand_set_C;
-  int mand_set_C_depth;
-  bool mand_theta;
-  int mand_theta_depth;
+  /* Landmark points: the renormalization points, i.e. the sigma at which the
+     limit-trap mechanism of CKW Lemma 9.2.5 applies.  Enumerated by
+     fd_landmarks() in funddom_core.h; they depend only on the complexity bound
+     mand_landmarks_N, not on the window, so the list is cached until N changes.
+     They are drawn as an OVERLAY of dots rather than as a mand_data_grid layer,
+     because they are a discrete set of points, not a property of every pixel. */
+  /* Optional guide circles on the parameter pane.  |s| = 1/2 and |s| = 1/sqrt2
+     bracket the annulus in which dM lies: below 1/2 the attractor is a Cantor set,
+     at or above 1/sqrt2 it is robustly connected.  Drawing them on demand explains
+     at a glance why several controls do nothing outside that band. */
+  bool mand_circle_half;
+  bool mand_circle_sqrt2;
+  bool mand_landmarks;
+  int  mand_landmarks_N;            /* the complexity bound a+b <= N */
+  std::vector<fd_landmark> mand_landmark_list;
+  int  mand_landmark_list_N;        /* the N the cached list was built for; -1 = empty */
+  int  mand_landmark_selected;      /* index into the list, or -1 */
+  int  mand_annulus_res;            /* raster size of the fundamental-annulus figure */
+  int  mand_annulus_cmax;           /* largest tail length c tried per parameter */
+  int  mand_annulus_ball_depth;     /* depth for the trap-like ball computation */
+  std::string mand_annulus_last;    /* summary of the last annulus run, for the readout */
   cpx mand_pixel_group_to_cpx(const Point2d<int>& p);
   Point2d<int> mand_cpx_to_pixel_group(const cpx& c);
   cpx mand_pixel_to_cpx(const Point2d<int>& p);
   Point2d<int> mand_cpx_to_pixel(const cpx& c);
-  int mand_get_color(PointNd<6,int>& p);
+  int mand_get_color(PointNd<4,int>& p);
   int mand_output_picture_size;
   
 
   //data for mandelbrot
-  std::vector<std::vector<PointNd<6,int> > > mand_data_grid;
+  std::vector<std::vector<PointNd<4,int> > > mand_data_grid;
   bool mand_grid_connected_valid;
   bool mand_grid_contains_half_valid;
   bool mand_grid_trap_valid;
-  bool mand_grid_dirichlet_valid;
-  bool mand_grid_set_C_valid;
-  bool mand_grid_theta_valid;
-  
+
   //data about highlighted point
   bool point_connected_check;
   int point_connected_depth;
@@ -200,11 +271,7 @@ struct IFSGui {
   bool point_trap_check;
   int point_trap_depth;
   std::vector<std::pair<Bitword,Bitword> > point_trap_words;
-  bool point_coordinates_check;
-  int point_coordinates_depth;
-  double point_coordinates_theta;
-  double point_coordinates_lambda;
-  
+
   //data about path
   IFSPath path;
   bool currently_drawing_path;
@@ -226,7 +293,6 @@ struct IFSGui {
   void mand_draw_ball(const Ball& b, int col);
   void recompute_point_data();
   void find_traps_along_path(int verbose);
-  void find_coordinates_along_path(int verbose);
   
   //graphics stuff
   Display* display;
@@ -234,16 +300,38 @@ struct IFSGui {
   Window main_window;
   Colormap col_map;
   std::vector<Widget*> widgets;
-  
+  //the widget currently receiving KeyPress events, or NULL if none.  Reset to
+  //NULL in launch, in reset_and_pack_window (at the widgets.resize(0) that
+  //throws away everyone's ul), and in detach_widget when the widget being
+  //detached is the one focused -- otherwise typing could go to a widget with
+  //a stale ul or a pixmap that no longer belongs to the current mode.
+  Widget* focus_widget;
+  Widget* hover_widget;      /* last widget whose help we reported; avoids re-flushing */
+  //the atom the window manager sends in a ClientMessage when the close button is
+  //clicked; without answering it the server just kills us with an X error
+  Atom wm_delete_window;
+
   int get_rgb_color(double r, double g, double b);
-  
+
+  //the one line at the very bottom of the window that says what the program is
+  //doing.  set_status flushes, which is what makes a message appear during a
+  //long computation instead of after it.
+  void set_status(const std::string& s);
+  void set_progress(double frac, const std::string& s);   /* status text plus a bar */
+  bool status_widget_ready;
+
   //widgets:
+  WidgetText W_status;
   WidgetButton W_switch_to_limit;
   WidgetButton W_switch_to_mandelbrot;
   WidgetButton W_switch_to_combined;
-  
+
   WidgetText W_point_title;
   WidgetText W_point_point;
+  //type "re im", "re+imi", a bare "deg" (degrees on |s|=1/sqrt2, the
+  //certify_arc/funddom convention), or "deg@r", then press Enter to move
+  //the highlighted parameter there
+  WidgetEntry W_point_param_entry;
   WidgetCheck W_point_connected_check;
   WidgetLeftArrow W_point_connected_leftarrow;
   WidgetText W_point_connected_depth_label;
@@ -268,12 +356,6 @@ struct IFSGui {
   WidgetRightArrow W_point_uv_words_rightarrow;
   WidgetText W_point_uv_words_status;
   
-  WidgetCheck W_point_coordinates_check;
-  WidgetLeftArrow W_point_coordinates_leftarrow;
-  WidgetText W_point_coordinates_depth_label;
-  WidgetRightArrow W_point_coordinates_rightarrow;
-  WidgetText W_point_coordinates_status;
-  
   WidgetDraw W_limit_plot;
   WidgetText W_limit_depth_title;
   WidgetLeftArrow W_limit_depth_leftarrow;
@@ -291,6 +373,11 @@ struct IFSGui {
   WidgetLeftArrow W_limit_uv_graph_depth_leftarrow;
   WidgetText W_limit_uv_graph_depth_label;
   WidgetRightArrow W_limit_uv_graph_depth_rightarrow;
+  WidgetCheck W_limit_trap;
+  WidgetLeftArrow W_limit_trap_depth_leftarrow;
+  WidgetText W_limit_trap_depth_label;
+  WidgetRightArrow W_limit_trap_depth_rightarrow;
+  WidgetButton W_limit_trap_zoom;
   WidgetCheck W_limit_nifs;
   WidgetCheck W_limit_gifs;
   WidgetCheck W_limit_2d;
@@ -319,19 +406,16 @@ struct IFSGui {
   WidgetLeftArrow W_mand_trap_depth_leftarrow;
   WidgetText W_mand_trap_depth_label;
   WidgetRightArrow W_mand_trap_depth_rightarrow;
-  WidgetCheck W_mand_limit_trap_check;
-  WidgetCheck W_mand_dirichlet_check;
-  WidgetLeftArrow W_mand_dirichlet_depth_leftarrow;
-  WidgetText W_mand_dirichlet_depth_label;
-  WidgetRightArrow W_mand_dirichlet_depth_rightarrow;
-  WidgetCheck W_mand_set_C_check;
-  WidgetLeftArrow W_mand_set_C_depth_leftarrow;
-  WidgetText W_mand_set_C_depth_label;
-  WidgetRightArrow W_mand_set_C_depth_rightarrow;
-  WidgetCheck W_mand_theta_check;
-  WidgetLeftArrow W_mand_theta_depth_leftarrow;
-  WidgetText W_mand_theta_depth_label;
-  WidgetRightArrow W_mand_theta_depth_rightarrow;
+  WidgetCheck W_mand_scale_check;
+  WidgetCheck W_mand_circle_half_check;
+  WidgetCheck W_mand_circle_sqrt2_check;
+  WidgetCheck W_mand_landmarks_check;
+  WidgetLeftArrow W_mand_landmarks_leftarrow;
+  WidgetText W_mand_landmarks_label;
+  WidgetRightArrow W_mand_landmarks_rightarrow;
+  WidgetButton W_mand_annulus_button;
+  WidgetText W_mand_annulus_result;   /* the last annulus result, kept on screen */
+  WidgetText W_mand_legend;           /* which layer wins where; see mand_get_color */
   WidgetText W_mand_mouse_label;
   WidgetText W_mand_mouse_X;
   WidgetText W_mand_mouse_Y;
@@ -350,7 +434,6 @@ struct IFSGui {
   WidgetText W_mand_path_tasks_title;
   WidgetButton W_mand_path_delete_button;
   WidgetButton W_mand_path_find_traps_button;
-  WidgetButton W_mand_path_find_coordinates_button;
   WidgetButton W_mand_path_create_movie_button;
   WidgetText W_mand_path_movie_length_title;
   WidgetLeftArrow W_mand_path_movie_decrease_length;
@@ -373,6 +456,11 @@ struct IFSGui {
   
   
   //signal functions
+
+  //the click_signal shared by every WidgetEntry, since a click on a text
+  //entry means "put the caret here", not any entry-specific action
+  void S_entry_click(XEvent* e);
+
   void S_switch_to_limit(XEvent* e);
   void S_switch_to_mandelbrot(XEvent* e);
   void S_switch_to_combined(XEvent* e);
@@ -386,6 +474,15 @@ struct IFSGui {
   void S_limit_zoom_in(XEvent* e);
   void S_limit_zoom_out(XEvent* e);
   void S_limit_uv_graph(XEvent* e);
+  void S_limit_trap(XEvent* e);
+  void S_limit_trap_increase_depth(XEvent* e);
+  void S_limit_trap_decrease_depth(XEvent* e);
+  void S_limit_trap_zoom(XEvent* e);
+  /* The single trap search, shared by the point panel and the limit-set overlay, so
+     that the words the one reports are the balls the other draws. */
+  bool find_trap_words(int uv_depth, std::vector<std::pair<Bitword,Bitword> >& out,
+                       std::string& why);
+  void draw_limit_trap();
   void S_limit_uv_graph_decrease_depth(XEvent* e);
   void S_limit_uv_graph_increase_depth(XEvent* e);
   void S_limit_nifs(XEvent* e);
@@ -407,22 +504,32 @@ struct IFSGui {
   void S_mand_trap(XEvent* e);
   void S_mand_trap_increase_depth(XEvent* e);
   void S_mand_trap_decrease_depth(XEvent* e);
-  void S_mand_limit_trap(XEvent* e);
-  void S_mand_dirichlet(XEvent* e);
-  void S_mand_dirichlet_decrease_depth(XEvent* e);
-  void S_mand_dirichlet_increase_depth(XEvent* e);
-  void S_mand_set_C(XEvent* e);
-  void S_mand_set_C_decrease_depth(XEvent* e);
-  void S_mand_set_C_increase_depth(XEvent* e);
-  void S_mand_theta(XEvent* e);
-  void S_mand_theta_decrease_depth(XEvent* e);
-  void S_mand_theta_increase_depth(XEvent* e);
+  void S_mand_circle_half(XEvent* e);
+  void S_mand_circle_sqrt2(XEvent* e);
+  void mand_draw_guide_circles();
+  /* Scale bar and axes.  A deep zoom in parameter space is otherwise disorienting: the
+     picture is self-similar, so nothing in it says how far in you are. */
+  void mand_draw_scale();
+  bool mand_scale;
+  void S_mand_scale(XEvent* e);
+  void mand_update_legend();
+  void S_mand_landmarks(XEvent* e);
+  void S_mand_landmarks_decrease(XEvent* e);
+  void S_mand_landmarks_increase(XEvent* e);
+  void S_mand_annulus(XEvent* e);      /* the limit-trap figure at the selected landmark */
+  void mand_rebuild_landmarks();       /* refresh the cache if N changed */
+  void mand_draw_landmarks();          /* overlay the dots on W_mand_plot */
+  int  mand_landmark_near(int wx, int wy, int tol_px);  /* index, or -1 */
   void S_mand_output_window(XEvent* e);
   void S_mand_output_picture(XEvent* e);
   void S_mand_output_picture_increase_size(XEvent* e);
   void S_mand_output_picture_decrease_size(XEvent* e);
   
-  
+
+  //enter_signal for W_point_param_entry: parses its text and, on success,
+  //moves the highlighted parameter there
+  void S_point_param_entered(XEvent* e);
+
   void S_point_connected(XEvent* e);
   void S_point_connected_increase_depth(XEvent* e);
   void S_point_connected_decrease_depth(XEvent* e);
@@ -435,9 +542,6 @@ struct IFSGui {
   void S_point_uv_words(XEvent* e);
   void S_point_uv_words_increase_depth(XEvent* e);
   void S_point_uv_words_decrease_depth(XEvent* e);
-  void S_point_coordinates(XEvent* e);
-  void S_point_coordinates_increase_depth(XEvent* e);
-  void S_point_coordinates_decrease_depth(XEvent* e);
   
   void S_mand_path_create_by_drawing_button(XEvent* e);
   void S_mand_path_create_by_boundary(XEvent* e);
@@ -446,7 +550,6 @@ struct IFSGui {
   void S_mand_path_finish_loop(XEvent* e);
   void S_mand_path_delete(XEvent* e);
   void S_mand_path_find_traps(XEvent* e);
-  void S_mand_path_find_coordinates(XEvent* e);
   void S_mand_path_create_movie(XEvent* e);
   void S_mand_path_movie_decrease_length(XEvent* e);
   void S_mand_path_movie_increase_length(XEvent* e);
@@ -463,6 +566,9 @@ struct IFSGui {
   bool main_window_initialized;
   int main_window_height;
   int main_window_width;
+  /* One font for the whole interface, loaded on demand and kept.  See gui_font(). */
+  XFontStruct* the_gui_font;
+  XFontStruct* gui_font();
   int limit_sidebar_size;
   int mand_sidebar_size;
   
@@ -470,6 +576,9 @@ struct IFSGui {
 
   void detach_widget(Widget* w);
   void pack_widget_upper_right(const Widget* w1, Widget* w2);
+  //Tab from an entry: walks widgets (in packing order) for the next one
+  //with wants_keys() == true, wrapping around; a no-op if none exists.
+  void focus_next_entry();
   void launch(IFSWindowMode m = BOTH, const cpx& c = cpx(0.5,0.5));
   void reset_and_pack_window();
   void main_loop();

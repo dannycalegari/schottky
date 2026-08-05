@@ -264,10 +264,17 @@ cpx ifs::solve_for_half(const Bitword& u, cpx start, double tol) {
 
 //open a separate window with a picture of the set B contained inside the 
 //balls
-void ifs::draw_set_B_balls(const std::vector<Bitword>& balls, 
-                           cpx initial_point, 
-                           int d, 
+void ifs::draw_set_B_balls(const std::vector<Bitword>& balls,
+                           cpx initial_point,
+                           int d,
                            int verbose) {
+#ifdef IFS_NO_GRAPHICS
+  /* this function is nothing but a window; certify_set_B_path calls it, so keep
+     the symbol and report rather than fail to link.  See ifs.h. */
+  (void)balls; (void)initial_point; (void)d; (void)verbose;
+  std::cout << "(ifs::draw_set_B_balls: built without graphics)\n";
+  return;
+#else
   cpx old_z = z;
   cpx old_w = w;
   
@@ -365,6 +372,7 @@ void ifs::draw_set_B_balls(const std::vector<Bitword>& balls,
   
   X2.wait_for_key();
   set_params(old_z, old_w);
+#endif /* IFS_NO_GRAPHICS */
 }
 
 
