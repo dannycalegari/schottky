@@ -359,6 +359,47 @@ crashing. Since the compressor is hand-rolled, it is worth running once on a new
 The generated `test_out/*.png` can be checked with any PNG reader, and `test_out/*.{eps,pdf}`
 with `gs -dNOPAUSE -dBATCH -sDEVICE=nullpage` if you have Ghostscript.
 
+## Testing `rigor.h`
+
+`rigor.h` is the one file here whose entire value is soundness. Everything else can be wrong in a
+way that shows up as a bad picture; this can be wrong in a way that shows up as a theorem that is
+not true. So it has its own known-answer test:
+
+    make rigortest
+
+Three layers, because each catches something the others cannot.
+
+* **Hand-computed answers.** The exact range of a product of intervals, `|[-3,2]| = [0,3]`, that
+  `cos_iv` finds the minimum at an *interior* multiple of pi rather than only at the endpoints, and
+  that `PI_I` contains the true pi — which it does, but only just: the nearest double to pi is
+  1.22e-16 away and one ulp there is 4.44e-16, so the outward widening is load-bearing.
+* **The containment property, against an independent oracle.** `rigor_test.cc` dumps every interval
+  operation it performs — inputs and computed output, in hex float so nothing is lost — and
+  `rigor_test.py` re-derives each result in **exact rational arithmetic** and checks that the
+  computed interval contains it. A verifier written in the same style as the code under test would
+  share any misunderstanding of what outward rounding is for; `fractions.Fraction` does not. About
+  3200 operations, over inputs chosen to be awkward: straddling zero, wildly different magnitudes,
+  exact powers of two where the `nextafter` step size changes, and numbers with no finite binary
+  expansion.
+* **The closed form against a different implementation.** `rigor.h` computes a word's disk centre
+  analytically; `ifs.cc` computes the same disk by composing the maps. Interval testing cannot
+  catch a wrong closed form, because the float and interval versions would be wrong together, so
+  the two are compared directly.
+
+**The suite was validated by breaking the code on purpose**, which is the only way to know a test
+is not decorative. Three mutants, each caught: removing the outward rounding from `radd` (caught by
+the exact-arithmetic oracle); making `certify_box` accept a non-positive margin, which is the most
+dangerous error possible here since it turns "could not verify" into "CERTIFIED" (caught by two
+checks); and flipping a sign in the closed form for the word centre (caught by three, including the
+cross-check against `ifs.cc`).
+
+That second mutant is worth dwelling on: an earlier draft of this test did **not** catch it. Every
+refusal it checked — a word linked with itself, two words on the same side, a 90-degree box — is
+rejected by the *floating-point* pre-check, so the interval stage never ran. Covering the dangerous
+path needs a case that is a genuine float trap on a box too wide for the intervals to separate,
+where the only correct answer is `interval-FAILED`. Measured on the real pair, a box of width 0.002
+about 83.6255 certifies and 0.005 does not, so the test uses 0.01.
+
 ## Authorship
 
 The interactive program and the underlying IFS, trap and trap-like-ball machinery

@@ -95,6 +95,16 @@ test: figure_export_test
 # pixel for pixel -- the invariant that keeps one copy of the mathematics honest.
 # Generates the trap-like balls and the reference raster first, so it is slower
 # than `make test`; hence its own target.
+# rigor.h is the one file whose whole value is soundness, so it gets its own
+# known-answer test: hand-computed answers and the certificate results in C++, plus an
+# exact-rational containment check of every interval operation in Python.  See the header
+# comment of rigor_test.cc for why the verifier is a separate program in another language.
+rigortest: rigor_test.cc rigor.h ifs_nogfx.o trap_grid_nogfx.o movie_nogfx.o figure_export.o
+	$(CC) $(CFLAGS) $(NOGFX) -o rigor_test rigor_test.cc ifs_nogfx.o trap_grid_nogfx.o movie_nogfx.o figure_export.o -lm
+	@mkdir -p test_out
+	./rigor_test test_out/rigor_corpus.txt
+	python3 rigor_test.py test_out/rigor_corpus.txt
+
 coretest: funddom_core_test.cc funddom_core.o funddom_core.h funddom certify_arc
 	$(CC) $(CFLAGS) -o funddom_core_test funddom_core_test.cc funddom_core.o -lm
 	@mkdir -p test_out
@@ -105,5 +115,5 @@ coretest: funddom_core_test.cc funddom_core.o funddom_core.h funddom certify_arc
 
 clean:
 	rm -f *.o
-	rm -f schottky certify_arc funddom figure_export_test funddom_core_test
+	rm -f schottky certify_arc funddom figure_export_test funddom_core_test rigor_test
 	rm -rf test_out
