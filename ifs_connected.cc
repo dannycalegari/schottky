@@ -184,6 +184,14 @@ bool ifs::contains_point(cpx pt, double r) {
 
 
 
+/* Whether Lambda contains the fixed point of the symmetry of the pair.
+ *
+ * The constant is 0.5 and the user-facing label says 0, and both are right: this program
+ * works in the normalization f(x) = zx, g(x) = z(x-1)+1, whose symmetric point is 1/2, while
+ * the paper uses f(z) = sz-1, g(z) = sz+1, whose symmetric point is 0.  The conjugation
+ * x -> (2x-1)/(1-z) carries one to the other and 1/2 to 0.  The name kept the old spelling
+ * because it is used in a dozen places; the label was corrected because the paper's
+ * normalization is the one a reader has in mind. */
 bool ifs::contains_half(int d, int& difficulty) {
   double min_r;
   if (!minimal_enclosing_radius(min_r)) {

@@ -187,17 +187,17 @@ Give the two words and `funddom` solves for the parameter itself:
        [0] sigma = 0.419643377607081+0.606290729207199i   |sigma| = 0.737352705760   arg = 55.311003 deg
            a = 4, b = 1, s = t = f;  Delta = 0;  P'(sigma) = 1.470353793-5.478273590i
 
-Since `u(0) = v(0)` makes `u` and `v` the *same affine map*, taking `s = t` gives
-`pi(u s^inf) = pi(v t^inf)` for free, so such a `sigma` is a renormalization point with `a = |u|`
-and `b = 1`, and everything else follows. With no further arguments the invocation above is just a
-query; add the usual run arguments to compute the coverage:
+**`coin:` is a query, not a core.** It solves the coincidence and reports the parameter; it is
+*not* accepted for a coverage run, and the program refuses it as one. The figure a run produces
+covers the `C` admitting a **limit** trap for the asymptotic family `sigma + C sigma^(bn)`, which
+needs an *infinite* coincidence — a landmark point. At a finite coincidence `u(0) = v(0)` the
+agreement is already exact, so there is no asymptotic renormalization to take a limit of and no
+fundamental annulus of `E_sigma` to cover. The reason the refusal is explicit rather than
+implicit is that everything still *evaluates* at such a sigma (`Delta = 0`, `b = 1`, and
+`rho_max` comes out positive), so a run would hand back a plausible raster and a coverage
+percentage that means nothing. Use a `lm:` core for a coverage run.
 
-    ./certify_arc dumptlbmanyz 0.419643377607081 0.606290729207199 20 1e-9 40 12 6 > tlb.txt
-    python3 prune_tlb.py tlb.txt tlb_pruned.txt
-    ./funddom coin:fgff:gfgg log 20 400 88 0.05 0 tri.bin 1 tlb_pruned.txt
-    # covered 99.7045%   in T_sigma 100.0000%
-
-If the coincidence polynomial has several admissible roots, `coin:<u>:<v>:<k>` picks the `k`-th;
+If the coincidence polynomial has several admissible roots, `coin:<u>:<v>:<k>` names the `k`-th;
 run the query form to list them. Note the three named cores are *infinite* coincidences and so
 cannot be reached this way — indeed no finite coincidence can lie on `|s| = 1/sqrt2` at all, since
 a `{0,±1}` polynomial with nonzero constant and leading coefficients is monic up to sign, making
@@ -249,6 +249,34 @@ Note this reaches the **infinite** (eventually periodic) coincidences, which `co
 three built-in cores are of that kind. So:
 
     ./funddom landmarks 8
+
+`landmarks` is exhaustive, so it costs `3^Nmax` polynomials and passes 100,000 points at
+`Nmax = 10`.  For a deep zoom -- where a hole spiral accumulates on one landmark of high
+complexity -- ask for that neighbourhood instead:
+
+    ./funddom lmnear 0.461537666483585 0.459125328106272 1e-5 12
+
+which searches rather than enumerates, pruning coefficient prefixes against a geometric tail
+bound (396 leaves instead of 531,441 polynomials, in that example).  It never discards a
+landmark inside the disc, and agrees exactly with `landmarks` for `Nmax <= 9`.
+
+For a **finite** coincidence `u(0) = v(0)` -- a root rather than a landmark -- use the `coin:`
+selector, which solves for `s` as a root of `sum_j d_j s^j` with `d_j = (eps^u_j - eps^v_j)/2`:
+
+    ./funddom coin:fgff:gfgg              # lists the admissible roots and their data
+
+Both are reachable from the interactive program's `uv =` box, which dispatches on whether the
+words carry brackets (eventually periodic, so landmarks) or not (finite, so roots).
+
+The finite coincidences can also be enumerated wholesale, exactly as the landmarks can:
+
+    ./funddom roots 8                                   # every root of degree <= 8 (7520)
+    ./funddom rootsnear 0.4615377 0.4591253 1e-4 20     # only those near a point
+
+`roots` costs `3^maxdeg` polynomials (degree 10 is 95,776 roots and ~16s); `rootsnear` prunes
+coefficient prefixes the same way `lmnear` does, so degree 20 near a point takes 148 leaves
+instead of the 3.5 billion polynomials an exhaustive pass would need.  Both are the `Roots:`
+layer of the interactive program, which picks between them by how far you are zoomed in.
 
 lists every landmark point of complexity `a + b <= 8`, one per line, with `sigma`, `a`, `b`, the
 degree, `Delta`, `P'(sigma)`, and a spec that feeds straight back in. There are 1, 18, 99, 533,

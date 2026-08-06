@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <deque>
 #include <set>
 
@@ -617,12 +618,34 @@ void ifs::find_closest_uv_words(std::vector<std::pair<Bitword,Bitword> >& words,
     //(for safety, take a little range)
     double cutoff_dist = (i==uv_depth ? min_d+last_step_tolerance : min_d + pow(az, i)*2*min_r);
     //std::cout << "Cutoff for i=" << i << ": " << cutoff_dist << "\n";
+    /* Keep everything inside the cutoff, but if there is a cap and the cutoff admits more
+       than that, keep the CLOSEST ones rather than whichever happened to come first.
+       This matters because the beam is otherwise unbounded: next_pairs is 4x pairs at every
+       level, and at an exact coincidence -- a landmark point, which is precisely where one
+       wants to ask this question -- the true minimum distance is 0, the cutoff is dominated
+       by its tail term and admits a large fraction of the candidates, so the beam grows
+       geometrically and the search runs the machine out of memory.  Truncating in index
+       order would be arbitrary and could throw away the minimiser; truncating by distance
+       keeps the part of the beam that can still lead to it.
+       With list_size_max < 0 (every pre-existing caller) the behaviour and the order are
+       exactly as before. */
     pairs.resize(0);
-    for (int j=0; j<(int)next_pairs.size(); ++j) {
-      double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
-      if (d <= cutoff_dist && (list_size_max < 0 ||(int)pairs.size() < list_size_max)) {
-        pairs.push_back(next_pairs[j]);
+    if (list_size_max < 0) {
+      for (int j=0; j<(int)next_pairs.size(); ++j) {
+        double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
+        if (d <= cutoff_dist) pairs.push_back(next_pairs[j]);
       }
+    } else {
+      std::vector<std::pair<double,int> > keep;
+      for (int j=0; j<(int)next_pairs.size(); ++j) {
+        double d = abs(next_pairs[j].first.center - next_pairs[j].second.center);
+        if (d <= cutoff_dist) keep.push_back(std::make_pair(d, j));
+      }
+      if ((int)keep.size() > list_size_max) {
+        std::partial_sort(keep.begin(), keep.begin()+list_size_max, keep.end());
+        keep.resize(list_size_max);
+      }
+      for (int k=0; k<(int)keep.size(); ++k) pairs.push_back(next_pairs[keep[k].second]);
     }  
   }
   //now we've got a bunch of pairs

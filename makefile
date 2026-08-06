@@ -22,7 +22,17 @@ LFLAGS=-L/usr/X11R6/lib -lX11
 all: schottky certify_arc funddom
 headless: certify_arc funddom
 
-graphics.o: graphics.cc
+# HEADERS ARE LISTED ON PURPOSE.  Until 2026-08-06 these rules named only their .cc
+# files, so `touch ifs_gui.h && make` said "Nothing to be done" -- and a change to a
+# struct in a header left every object that includes it stale, linking translation units
+# that disagreed about layout.  That is a silent-memory-corruption bug, not a slow build,
+# so the dependencies are spelled out rather than left to chance.  (There is no automatic
+# dependency generation here deliberately: -MMD would need a .d include and a clean rule
+# for it, and this project is a fixed, short list of headers.)
+HDRS=ifs.h cpx.h point.h graphics.h trap_grid.h movie.h ifs_gui.h figure_export.h \
+     funddom_core.h rigor.h
+
+graphics.o: graphics.cc graphics.h point.h
 	$(CC) $(CFLAGS) $(IFLAGS) -c graphics.cc
 
 # figure export (PNG/EPS/PDF).  Uses no X11 and no zlib, so the one object
@@ -30,19 +40,19 @@ graphics.o: graphics.cc
 figure_export.o: figure_export.cc figure_export.h
 	$(CC) $(CFLAGS) -c figure_export.cc
 
-schottky.o: schottky.cc ifs.cc ifs_gui.cc
+schottky.o: schottky.cc ifs.cc ifs_gui.cc $(HDRS)
 	$(CC) $(CFLAGS) $(IFLAGS) -c schottky.cc
 
-trap_grid.o: trap_grid.cc
+trap_grid.o: trap_grid.cc trap_grid.h ifs.h cpx.h point.h
 	$(CC) $(CFLAGS) $(IFLAGS) -c trap_grid.cc
 
-movie.o: movie.cc
+movie.o: movie.cc movie.h ifs.h cpx.h point.h
 	$(CC) $(CFLAGS) $(IFLAGS) -c movie.cc
 
-ifs_gui.o: ifs_gui.cc
+ifs_gui.o: ifs_gui.cc $(HDRS)
 	$(CC) $(CFLAGS) $(IFLAGS) -c ifs_gui.cc
 
-ifs.o: ifs.cc ifs_draw.cc ifs_trap.cc ifs_interface.cc ifs_connected.cc ifs_trap_like.cc ifs_set_A.cc ifs_set_B.cc ifs_nifs.cc ifs_gifs.cc ifs_2d.cc ifs_picture.cc
+ifs.o: ifs.cc ifs_draw.cc ifs_trap.cc ifs_interface.cc ifs_connected.cc ifs_trap_like.cc ifs_set_A.cc ifs_set_B.cc ifs_nifs.cc ifs_gifs.cc ifs_2d.cc ifs_picture.cc ifs.h cpx.h point.h trap_grid.h graphics.h
 	$(CC) $(CFLAGS) $(IFLAGS) -c ifs.cc
 
 schottky: schottky.o graphics.o ifs.o trap_grid.o movie.o ifs_gui.o figure_export.o funddom_core.o
@@ -52,13 +62,13 @@ schottky: schottky.o graphics.o ifs.o trap_grid.o movie.o ifs_gui.o figure_expor
 # that the headless tools link without libX11 and compile without X11/Xlib.h
 NOGFX=-DIFS_NO_GRAPHICS
 
-ifs_nogfx.o: ifs.cc ifs_trap.cc ifs_connected.cc ifs_trap_like.cc ifs_set_A.cc ifs_set_B.cc ifs_nifs.cc ifs_gifs.cc ifs_2d.cc ifs_picture.cc
+ifs_nogfx.o: ifs.cc ifs_trap.cc ifs_connected.cc ifs_trap_like.cc ifs_set_A.cc ifs_set_B.cc ifs_nifs.cc ifs_gifs.cc ifs_2d.cc ifs_picture.cc ifs.h cpx.h point.h trap_grid.h
 	$(CC) $(CFLAGS) $(NOGFX) -c ifs.cc -o ifs_nogfx.o
 
-trap_grid_nogfx.o: trap_grid.cc
+trap_grid_nogfx.o: trap_grid.cc trap_grid.h ifs.h cpx.h point.h
 	$(CC) $(CFLAGS) $(NOGFX) -c trap_grid.cc -o trap_grid_nogfx.o
 
-movie_nogfx.o: movie.cc
+movie_nogfx.o: movie.cc movie.h ifs.h cpx.h point.h
 	$(CC) $(CFLAGS) $(NOGFX) -c movie.cc -o movie_nogfx.o
 
 certify_arc: certify_arc.cc rigor.h ifs_nogfx.o trap_grid_nogfx.o movie_nogfx.o figure_export.o

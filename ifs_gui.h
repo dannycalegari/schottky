@@ -26,6 +26,15 @@ struct IFSGui;
 //argv[1] with the exact same rules the GUI entry uses.
 bool parse_parameter(const std::string& raw, cpx& out);
 
+//Parses a pair of eventually-periodic words, "fg(fffffggggg) gf(gggggfffff)" or the same in
+//bits, into the sign strings A and B of the landmark parameterisation; `why` gets a reason
+//on failure.  See the comment on the definition in ifs_gui.cc.
+bool parse_uv_pair(const std::string& raw, std::string& A, std::string& B, std::string& why);
+
+//Parses the FINITE form, two equal-length words with no brackets ("fgff gfgg" or "0100 1011"),
+//into the f/g strings the coincidence solver takes.  See the definition in ifs_gui.cc.
+bool parse_uv_finite(const std::string& raw, std::string& u, std::string& v, std::string& why);
+
 struct Widget {
   Point2d<int> ul; //the upper left hand corner
   int height;
@@ -204,6 +213,9 @@ struct IFSGui {
   std::vector<std::pair<Bitword,Bitword> > trap_cache_words;
   std::string trap_cache_why;
   bool limit_nifs;
+  //the limit-set view to come back to when the difference-set layer is switched off: it
+  //reframes the pane on 0, since Lambda - Lambda is centred there and Lambda is not
+  cpx nifs_saved_ll, nifs_saved_ur;
   bool limit_gifs;
   bool limit_2d;
   std::vector<cpx> limit_marked_points;
@@ -236,6 +248,10 @@ struct IFSGui {
   bool mand_circle_half;
   bool mand_circle_sqrt2;
   bool mand_landmarks;
+  bool mand_roots;                 //show the finite-coincidence roots as well
+  int  mand_roots_deg;             //largest polynomial degree enumerated
+  int  mand_root_list_deg;         //what the cached list was built for (-1 = none)
+  bool mand_root_list_on;
   int  mand_landmarks_N;            /* the complexity bound a+b <= N */
   std::vector<fd_landmark> mand_landmark_list;
   int  mand_landmark_list_N;        /* the N the cached list was built for; -1 = empty */
@@ -290,7 +306,10 @@ struct IFSGui {
   void mand_zoom(double radius_multiplier);
   void mand_reset_mesh();
   void mand_recenter();
+  bool window_frame_origin(int& ox, int& oy);
   void mand_draw_ball(const Ball& b, int col);
+  //paints one mesh cell into draw_mand's client-side raster (NULL = straight to the pixmap)
+  void mand_put_cell(XImage* img, int i, int j, unsigned long col);
   void recompute_point_data();
   void find_traps_along_path(int verbose);
   
@@ -332,6 +351,8 @@ struct IFSGui {
   //certify_arc/funddom convention), or "deg@r", then press Enter to move
   //the highlighted parameter there
   WidgetEntry W_point_param_entry;
+  WidgetEntry W_point_uv_entry;
+
   WidgetCheck W_point_connected_check;
   WidgetLeftArrow W_point_connected_leftarrow;
   WidgetText W_point_connected_depth_label;
@@ -409,6 +430,13 @@ struct IFSGui {
   WidgetCheck W_mand_scale_check;
   WidgetCheck W_mand_circle_half_check;
   WidgetCheck W_mand_circle_sqrt2_check;
+  /* Roots: every finite coincidence u(0) = v(0) of degree <= mand_roots_deg, marked and
+     selectable exactly as the landmarks are.  Shares the marked-point list with them, so
+     both can be shown at once and are told apart by colour and by their spec. */
+  WidgetCheck      W_mand_roots_check;
+  WidgetLeftArrow  W_mand_roots_leftarrow;
+  WidgetText       W_mand_roots_label;
+  WidgetRightArrow W_mand_roots_rightarrow;
   WidgetCheck W_mand_landmarks_check;
   WidgetLeftArrow W_mand_landmarks_leftarrow;
   WidgetText W_mand_landmarks_label;
@@ -529,6 +557,14 @@ struct IFSGui {
   //enter_signal for W_point_param_entry: parses its text and, on success,
   //moves the highlighted parameter there
   void S_point_param_entered(XEvent* e);
+  void S_point_uv_entered(XEvent* e);
+  void S_point_roots(XEvent* e);
+  void S_mand_roots(XEvent* e);
+  void S_mand_roots_increase(XEvent* e);
+  void S_mand_roots_decrease(XEvent* e);
+  void do_uv_roots_search();
+  void uv_show_results(const std::vector<fd_landmark>& found,
+                       const std::string& lead, const char* what);
 
   void S_point_connected(XEvent* e);
   void S_point_connected_increase_depth(XEvent* e);
@@ -566,6 +602,17 @@ struct IFSGui {
   bool main_window_initialized;
   int main_window_height;
   int main_window_width;
+  //the window the cached landmark list was built for, and whether it came from the
+  //targeted search (which depends on the window) or the exhaustive one (which does not)
+  bool mand_landmark_list_targeted;
+  //the list came from a typed u,v pair rather than from enumeration or search, so it does
+  //not depend on the window and must not be rebuilt when the window changes
+  bool mand_landmark_list_from_uv;
+  cpx  mand_landmark_list_ll, mand_landmark_list_ur;
+  //where the WM frame was last seen, so a mode switch (which destroys and recreates the
+  //window) puts it back where the user left it instead of at the top left corner
+  int main_window_x;
+  int main_window_y;
   /* One font for the whole interface, loaded on demand and kept.  See gui_font(). */
   XFontStruct* the_gui_font;
   XFontStruct* gui_font();

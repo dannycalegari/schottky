@@ -234,14 +234,11 @@ static void usage(const char *prog)
 "  %s <core> <mode> <cmax> <RESX> <RESY> <rho> <survdepth> <out.bin> [nper] [balls.txt]\n"
 "\n"
 "  core       s0   sigma = 1/2 + i/2                  (twindragon, a=2, b=1)\n"
-"             coin:<u>:<v>[:k]  derive everything from a finite coincidence u(0)=v(0):\n"
-"                  give u and v as equal-length f/g words starting with different\n"
-"                  letters; sigma is solved for as a root of sum_j d_j z^j with\n"
-"                  d_j=(eps^u_j-eps^v_j)/2, and a=|u|, b=1, s=t=f.  If the polynomial\n"
-"                  has several admissible roots, k picks one.  Run '%s coin:<u>:<v>'\n"
-"                  with no further arguments to list them.  Requires a ball file.\n"
-"                  The three named cores above are INFINITE coincidences and cannot be\n"
-"                  reached this way -- use s0/s1/hex for those.\n"
+"             NOT coin:<u>:<v> -- a finite coincidence has no fundamental annulus to\n"
+"                  cover, since u(0)=v(0) is exact rather than asymptotic, so it is not a\n"
+"                  core for a coverage run and is refused as one.  To solve a coincidence\n"
+"                  for its roots run '%s coin:<u>:<v>' with no further arguments, and for\n"
+"                  every root up to a degree see the 'roots' and 'rootsnear' commands.\n"
 "             s1   sigma = 1/4 + (sqrt7/4) i          (tame twindragon, a=1, b=4)\n"
 "             hex  the CKW hexahole ~0.37186+0.51941i (a=8, b=1; on the boundary of M,\n"
 "                  so a useful control -- it must NOT reach full coverage).\n"
@@ -363,9 +360,71 @@ static int lm_cmp_key(const void *p, const void *q)
    (1 - z^b) contributes whenever B is identically zero) and outside the annulus
    1/2 < |z| < 1 are dropped, as are conjugates: Im sigma > 0 only, since a
    conjugate pair gives mirror-image pictures. */
+/* ---- dedup accelerator for landmarks() -------------------------------------------
+ * The scan this replaces compared every candidate root against every point already
+ * found, which is quadratic: at a+b <= 9 that is 46201 points and about 10^9 distance
+ * computations, and it -- not the root finding -- was most of the running time.  Bucket
+ * the points by a grid of side LM_CELL instead.  Two sigma within the 1e-8 dedup radius
+ * must fall in the same cell or in one of the eight touching it, so searching that
+ * 3x3 neighbourhood gives exactly the same answers as the full scan.  Hash collisions
+ * between distant cells cost a few extra comparisons and change nothing.
+ */
+#define LM_CELL      1e-6         /* >> the 1e-8 dedup radius */
+#define LM_HASH_BITS 20           /* 1048576 buckets */
+#define LM_HASH_SIZE (1 << LM_HASH_BITS)
+static int *lm_hhead = NULL;      /* bucket -> index of the first point in it, or -1 */
+static int *lm_hnext = NULL;      /* point index -> next point in the same bucket */
+
+static unsigned lm_hash_cell(int cx, int cy)
+{
+  unsigned h = (unsigned)cx * 73856093u ^ (unsigned)cy * 19349663u;
+  return h & (unsigned)(LM_HASH_SIZE - 1);
+}
+
+static int lm_dedup_init(int maxout)
+{
+  lm_hhead = malloc(sizeof(int) * (size_t)LM_HASH_SIZE);
+  lm_hnext = malloc(sizeof(int) * (size_t)maxout);
+  if (!lm_hhead || !lm_hnext) {
+    free(lm_hhead); lm_hhead = NULL; free(lm_hnext); lm_hnext = NULL; return -1;
+  }
+  for (int i = 0; i < LM_HASH_SIZE; ++i) lm_hhead[i] = -1;
+  return 0;
+}
+
+static void lm_dedup_free(void)
+{
+  free(lm_hhead); lm_hhead = NULL;
+  free(lm_hnext); lm_hnext = NULL;
+}
+
+/* is r within 1e-8 of a sigma already in out[0..nout)? */
+static int lm_is_dup(const landmark *out, cx r)
+{
+  int cx0 = (int)floor(creal(r) / LM_CELL);
+  int cy0 = (int)floor(cimag(r) / LM_CELL);
+  for (int dx = -1; dx <= 1; ++dx)
+    for (int dy = -1; dy <= 1; ++dy) {
+      unsigned h = lm_hash_cell(cx0 + dx, cy0 + dy);
+      for (int m = lm_hhead[h]; m != -1; m = lm_hnext[m])
+        if (cabs(out[m].sigma - r) < 1e-8) return 1;
+    }
+  return 0;
+}
+
+static void lm_dedup_add(cx r, int idx)
+{
+  int cx0 = (int)floor(creal(r) / LM_CELL);
+  int cy0 = (int)floor(cimag(r) / LM_CELL);
+  unsigned h = lm_hash_cell(cx0, cy0);
+  lm_hnext[idx] = lm_hhead[h];
+  lm_hhead[h] = idx;
+}
+
 static int landmarks(int N, landmark *out, int maxout, int verbose)
 {
   if (N < 2 || N > LM_MAXN) return -1;
+  if (lm_dedup_init(maxout) != 0) return -1;
   int nout = 0;
   for (int tot = 2; tot <= N; ++tot) {
     for (int a = 1; a < tot; ++a) {
@@ -388,16 +447,16 @@ static int landmarks(int N, landmark *out, int maxout, int verbose)
             if (ab <= 0.5 + 1e-9 || ab >= 1.0 - 1e-9) continue;
             if (cimag(root[i]) <= 1e-9) continue;
             if (cabs(polyval_(c, D, root[i])) > 1e-9) continue;
-            int dup = 0;
-            for (int m = 0; m < nout; ++m)
-              if (cabs(out[m].sigma - root[i]) < 1e-8) { dup = 1; break; }
-            if (dup) continue;                  /* keep the first, i.e. least a+b */
+            if (lm_is_dup(out, root[i])) continue;  /* keep the first, i.e. least a+b */
             if (nout >= maxout) {
               if (verbose) fprintf(stderr, "landmarks: hit the %d-point cap\n", maxout);
+              lm_dedup_free();
               return nout;
             }
             out[nout].sigma = root[i]; out[nout].a = a; out[nout].b = b;
-            out[nout].deg = D; out[nout].ia = ia; out[nout].ib = ib; ++nout;
+            out[nout].deg = D; out[nout].ia = ia; out[nout].ib = ib;
+            lm_dedup_add(root[i], nout);
+            ++nout;
           }
         }
       }
@@ -405,6 +464,7 @@ static int landmarks(int N, landmark *out, int maxout, int verbose)
     if (verbose) fprintf(stderr, "  a+b <= %d : %d points\n", tot, nout);
   }
   (void)lm_cmp_key;
+  lm_dedup_free();
   return nout;
 }
 
@@ -490,6 +550,39 @@ int fd_core_builtin(const char *name, fd_core *out)
   return -1;
 }
 
+/* The renormalization data of a FINITE coincidence u(0) = v(0), for the `roots` search.
+ *
+ * The two normalizations have to be kept straight here.  u(0) = v(0) is a statement in the
+ * PAPER's normalization, f(z) = sz - 1 and g(z) = sz + 1, where applying a word gives
+ * w(0) = sum_j eps_j s^j with j = 0 the outermost letter and eps = -1 for f, +1 for g.  So
+ * u(0) - v(0) = 2 sum_j d_j s^j with d_j = (eps^u_j - eps^v_j)/2, and the coincidences are
+ * the roots of that {0,+-1} polynomial.  coincidence_data already does exactly this; the
+ * program's own normalization (base 1/2) does not enter, which is why this can be shared.
+ *
+ * Since u and v are then the same affine map, sigma is a renormalization point with b = 1
+ * and Delta = 0, so a limit-trap run works at it just as at a landmark.
+ *
+ * Returns the number of admissible roots (1/2 < |sigma| < 1, Im sigma > 0 -- the conjugates
+ * give mirror-image pictures and nothing outside that annulus can be connected with
+ * interior), 0 if there are none, -1 if (u,v) is not a legal pair, -2 if the words are too
+ * long, or -3 if `pick` is out of range. */
+int fd_core_from_coin(const char *u, const char *v, int pick, fd_core *out)
+{
+  if (!u || !v || !out) return -1;
+  int d[MAXM], D; cx rts[MAXM];
+  int n = coincidence_data(u, v, d, &D, rts, MAXM);
+  if (n <= 0) return n;
+  if (pick < 0 || pick >= n) return -3;
+  cx sg = rts[pick];
+  cx Pp = 0;
+  for (int j = 1; j <= D; ++j) Pp += 2.0 * j * d[j] * cpow(sg, j - 1);
+  out->sigma_re = creal(sg); out->sigma_im = cimag(sg);
+  out->a = (int)strlen(u); out->b = 1;
+  out->Delta_re = 0.0; out->Delta_im = 0.0;
+  out->Pp_re = creal(Pp); out->Pp_im = cimag(Pp);
+  return n;
+}
+
 int fd_core_from_lm(const char *A, const char *B, int pick, fd_core *out)
 {
   cx sigma, Delta, Pp; int a, b;
@@ -501,6 +594,430 @@ int fd_core_from_lm(const char *A, const char *B, int pick, fd_core *out)
   out->Delta_re = creal(Delta); out->Delta_im = cimag(Delta);
   out->Pp_re = creal(Pp);       out->Pp_im = cimag(Pp);
   return n;
+}
+
+/* ---- targeted landmark search: only the landmarks near one sigma ------------------
+ *
+ * Enumerating every landmark with a+b <= N costs 3^N polynomials and, past N = 9,
+ * hundreds of thousands of points -- almost all of them nowhere near the window one is
+ * actually looking at.  What one usually wants is the opposite: the landmarks inside a
+ * small disc, and there to as high a complexity as possible, because a hole spiral
+ * accumulates on a landmark of high a+b.
+ *
+ * That is a search, not an enumeration, and the pruning is the same prefix-plus-
+ * geometric-tail argument used everywhere else in this project.  Write
+ *
+ *     Q(z) = A(z)(1 - z^b) + z^a B(z),   A_0 = -1,  A_j, B_k in {-1,0,+1}.
+ *
+ * TWO BOUNDS.
+ *
+ * (1) A no-root certificate at the target.  On the disc |z - sigma| <= eps every point
+ *     has |z| <= rho + eps < 1, and every coefficient of Q is at most 3 in modulus, so
+ *         max |Q'| <= 3 * sum_{j>=1} j (rho+eps)^{j-1} = 3/(1 - rho - eps)^2,
+ *     whence |Q(z) - Q(sigma)| <= eps*3/(1-rho-eps)^2 =: tau throughout the disc.  So
+ *     if |Q(sigma)| > tau, Q has NO root within eps of sigma.  Conservative, which is
+ *     what a filter has to be.
+ *
+ * (2) A prefix bound, which is what turns 3^N into a search.  Since |sigma| < 1 the
+ *     coefficients enter Q(sigma) with geometrically decreasing weight, so a prefix
+ *     already determines Q(sigma) up to a tail:
+ *         the unchosen part of A contributes at most  |1-sigma^b| * rho^m/(1-rho),
+ *         the whole of B contributes at most          rho^a/(1-rho).
+ *     If the partial value exceeds tau plus that tail, no completion of the prefix can
+ *     have a root near sigma, and 3^(a-m) * 3^b candidates die at once.
+ *
+ * This is the polynomial form of the observation that near dM only words sharing a long
+ * prefix can matter: the outermost letters are the low-order coefficients, they carry
+ * the largest weight, and asking for Q(sigma) ~ 0 pins them down first.
+ *
+ * Cost then scales with the number of surviving prefixes rather than with 3^N, so N can
+ * go well past the 12 that exhaustive enumeration tops out at.  Correctness is checked
+ * against the exhaustive enumerator: for N <= 9 every landmark it reports inside the
+ * disc is reported here too.
+ */
+typedef struct {
+  cx     sigma;                 /* the target */
+  double rho, eps, tau;
+  int    N, a, b;
+  int    A[LM_MAXN], B[LM_MAXN];
+  cx     pow_sigma[2*LM_MAXN+2]; /* sigma^j */
+  cx     one_minus_sb;           /* 1 - sigma^b */
+  double abs_one_minus_sb;
+  double tailA[LM_MAXN+2];       /* rho^m/(1-rho), the unchosen part of A */
+  double tailB[LM_MAXN+2];       /* rho^a * rho^k/(1-rho), the unchosen part of B */
+  landmark *out;
+  int    nout, maxout;
+  long   leaves, pruned;
+  /* A WORK BUDGET, in leaves -- i.e. in calls to poly_roots_, which is what the time goes
+     on.  Measured at about 28000 leaves a second, and the cost climbs steeply with the
+     radius (at a+b <= 12: 9720 leaves and 0.35 s at radius 0.005, 287675 and 10.4 s at
+     0.02, 2413122 and 88 s at 0.05).  Without a budget the interactive caller, which
+     re-runs this on every zoom and cannot be interrupted, simply freezes.  0 means no
+     limit, which is right for the command line. */
+  long   budget;
+  int    truncated;
+} lm_near_ctx;
+
+/* out of room, or out of budget */
+static int lm_near_done(lm_near_ctx *S)
+{
+  if (S->nout >= S->maxout) return 1;
+  if (S->budget > 0 && S->leaves >= S->budget) { S->truncated = 1; return 1; }
+  return 0;
+}
+
+/* leaf: A and B are complete.  Build Q, find its roots, keep the admissible ones inside
+   the disc.  Same admissibility tests as landmarks(), so the two agree. */
+static void lm_near_leaf(lm_near_ctx *S)
+{
+  double c[2*LM_MAXN+1];
+  for (int j = 0; j <= S->a + S->b; ++j) c[j] = 0.0;
+  for (int j = 0; j < S->a; ++j) { c[j] += S->A[j]; c[j + S->b] -= S->A[j]; }
+  for (int k = 0; k < S->b; ++k) c[S->a + k] += S->B[k];
+  int D = S->a + S->b;
+  while (D > 0 && fabs(c[D]) < 1e-12) --D;
+  if (D < 1) return;
+  ++S->leaves;
+  if (S->budget > 0 && S->leaves > S->budget) { S->truncated = 1; return; }
+  cx root[2*LM_MAXN+1];
+  poly_roots_(c, D, root);
+  for (int i = 0; i < D; ++i) {
+    double ab = cabs(root[i]);
+    if (ab <= 0.5 + 1e-9 || ab >= 1.0 - 1e-9) continue;
+    if (cimag(root[i]) <= 1e-9) continue;
+    if (cabs(polyval_(c, D, root[i])) > 1e-9) continue;
+    if (cabs(root[i] - S->sigma) > S->eps) continue;      /* outside the disc */
+    if (lm_is_dup(S->out, root[i])) continue;             /* least a+b wins */
+    if (S->nout >= S->maxout) return;
+    S->out[S->nout].sigma = root[i];
+    S->out[S->nout].a = S->a; S->out[S->nout].b = S->b;
+    S->out[S->nout].deg = D;
+    /* ia/ib, so fd_landmarks_near can rebuild the sign strings exactly as fd_landmarks
+       does -- the digits are little-endian base 3, matching lm_build */
+    { int ia = 0, p = 1;
+      for (int j = 1; j < S->a; ++j) { ia += (S->A[j] + 1)*p; p *= 3; }
+      int ib = 0; p = 1;
+      for (int k = 0; k < S->b; ++k) { ib += (S->B[k] + 1)*p; p *= 3; }
+      S->out[S->nout].ia = ia; S->out[S->nout].ib = ib; }
+    lm_dedup_add(root[i], S->nout);
+    ++S->nout;
+  }
+}
+
+/* DFS over B_0..B_{b-1}, with A already fixed.  partial = A(sigma)(1-sigma^b)
+   + sigma^a * sum_{i<k} B_i sigma^i */
+static void lm_near_B(lm_near_ctx *S, int k, cx partial)
+{
+  if (lm_near_done(S)) return;
+  if (k == S->b) { lm_near_leaf(S); return; }
+  if (cabs(partial) - S->tailB[k] > S->tau) { ++S->pruned; return; }
+  for (int v = -1; v <= 1; ++v) {
+    S->B[k] = v;
+    lm_near_B(S, k + 1,
+              partial + (double)v * S->pow_sigma[S->a + k]);
+  }
+}
+
+/* DFS over A_1..A_{a-1}; A_0 is -1 by convention.  partial = sum_{j<m} A_j sigma^j */
+static void lm_near_A(lm_near_ctx *S, int m, cx partial)
+{
+  if (lm_near_done(S)) return;
+  if (m == S->a) {
+    lm_near_B(S, 0, partial * S->one_minus_sb);
+    return;
+  }
+  /* the best |Q(sigma)| any completion could reach */
+  double lo = cabs(partial * S->one_minus_sb)
+            - S->tailA[m] * S->abs_one_minus_sb
+            - S->tailB[0];
+  if (lo > S->tau) { ++S->pruned; return; }
+  for (int v = -1; v <= 1; ++v) {
+    S->A[m] = v;
+    lm_near_A(S, m + 1, partial + (double)v * S->pow_sigma[m]);
+  }
+}
+
+int fd_landmarks_near(double c_re, double c_im, double radius, int N,
+                      fd_landmark *out, int maxout, long leaf_budget, int *truncated)
+{
+  if (truncated) *truncated = 0;
+  if (!out || maxout < 1 || N < 2 || N > LM_MAXN) return -1;
+  if (!(radius > 0.0)) return -1;
+  lm_near_ctx S;
+  S.sigma = c_re + c_im * I;
+  S.rho = cabs(S.sigma);
+  S.eps = radius;
+  if (!(S.rho > 0.0) || S.rho + S.eps >= 1.0) return -1;   /* the bound needs rho+eps<1 */
+  S.tau = 3.0 * S.eps / ((1.0 - S.rho - S.eps)*(1.0 - S.rho - S.eps));
+  S.N = N;
+  S.maxout = maxout;
+  landmark *L = malloc(sizeof(landmark) * (size_t)maxout);
+  if (!L) return -1;
+  if (lm_dedup_init(maxout) != 0) { free(L); return -1; }
+  S.out = L; S.nout = 0; S.leaves = 0; S.pruned = 0;
+  S.budget = leaf_budget; S.truncated = 0;
+  S.pow_sigma[0] = 1.0;
+  for (int j = 1; j <= 2*LM_MAXN + 1; ++j) S.pow_sigma[j] = S.pow_sigma[j-1] * S.sigma;
+  for (int tot = 2; tot <= N && !lm_near_done(&S); ++tot) {
+    for (int a = 1; a < tot && !lm_near_done(&S); ++a) {
+      S.a = a; S.b = tot - a;
+      S.one_minus_sb = 1.0 - S.pow_sigma[S.b];
+      S.abs_one_minus_sb = cabs(S.one_minus_sb);
+      for (int m = 0; m <= S.a; ++m)
+        S.tailA[m] = pow(S.rho, (double)m) / (1.0 - S.rho);
+      for (int k = 0; k <= S.b; ++k)
+        S.tailB[k] = pow(S.rho, (double)(S.a + k)) / (1.0 - S.rho);
+      S.A[0] = -1;
+      lm_near_A(&S, 1, -1.0);          /* partial = A_0 sigma^0 = -1 */
+    }
+  }
+  int n = S.nout;
+  /* fill in the caller's structs exactly as fd_landmarks does */
+  for (int i = 0; i < n; ++i) {
+    int A[LM_MAXN], B[LM_MAXN]; double c[2*LM_MAXN+1];
+    int D = lm_build(L[i].a, L[i].b, L[i].ia, L[i].ib, A, B, c);
+    char As[LM_MAXN+1], Bs[LM_MAXN+1];
+    for (int j = 0; j < L[i].a; ++j) As[j] = (A[j] < 0 ? '-' : (A[j] > 0 ? '+' : '0'));
+    As[L[i].a] = 0;
+    for (int k = 0; k < L[i].b; ++k) Bs[k] = (B[k] < 0 ? '-' : (B[k] > 0 ? '+' : '0'));
+    Bs[L[i].b] = 0;
+    int pick = 0;
+    { cx rr[2*LM_MAXN+1]; poly_roots_(c, D, rr);
+      for (int m = 0; m < D; ++m) {
+        double ab = cabs(rr[m]);
+        if (ab <= 0.5 + 1e-9 || ab >= 1.0 - 1e-9) continue;
+        if (cimag(rr[m]) <= 1e-9) continue;
+        if (cabs(polyval_(c, D, rr[m])) > 1e-9) continue;
+        if (cabs(rr[m] - L[i].sigma) < 1e-8) break;
+        ++pick;
+      } }
+    out[i].sigma_re = creal(L[i].sigma); out[i].sigma_im = cimag(L[i].sigma);
+    out[i].a = L[i].a; out[i].b = L[i].b; out[i].deg = L[i].deg;
+    snprintf(out[i].spec, sizeof out[i].spec, "lm:%s:%s:%d", As, Bs, pick);
+  }
+  if (truncated) *truncated = S.truncated;
+  if (getenv("FD_LMNEAR_STATS"))
+    fprintf(stderr, "[lmnear] %d found, %ld leaves reached, %ld subtrees pruned%s\n",
+            n, S.leaves, S.pruned, S.truncated ? "  (BUDGET EXHAUSTED)" : "");
+  lm_dedup_free();
+  free(L);
+  return n;
+}
+
+/* ---- the finite-coincidence roots NEAR one point ------------------------------------
+ *
+ * The same branch and bound as fd_landmarks_near, and simpler: here the polynomial IS the
+ * unknown, Q(s) = sum_j d_j s^j with d_0 = -1 and d_j in {0,+-1}, so a prefix d_0..d_{m-1}
+ * fixes Q(sigma) up to a tail of at most rho^m/(1-rho), and every coefficient is bounded by
+ * 1 rather than 3, giving |Q'| <= 1/(1-rho-eps)^2 on the disc and hence
+ *      no root within eps of sigma once |Q(sigma)| > eps/(1-rho-eps)^2.
+ * A prefix already past that threshold plus its tail cannot be completed to a polynomial
+ * with a root near sigma, and 3^(D-m) candidates die with it.
+ *
+ * This is what makes the roots layer usable at a deep zoom: the coefficients of low order
+ * are pinned first, which is the same statement as saying that only words sharing a long
+ * prefix can have u(0) = v(0) near a given s.  Cost scales with the surviving prefixes, not
+ * with 3^maxdeg, so the degree can go far past what the exhaustive pass affords. */
+typedef struct {
+  cx     sigma;
+  double rho, eps, tau;
+  int    D;                        /* the degree currently being enumerated */
+  int    d[MAXM];
+  cx     pow_sigma[MAXM + 1];
+  double tail[MAXM + 1];           /* rho^m/(1-rho) */
+  landmark *out;
+  int    nout, maxout;
+  long   leaves, budget;
+  int    truncated;
+} rt_near_ctx;
+
+static int rt_near_done(rt_near_ctx *S)
+{
+  if (S->nout >= S->maxout) return 1;
+  if (S->budget > 0 && S->leaves >= S->budget) { S->truncated = 1; return 1; }
+  return 0;
+}
+
+static void rt_near_leaf(rt_near_ctx *S)
+{
+  if (S->d[S->D] == 0) return;                  /* not really this degree */
+  double c[MAXM];
+  for (int j = 0; j <= S->D; ++j) c[j] = S->d[j];
+  ++S->leaves;
+  if (S->budget > 0 && S->leaves > S->budget) { S->truncated = 1; return; }
+  cx root[MAXM];
+  poly_roots_(c, S->D, root);
+  for (int i = 0; i < S->D; ++i) {
+    double ab = cabs(root[i]);
+    if (ab <= 0.5 + 1e-9 || ab >= 1.0 - 1e-9) continue;
+    if (cimag(root[i]) <= 1e-9) continue;
+    if (cabs(polyval_(c, S->D, root[i])) > 1e-9) continue;
+    if (cabs(root[i] - S->sigma) > S->eps) continue;
+    if (lm_is_dup(S->out, root[i])) continue;
+    if (S->nout >= S->maxout) return;
+    S->out[S->nout].sigma = root[i];
+    S->out[S->nout].a = S->D + 1; S->out[S->nout].b = 1; S->out[S->nout].deg = S->D;
+    { long t = 0, pw = 1;
+      for (int j = 0; j <= S->D; ++j) { t += (long)(S->d[j] + 1)*pw; pw *= 3; }
+      S->out[S->nout].ia = (int)(t & 0x7fffffff); S->out[S->nout].ib = S->D; }
+    lm_dedup_add(root[i], S->nout);
+    ++S->nout;
+  }
+}
+
+static void rt_near_dfs(rt_near_ctx *S, int m, cx partial)
+{
+  if (rt_near_done(S)) return;
+  if (m > S->D) { rt_near_leaf(S); return; }
+  if (cabs(partial) - S->tail[m] > S->tau) return;      /* no completion can have a root */
+  for (int v = -1; v <= 1; ++v) {
+    S->d[m] = v;
+    rt_near_dfs(S, m + 1, partial + (double)v * S->pow_sigma[m]);
+  }
+}
+
+int fd_roots_near(double c_re, double c_im, double radius, int maxdeg,
+                  fd_landmark *out, int maxout, long leaf_budget, int *truncated)
+{
+  if (truncated) *truncated = 0;
+  if (!out || maxout < 1 || maxdeg < 1 || maxdeg > MAXM - 1) return -1;
+  if (!(radius > 0.0)) return -1;
+  rt_near_ctx S;
+  S.sigma = c_re + c_im * I;
+  S.rho = cabs(S.sigma);
+  S.eps = radius;
+  if (!(S.rho > 0.0) || S.rho + S.eps >= 1.0) return -1;
+  S.tau = S.eps / ((1.0 - S.rho - S.eps)*(1.0 - S.rho - S.eps));
+  S.maxout = maxout; S.nout = 0; S.leaves = 0;
+  S.budget = leaf_budget; S.truncated = 0;
+  landmark *L = malloc(sizeof(landmark) * (size_t)maxout);
+  if (!L) return -1;
+  if (lm_dedup_init(maxout) != 0) { free(L); return -1; }
+  S.out = L;
+  S.pow_sigma[0] = 1.0;
+  for (int j = 1; j <= MAXM; ++j) S.pow_sigma[j] = S.pow_sigma[j-1] * S.sigma;
+  for (int m = 0; m <= MAXM; ++m) S.tail[m] = pow(S.rho, (double)m) / (1.0 - S.rho);
+  for (int D = 1; D <= maxdeg && !rt_near_done(&S); ++D) {
+    S.D = D;
+    S.d[0] = -1;
+    rt_near_dfs(&S, 1, -1.0);
+  }
+  int n = S.nout;
+  for (int i = 0; i < n; ++i) {
+    int D = L[i].ib;
+    char us[MAXM + 1], vs[MAXM + 1];
+    long t = L[i].ia;
+    for (int j = 0; j <= D; ++j) {
+      int dj = (int)(t % 3) - 1; t /= 3;
+      us[j] = (dj > 0) ? 'g' : 'f';
+      vs[j] = (dj < 0) ? 'g' : 'f';
+    }
+    us[D + 1] = 0; vs[D + 1] = 0;
+    out[i].sigma_re = creal(L[i].sigma); out[i].sigma_im = cimag(L[i].sigma);
+    out[i].a = L[i].a; out[i].b = L[i].b; out[i].deg = D;
+    int pick = 0;
+    { fd_core c2;
+      int nn = fd_core_from_coin(us, vs, 0, &c2);
+      for (int k = 0; k < nn; ++k) {
+        if (fd_core_from_coin(us, vs, k, &c2) <= 0) continue;
+        if (fabs(c2.sigma_re - out[i].sigma_re) < 1e-9 &&
+            fabs(c2.sigma_im - out[i].sigma_im) < 1e-9) { pick = k; break; }
+      } }
+    snprintf(out[i].spec, sizeof out[i].spec, "coin:%s:%s:%d", us, vs, pick);
+  }
+  if (truncated) *truncated = S.truncated;
+  if (getenv("FD_LMNEAR_STATS"))
+    fprintf(stderr, "[rootsnear] %d found, %ld leaves%s\n", n, S.leaves,
+            S.truncated ? "  (BUDGET EXHAUSTED)" : "");
+  lm_dedup_free();
+  free(L);
+  return n;
+}
+
+/* ---- every root of a finite coincidence, up to a given degree -----------------------
+ *
+ * The companion of fd_landmarks.  A finite coincidence u(0) = v(0) says
+ * sum_j d_j s^j = 0 with d_j = (eps^u_j - eps^v_j)/2 in {0,+-1} and d_0 != 0, so the roots
+ * are exactly the roots in the annulus of the {0,+-1} polynomials with nonzero constant
+ * term -- and enumerating those d-vectors enumerates the roots.  Normalizing d_0 = -1
+ * costs nothing (negating a polynomial does not move its roots) and halves the work.
+ *
+ * A d-vector does not determine (u,v) uniquely -- d_j = 0 only says the two words agree
+ * there -- so `spec` reports the canonical representative: d_j = -1 -> (f,g),
+ * +1 -> (g,f), 0 -> (f,f).  That is a real coincidence pair with this exact polynomial, so
+ * the spec round-trips through funddom's coin: selector.
+ *
+ * Cost is 3^maxdeg polynomials, the same shape as fd_landmarks, and the same spatial-hash
+ * dedup keeps it from being quadratic in the number of points found. */
+int fd_roots(int maxdeg, fd_landmark *out, int maxout)
+{
+  if (!out || maxout < 1 || maxdeg < 1 || maxdeg > MAXM - 1) return -1;
+  landmark *L = malloc(sizeof(landmark) * (size_t)maxout);
+  if (!L) return -1;
+  if (lm_dedup_init(maxout) != 0) { free(L); return -1; }
+  int nout = 0;
+  int d[MAXM];
+  for (int D = 1; D <= maxdeg && nout < maxout; ++D) {
+    /* d_0 = -1 fixed, d_D != 0 (else this is a lower degree, already done), and
+       d_1..d_{D-1} free over {-1,0,+1}: 2*3^(D-1) vectors */
+    long ncomb = 1;
+    for (int i = 0; i < D - 1; ++i) ncomb *= 3;
+    for (long comb = 0; comb < ncomb && nout < maxout; ++comb) {
+      for (int sgn = -1; sgn <= 1 && nout < maxout; sgn += 2) {
+        d[0] = -1;
+        { long t = comb; for (int j = 1; j < D; ++j) { d[j] = (int)(t % 3) - 1; t /= 3; } }
+        d[D] = sgn;
+        double c[MAXM];
+        for (int j = 0; j <= D; ++j) c[j] = d[j];
+        cx root[MAXM];
+        poly_roots_(c, D, root);
+        for (int i = 0; i < D && nout < maxout; ++i) {
+          double ab = cabs(root[i]);
+          if (ab <= 0.5 + 1e-9 || ab >= 1.0 - 1e-9) continue;
+          if (cimag(root[i]) <= 1e-9) continue;
+          if (cabs(polyval_(c, D, root[i])) > 1e-9) continue;
+          if (lm_is_dup(L, root[i])) continue;      /* keep the first, i.e. least degree */
+          L[nout].sigma = root[i];
+          L[nout].a = D + 1;            /* the word length that realises it */
+          L[nout].b = 1;                /* u and v are the same map, so b = 1 */
+          L[nout].deg = D;
+          /* stash the d-vector in ia/ib so the spec can be built below: ia holds the
+             digits d_j+1 in base 3, little-endian, which is enough to recover them */
+          { long t = 0, pw = 1;
+            for (int j = 0; j <= D; ++j) { t += (long)(d[j] + 1)*pw; pw *= 3; }
+            L[nout].ia = (int)(t & 0x7fffffff); L[nout].ib = D; }
+          lm_dedup_add(root[i], nout);
+          ++nout;
+        }
+      }
+    }
+  }
+  for (int i = 0; i < nout; ++i) {
+    int D = L[i].ib;
+    char us[MAXM + 1], vs[MAXM + 1];
+    long t = L[i].ia;
+    for (int j = 0; j <= D; ++j) {
+      int dj = (int)(t % 3) - 1; t /= 3;
+      us[j] = (dj > 0) ? 'g' : 'f';          /* d= -1 -> (f,g), +1 -> (g,f), 0 -> (f,f) */
+      vs[j] = (dj < 0) ? 'g' : 'f';
+    }
+    us[D + 1] = 0; vs[D + 1] = 0;
+    out[i].sigma_re = creal(L[i].sigma); out[i].sigma_im = cimag(L[i].sigma);
+    out[i].a = L[i].a; out[i].b = L[i].b; out[i].deg = D;
+    /* which admissible root of that pair this is, so the spec selects the right one */
+    int pick = 0;
+    { fd_core c2;
+      int n = fd_core_from_coin(us, vs, 0, &c2);
+      for (int k = 0; k < n; ++k) {
+        if (fd_core_from_coin(us, vs, k, &c2) <= 0) continue;
+        if (fabs(c2.sigma_re - out[i].sigma_re) < 1e-9 &&
+            fabs(c2.sigma_im - out[i].sigma_im) < 1e-9) { pick = k; break; }
+      } }
+    snprintf(out[i].spec, sizeof out[i].spec, "coin:%s:%s:%d", us, vs, pick);
+  }
+  lm_dedup_free();
+  free(L);
+  return nout;
 }
 
 int fd_landmarks(int N, fd_landmark *out, int maxout)
@@ -616,6 +1133,101 @@ int main(int argc, char **argv)
 {
   /* `funddom landmarks <Nmax>` lists the renormalization points of complexity
      a+b <= Nmax, with the renormalization data each one needs. */
+  if (argc >= 2 && !strcmp(argv[1], "lmnear")) {
+    if (argc < 6) {
+      fprintf(stderr,
+        "usage: %s lmnear <re> <im> <radius> <Nmax>\n"
+        "  The landmark points within <radius> of <re>+<im>i, with a+b <= Nmax.  Found by\n"
+        "  branch and bound on the coefficients of Q, not by enumerating all 3^Nmax of\n"
+        "  them, so a small radius is cheap even at the top of the Nmax range -- which is\n"
+        "  what one wants at a deep zoom, where a hole spiral accumulates on a landmark of\n"
+        "  high complexity.  Set FD_LMNEAR_STATS=1 to see how much got pruned.\n"
+        "  prints the same columns as 'landmarks', nearest first.\n", argv[0]);
+      return 1;
+    }
+    double cr = atof(argv[2]), ci = atof(argv[3]), rad = atof(argv[4]);
+    int N = atoi(argv[5]);
+    static fd_landmark F[100000];
+    int n = fd_landmarks_near(cr, ci, rad, N, F, 100000, 0, NULL);
+    if (n < 0) {
+      fprintf(stderr, "lmnear: need 2 <= Nmax <= %d, radius > 0, and "
+                      "|sigma| + radius < 1\n", LM_MAXN);
+      return 1;
+    }
+    /* nearest first: at a deep zoom the first line is almost always the one wanted */
+    for (int i = 0; i < n; ++i)
+      for (int j = i+1; j < n; ++j) {
+        double di = (F[i].sigma_re-cr)*(F[i].sigma_re-cr) + (F[i].sigma_im-ci)*(F[i].sigma_im-ci);
+        double dj = (F[j].sigma_re-cr)*(F[j].sigma_re-cr) + (F[j].sigma_im-ci)*(F[j].sigma_im-ci);
+        if (dj < di) { fd_landmark t = F[i]; F[i] = F[j]; F[j] = t; }
+      }
+    printf("# landmarks within %g of %.17g%+.17gi, a+b <= %d : %d found\n",
+           rad, cr, ci, N, n);
+    printf("# sigma_re sigma_im |sigma| arg_deg a b deg dist spec\n");
+    for (int i = 0; i < n; ++i) {
+      cx z = F[i].sigma_re + F[i].sigma_im * I;
+      double d = cabs(z - (cr + ci*I));
+      printf("%.17g %.17g %.12f %.6f %d %d %d %.3e %s\n",
+             F[i].sigma_re, F[i].sigma_im, cabs(z), carg(z)*180.0/M_PI,
+             F[i].a, F[i].b, F[i].deg, d, F[i].spec);
+    }
+    return 0;
+  }
+
+  if (argc >= 2 && !strcmp(argv[1], "rootsnear")) {
+    if (argc < 6) {
+      fprintf(stderr, "usage: %s rootsnear <re> <im> <radius> <maxdeg>\n"
+        "  The finite-coincidence roots within <radius> of a point, by branch and bound on\n"
+        "  the coefficients rather than by enumerating all 3^maxdeg of them -- so a small\n"
+        "  radius is cheap at degrees the exhaustive pass cannot reach.  Nearest first.\n"
+        "  FD_LMNEAR_STATS=1 shows the leaf count.\n", argv[0]);
+      return 1;
+    }
+    double cr = atof(argv[2]), ci = atof(argv[3]), rad = atof(argv[4]);
+    int D = atoi(argv[5]);
+    static fd_landmark F[200000];
+    int n = fd_roots_near(cr, ci, rad, D, F, 200000, 0, NULL);
+    if (n < 0) { fprintf(stderr, "rootsnear: need 1 <= maxdeg <= %d, radius > 0 and "
+                                 "|sigma| + radius < 1\n", MAXM - 1); return 1; }
+    for (int i = 0; i < n; ++i)
+      for (int j = i+1; j < n; ++j) {
+        double di = (F[i].sigma_re-cr)*(F[i].sigma_re-cr) + (F[i].sigma_im-ci)*(F[i].sigma_im-ci);
+        double dj = (F[j].sigma_re-cr)*(F[j].sigma_re-cr) + (F[j].sigma_im-ci)*(F[j].sigma_im-ci);
+        if (dj < di) { fd_landmark t = F[i]; F[i] = F[j]; F[j] = t; }
+      }
+    printf("# finite-coincidence roots within %g of %.17g%+.17gi, degree <= %d : %d\n",
+           rad, cr, ci, D, n);
+    printf("# sigma_re sigma_im |sigma| arg_deg wordlen deg dist spec\n");
+    for (int i = 0; i < n; ++i) {
+      cx z = F[i].sigma_re + F[i].sigma_im*I;
+      double d = cabs(z - (cr + ci*I));
+      printf("%.17g %.17g %.12f %.6f %d %d %.3e %s\n", F[i].sigma_re, F[i].sigma_im,
+             cabs(z), carg(z)*180.0/M_PI, F[i].a, F[i].deg, d, F[i].spec);
+    }
+    return 0;
+  }
+
+  if (argc >= 2 && !strcmp(argv[1], "roots")) {
+    if (argc < 3) {
+      fprintf(stderr, "usage: %s roots <maxdeg>   (every finite-coincidence root of degree"
+                      " <= maxdeg)\n  prints: sigma_re sigma_im |sigma| arg_deg wordlen deg"
+                      " spec\n", argv[0]);
+      return 1;
+    }
+    int D = atoi(argv[2]);
+    static fd_landmark F[200000];
+    int n = fd_roots(D, F, 200000);
+    if (n < 0) { fprintf(stderr, "roots: maxdeg must be in 1..%d\n", MAXM - 1); return 1; }
+    printf("# finite-coincidence roots of degree <= %d : %d\n", D, n);
+    printf("# sigma_re sigma_im |sigma| arg_deg wordlen deg spec\n");
+    for (int i = 0; i < n; ++i) {
+      cx z = F[i].sigma_re + F[i].sigma_im*I;
+      printf("%.17g %.17g %.12f %.6f %d %d %s\n", F[i].sigma_re, F[i].sigma_im,
+             cabs(z), carg(z)*180.0/M_PI, F[i].a, F[i].deg, F[i].spec);
+    }
+    return 0;
+  }
+
   if (argc >= 2 && !strcmp(argv[1], "landmarks")) {
     if (argc < 3) {
       fprintf(stderr, "usage: %s landmarks <Nmax>   (complexity a+b, 2..%d)\n"
@@ -773,6 +1385,14 @@ int main(int argc, char **argv)
       ballfile = A;
     }
   }
+  /* An unrecognized mode used to fall through to the log branch: `funddom s0 anm ...`
+     ran happily, printed the bogus mode back at you, wrote a log-polar raster and exited
+     0.  Since log and ann are different MEASURES of the same set -- they disagree by six
+     percentage points at b = 8 -- a typo silently answered a different question. */
+  if (strcmp(mode, "ann") != 0 && strcmp(mode, "log") != 0) {
+    fprintf(stderr, "funddom: mode must be 'ann' or 'log' (got '%s')\n", mode);
+    return 1;
+  }
   if (nper < 1) {
     fprintf(stderr, "funddom: nper must be at least 1 (got %d)\n", nper);
     return 1;
@@ -803,32 +1423,33 @@ int main(int argc, char **argv)
   static double raw[200000][3]; int nraw = 0;
 
   if (!strncmp(core, "coin:", 5)) {
-    /* renormalization data derived from a finite coincidence u(0) = v(0) */
-    char buf[512]; snprintf(buf, sizeof buf, "%s", core + 5);
-    char *us = buf, *vs = strchr(buf, ':'); int pick = 0;
-    if (!vs) { fprintf(stderr, "coin: expected coin:<u>:<v>[:index]\n"); return 1; }
-    *vs++ = 0;
-    { char *k = strchr(vs, ':'); if (k) { *k = 0; pick = atoi(k + 1); } }
-    int d[MAXM], D; cx rts[MAXM];
-    int n = coincidence_data(us, vs, d, &D, rts, MAXM);
-    if (n == -2) { fprintf(stderr, "coin: words longer than %d are not supported (got %d)\n",
-                           MAXM, (int)strlen(us)); return 1; }
-    if (n < 0) { fprintf(stderr, "coin: illegal coincidence pair u=%s v=%s\n", us, vs); return 1; }
-    if (n == 0) { fprintf(stderr, "coin: no root of the coincidence polynomial in "
-                                  "1/2 < |sigma| < 1 with Im sigma > 0\n"); return 1; }
-    if (pick < 0 || pick >= n) {
-      fprintf(stderr, "coin: root index %d out of range (there are %d; run "
-                      "'%s coin:%s:%s' to list them)\n", pick, n, argv[0], us, vs);
-      return 1;
-    }
-    sigma = rts[pick];
-    a = (int)strlen(us); b = 1;
-    Delta = 0.0;                     /* u and v are the same affine map at sigma */
-    Pp = 0; for (int j = 1; j <= D; ++j) Pp += 2.0 * j * d[j] * cpow(sigma, j - 1);
-    nraw = 0;                        /* a ball file is required for coin: cores  */
-    fprintf(stderr, "coin: u=%s v=%s root[%d]  sigma=%.12f%+.12fi  a=%d b=1  "
-                    "P'=%.6f%+.6fi\n", us, vs, pick, creal(sigma), cimag(sigma), a,
-            creal(Pp), cimag(Pp));
+    /* A FINITE COINCIDENCE IS NOT A CORE FOR THIS FIGURE, and saying so is the whole of this
+     * branch now.
+     *
+     * The picture this program draws is the set of C admitting a LIMIT trap for the
+     * asymptotic family sigma + C sigma^{bn} -- it needs an infinite coincidence, which is
+     * what a landmark point supplies.  At a finite coincidence u(0) = v(0) the agreement is
+     * already exact, so there is no asymptotic renormalization to take a limit of and no
+     * fundamental annulus of E_sigma to cover.
+     *
+     * The reason to refuse loudly rather than to leave it working is that everything here
+     * still EVALUATES at such a sigma: Delta = 0, b = 1, and rho_max comes out positive, so
+     * the run produced a plausible raster and a coverage percentage describing nothing.  The
+     * interactive program's annulus button refuses a root for the same reason.
+     *
+     * `funddom coin:<u>:<v>` with no further arguments is untouched: solving for the roots of
+     * a coincidence is a perfectly good question, and that is how one asks it. */
+    fprintf(stderr,
+      "coin: a finite coincidence is not a core for a coverage run.\n"
+      "  This figure covers the C admitting a LIMIT trap for sigma + C sigma^(bn), which\n"
+      "  needs an INFINITE coincidence -- a landmark point.  u(0) = v(0) is exact, so there\n"
+      "  is no asymptotic family and no fundamental annulus of E_sigma to cover; the formulae\n"
+      "  would still evaluate and hand you a percentage that means nothing.\n"
+      "  To solve the coincidence for its roots:      %s coin:%s\n"
+      "  To run a coverage at a landmark instead:     %s landmarks <Nmax>   (then use its\n"
+      "                                               lm: spec as the core)\n",
+      argv[0], core + 5, argv[0]);
+    return 1;
   } else if (!strncmp(core, "lm:", 3)) {
     /* a landmark point given by the sign strings of A and B; see `funddom landmarks` */
     char buf[512]; snprintf(buf, sizeof buf, "%s", core + 3);
@@ -983,11 +1604,12 @@ int main(int argc, char **argv)
   long pcov[64], pgam[64], ptot[64];
   memset(pcov, 0, sizeof pcov); memset(pgam, 0, sizeof pgam); memset(ptot, 0, sizeof ptot);
 
+  const int mode_is_ann = !strcmp(mode, "ann");   /* hoisted: this was a strcmp per PIXEL */
   for (int iy = 0; iy < RESY; ++iy) {
     for (int ix = 0; ix < RESX; ++ix) {
       cx C;
       int inside = 1, per = 0;
-      if (!strcmp(mode, "ann")) {
+      if (mode_is_ann) {
         double x = (2.0 * (ix + 0.5) / RESX - 1.0) * rho;
         double y = (2.0 * (iy + 0.5) / RESY - 1.0) * rho;
         C = x + y * I;

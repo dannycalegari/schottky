@@ -983,14 +983,17 @@ bool write_pdf(const Figure& F, const Options& opt, const Raster& img,
   }
 
   off[4] = out.size();
-  std::sprintf(buf, "4 0 obj\n<< /Length %lu >>\nstream\n", (unsigned long)content.size());
+  /* snprintf, not sprintf: the values here are all short numbers so nothing could
+     actually overflow buf, but sprintf is deprecated on macOS and warned on every build,
+     which is noise a reader has to learn to ignore. */
+  std::snprintf(buf, sizeof buf, "4 0 obj\n<< /Length %lu >>\nstream\n", (unsigned long)content.size());
   out += buf;
   out += content;
   out += "endstream\nendobj\n";
 
   if (have_img) {
     off[obj_img] = out.size();
-    std::sprintf(buf,
+    std::snprintf(buf, sizeof buf,
       "%d 0 obj\n<< /Type /XObject /Subtype /Image /Width %d /Height %d "
       "/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length %lu >>\nstream\n",
       obj_img, img.w, img.h, (unsigned long)imgdata.size());
@@ -1002,20 +1005,20 @@ bool write_pdf(const Figure& F, const Options& opt, const Raster& img,
 
   if (have_text) {
     off[obj_font] = out.size();
-    std::sprintf(buf, "%d 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+    std::snprintf(buf, sizeof buf, "%d 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
                       "/Encoding /WinAnsiEncoding >>\nendobj\n", obj_font);
     out += buf;
   }
 
   size_t xref = out.size();
-  std::sprintf(buf, "xref\n0 %d\n", nobj + 1);
+  std::snprintf(buf, sizeof buf, "xref\n0 %d\n", nobj + 1);
   out += buf;
   out += "0000000000 65535 f \n";
   for (int i = 1; i <= nobj; ++i) {
-    std::sprintf(buf, "%010lu 00000 n \n", (unsigned long)off[i]);
+    std::snprintf(buf, sizeof buf, "%010lu 00000 n \n", (unsigned long)off[i]);
     out += buf;
   }
-  std::sprintf(buf, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%lu\n%%%%EOF\n",
+  std::snprintf(buf, sizeof buf, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%lu\n%%%%EOF\n",
                nobj + 1, (unsigned long)xref);
   out += buf;
 

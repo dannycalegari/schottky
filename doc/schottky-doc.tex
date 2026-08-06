@@ -122,11 +122,13 @@ $s = -0.58 + 0.33i$.  A single argument sets the starting parameter instead, in 
 forms the parameter box accepts below, so \texttt{schottky 45} starts at $45^\circ$ on the
 circle $|s| = 1/\sqrt2$ --- the twindragon.
 \item[Status line] The bottom row of the window reports what the program is doing: progress
-through a long computation (with a bar), the result of the last operation, and a one-line
-explanation of whatever control the mouse is resting on.  Hovering is the quickest way to
+through a long computation, the result of the last operation, and a one-line
+explanation of whatever control the mouse is resting on.  Only the annulus run draws a
+progress bar; a parameter-space repaint needs none, because the picture visibly fills in
+column by column as it is computed.  Hovering is the quickest way to
 find out what something does; nothing needs to be clicked to read the help.
-\item[Escape] aborts a long computation --- a parameter-space repaint or an annulus run ---
-without recording the incomplete result.
+\item[Escape] aborts a long computation --- a parameter-space repaint, a limit-set redraw
+or an annulus run --- without recording the incomplete result.
 \item[Quitting] \texttt{q} quits, unless a text box has the keyboard focus, in which case it
 types the letter \texttt{q}.  The window manager's close button also works.
 \item[The parameter box] The box marked \texttt{s =} at the bottom left sets the parameter by
@@ -140,6 +142,45 @@ parameter alone.  Immediately above it, the parameter is shown to fifteen digits
 \subsection{Limit set}
 
 \begin{description}
+\item[The uv box] Beside it, a parameter can be named not by its coordinates but by the
+\emph{coincidence} it realises.  Type a pair of eventually periodic words as
+\texttt{prefix(period)} for each --- \texttt{fg(fffffggggg) gf(gggggfffff)}, or the same in
+bits, \texttt{01(0000011111) 10(1111100000)} --- and press Enter.  Differencing the two words
+letter by letter, $A_j = (\epsilon(u_j) - \epsilon(v_j))/2$ over the prefix and $B_k$ likewise
+over the period with $\epsilon(f) = -1$, $\epsilon(g) = +1$, gives the sign strings of the
+landmark parameterisation, and $\sigma$ is then \emph{solved for} as a root of
+$Q(z) = A(z)(1-z^b) + z^aB(z)$.
+
+Since $Q$ has integer coefficients its roots come in a Galois orbit, so there is often more
+than one; only those with $1/2 < |\sigma| < 1$ are of any use, and of each conjugate pair only
+the one with $\operatorname{Im}\sigma > 0$ is new.  All of those are marked at once and the
+first is selected, so the annulus button works immediately; clicking any of them selects it
+instead, and clicking twice zooms in.  The status line lists them with the \texttt{lm:}
+specification that names each on the command line.  The two prefixes must have the same length,
+as must the two periods, and $u$ and $v$ must start with different letters --- otherwise the
+coincidence factors through a shorter one.  As an example, \texttt{fgfffggg(f) gfgggfff(g)}
+returns two points, the second of which is the CKW hexahole.
+
+The same box, given two \emph{finite} words with no brackets --- \texttt{fgff gfgg}, or
+\texttt{0100 1011} --- searches instead for \textbf{roots}: the $s$ at which $u(0) = v(0)$
+\emph{exactly}.  Pressing Enter dispatches on the syntax, and the \textbf{roots} button beside
+the box does the same thing explicitly.  Note that $u(0) = v(0)$ is a statement in the paper's
+normalization $f(z) = sz-1$, $g(z) = sz+1$: applying a word gives
+$w(0) = \sum_j \epsilon_j s^j$ with $j = 0$ the outermost letter and $\epsilon = \mp 1$ for
+$f$, $g$, so the condition is
+\[ \sum_j d_j s^j = 0, \qquad d_j = (\epsilon^u_j - \epsilon^v_j)/2 \in \{0,\pm1\}, \]
+a polynomial with coefficients in $\{0,\pm 1\}$ whose roots are what the search returns.
+Being a Galois orbit there are usually several, and again only those with
+$1/2 < |s| < 1$ and $\operatorname{Im} s > 0$ are of use.  Since $u$ and $v$ then denote the
+same affine map, such an $s$ is a renormalization point with $b = 1$ --- but only in a degenerate
+sense, and \emph{not} one the annulus figure applies to, as described under \textbf{Roots}
+below.  The reported specification is \texttt{coin:u:v:k}, which \texttt{funddom} accepts as a
+\emph{query} (though not as a core for a coverage run).  For example
+\texttt{fgfgfgff gfgfgfgg} returns three roots.
+
+The marked points stay until the enumerated landmarks are asked for again, by toggling
+Landmarks off and on or by moving the complexity bound.
+
 \item[Clicking] Clicking on the panel recenters the drawing.
 \item[Depth] Change the depth to which the limit set is drawn.  This changes $n$, 
 where the picture drawn is the image of a point (non-chunky mode) or 
@@ -194,11 +235,18 @@ balls have radius about $r|s|^{|u|}$, which for $|u| = 9$ at $|s| = 0.7$ is a fe
 against a default view three units across --- a mark a few pixels wide.  The status line
 says when the trap is too small to see, and this button then frames it.
 
-\item[nIFS] This stands for $n$-generator IFS.  Although right now it is set to 
-simply plot the 3-generator IFS which computes the differences between points in 
-$\Lambda_z$.  Consider navigating to a renormalization point, turning off chunky and 
-colors, 
-and zooming in to observe the similarity with the set $\mathcal{M}$ described in \cite{paper}.
+\item[nIFS] This stands for $n$-generator IFS.  Right now it plots the 3-generator IFS
+$z \mapsto sz + c$ with $c \in \{-1,0,1\}$, whose attractor $E$ is built from the
+differences between points of $\Lambda_s$.  Note that $E$ is \emph{half} the difference
+set: the two translations of the pair differ by $\pm 2$, so $\Lambda_s - \Lambda_s = 2E$,
+and the connectedness criterion $s \in \mathcal{M} \iff 2/s \in \Lambda_s - \Lambda_s$
+reads on the plotted set as $1/s \in E$.  A black cross marks $1/s$, so the picture answers
+the membership question directly: the cross is either on the set or off it.  Switching this
+layer on reframes the pane on $0$, where $E$ is centred and where the cross can be seen ---
+$\Lambda_s$ itself sits near $1/2$, so the limit-set window would cut both of them off.
+Switching it off restores the previous view.  Consider navigating to a renormalization
+point, turning off chunky and colors, and zooming in to observe the similarity with the set
+$\mathcal{M}$ described in \cite{paper}.
 \item[2d IFS]  This ignores the imaginary part and only works when the real part of the 
 parameter is between $0.6$ and $0.68$.  It plots the affine limit set as 
 described in \cite{paper}.
@@ -216,7 +264,12 @@ Setting mesh size smaller makes the picture sharper.
 \item[Connected] Plot set $\mathcal{M}$ (run the disconnectedness algorithm).
 The shade of blue indicates how hard the program had to work to find a pair of 
 disks which intersect at the required depth.
-\item[Contains $1/2$] Plot set $\mathcal{M}_0$.
+\item[Contains $0$] Plot set $\mathcal{M}_0$, the parameters whose limit set contains the
+point $0$ --- the fixed point of the symmetry of the pair $f(z) = sz-1$, $g(z) = sz+1$.  The
+program works internally in the normalization $f(x) = zx$, $g(x) = z(x-1)+1$, whose symmetric
+point is $1/2$, which is why the source calls the test \texttt{contains\_half}; the two frames
+are conjugate by $x \mapsto (2x-1)/(1-z)$, which carries $1/2$ to $0$.  The label names the
+point in the paper's normalization, which is the one a reader has in mind.
 \item[Traps] Find traps in a region.  This will not work at all until the
 panel window is quite zoomed in.  It functions by far the best at the boundary of $\mathcal{M}$.
 If there are no trap-like balls to be had in the current window it now says so, rather than
@@ -251,6 +304,28 @@ exists only at the exact renormalization point, so a hand-placed click would nev
 That same \texttt{lm:} string is what \texttt{funddom} takes as a core, so a point found by eye
 here can be handed straight to a command line.  Clicking an already-selected landmark a second
 time zooms in on it, which is how the asymptotic self-similarity becomes visible.
+\item[Roots] Mark every $s$ at which two \emph{finite} words agree, $u(0) = v(0)$, up to the
+polynomial degree at right.  These are the roots in $1/2 < |s| < 1$ of the polynomials with
+coefficients in $\{0,\pm 1\}$ and nonzero constant term, and they are drawn in amber against
+the landmarks' green; the two layers are independent, so both can be shown at once, and a
+click selects from either.  As with the landmarks only $\operatorname{Im} s > 0$ is marked, one
+per conjugate pair, so the lower half is bare by convention and not for want of roots.
+
+A root is not a landmark, and the annulus figure does not apply to one: it covers the $C$
+admitting a \emph{limit} trap for the asymptotic family $\sigma + C\sigma^{bn}$, which is what
+a landmark's infinite coincidence supplies, whereas $u(0) = v(0)$ is already exact and has no
+asymptotic renormalization to take a limit of.  The button says so if a root is selected rather
+than quietly producing a picture of nothing --- which it could, since the formulae still
+evaluate there.
+
+The degree bound behaves like the landmarks' complexity bound, and for the same reason.  At a
+wide view the search must enumerate all $3^{d}$ polynomials, which is $95\,776$ roots and some
+seconds by degree $10$; in a zoomed window it switches to the targeted search of
+\S\ref{sec:lmnear-doc}, and then the degree can go far higher --- at radius $10^{-4}$ around
+$0.4615 + 0.4591i$, degree $20$ costs $148$ leaves and finds two roots, against the
+$3^{20} \approx 3.5\times 10^{9}$ polynomials an exhaustive pass would need.  That is the same
+observation as for the landmarks: only words sharing a long prefix can agree near a given $s$,
+and in coefficient terms that is the low-order $d_j$ being pinned first.
 \item[Limit traps in annulus] With a landmark selected, certify limit traps over one annular
 fundamental domain of the elliptic curve $E_\sigma = \mathbb{C}^*/\langle\sigma^b\rangle$ and
 write the figure as \texttt{schottky\_annulus\_NNN.png}, \texttt{.eps}, \texttt{.pdf} and a
@@ -262,7 +337,24 @@ the same table, so a figure made in the interactive program and one made from a
 \texttt{funddom} raster are directly comparable; the two red circles, at radii $\rho$ and $\rho|\sigma|^b$, bound the fundamental
 domain.  This is the asymptotic picture, drawn deep enough in that it is invariant under
 $C \mapsto \sigma^b C$; both $\rho$ and the depth are derived from the geometry at $\sigma$
-rather than chosen.  The percentage of the fundamental annulus covered stays on screen after the
+rather than chosen.  The annulus drawn is not the outermost one: certification transports
+inward only (certified at tail length $c$ implies $\sigma^b C$ certified at $c+b$, but not
+the reverse), so a period further in is strictly easier to cover, and because the
+limit-trap set is exactly invariant under $C \mapsto \sigma^b C$, covering \emph{any one}
+period settles every $C$.  The outermost period is both the hardest and the one that still
+remembers the finite scale, so the program renders the next one in.
+
+Two numbers are reported, and the second is the one that decides.  The \emph{coverage} is
+the fraction of the annulus certified; the \emph{ceiling} is the fraction lying in
+$T_\sigma$ at all.  Failing the survival test is a necessary condition, so anything outside
+$T_\sigma$ admits no limit trap however deep one searches: a ceiling below $100\%$ is an
+obstruction rather than a shortage of depth, and being scale-invariant it recurs at every
+scale --- the signature of a boundary point.  Reaching $100\%$ coverage, conversely,
+certifies a whole fundamental domain and so puts $\sigma$ in the interior.  The program
+therefore reports \texttt{boundary?}, \texttt{interior?} or \texttt{too shallow}, and that
+verdict comes out right on the two points where the answer is known independently: the CKW
+hexahole, which is on $\partial\mathcal{M}$, has a ceiling of $99.89\%$, while $s_0$, which
+is interior, reaches $100\%$ of a $100\%$ ceiling.  The verdict stays on screen after the
 run, and everything needed to reproduce the figure goes in the sidecar.
 \item[Write window coords] This outputs the window to the terminal.
 \item[Write picture]  This recomputes the current picture at the given resolution
@@ -686,10 +778,16 @@ This is exactly the \texttt{spec} column that \texttt{funddom landmarks} prints,
 the interactive program reports when you click a landmark, so a point found either way can be
 handed straight here.  Unlike \texttt{coin:} it reaches the infinite coincidences: the three named
 cores are \texttt{lm:-+:-:0}, \texttt{lm:-:+--+:0} and \texttt{lm:-+---+++:-:1}.
-\item[\texttt{coin:<u>:<v>[:k]}] a \emph{finite} coincidence $u(0) = v(0)$, given as two
-equal-length $f$/$g$ words beginning with different letters.  The program solves for $\sigma$
-itself and derives everything else.
 \end{description}
+
+\texttt{coin:<u>:<v>[:k]}, a \emph{finite} coincidence $u(0) = v(0)$ given as two equal-length
+$f$/$g$ words beginning with different letters, is deliberately \emph{not} in that list.  The
+program will solve it for $\sigma$ as a query, but refuses it as a core: this figure covers the
+$C$ admitting a \emph{limit} trap for $\sigma + C\sigma^{bn}$, which needs an infinite
+coincidence, whereas $u(0) = v(0)$ is exact and has no asymptotic family and so no fundamental
+annulus of $E_\sigma$ to cover.  The refusal is explicit because the formulae would otherwise
+still evaluate --- $\Delta = 0$, $b = 1$, and $\rho_{\max}$ positive --- and return a coverage
+percentage describing nothing.
 
 Run a \texttt{lm:} or \texttt{coin:} selector with no further arguments and it just reports what
 it found, which is the quickest way to check a specification:
@@ -767,6 +865,59 @@ lists every renormalization point of complexity $a + b \le \texttt{Nmax}$: the r
 $1/2 < |\sigma| < 1$, $\operatorname{Im}\sigma > 0$ of $Q(z) = A(z)(1-z^b) + z^aB(z)$ over all
 $A, B$ with coefficients in $\{0,\pm1\}$ and $A_0 = -1$.  Each line carries everything a coverage
 run needs, plus the reusable \texttt{lm:} specification.
+
+The enumeration costs $3^{\texttt{Nmax}}$ polynomials, and the number of points grows by a factor
+of about $4.3$ per level: $2421$ at $\texttt{Nmax}=7$, $46201$ at $9$, past $100{,}000$ at $10$.
+So it stops being usable at exactly the complexity where it starts to be interesting --- and a
+complete list is the wrong thing to want at a deep zoom anyway, where a hole spiral accumulates on
+a \emph{single} landmark of high complexity.
+
+\label{sec:lmnear-doc}
+\begin{verbatim}
+funddom lmnear <re> <im> <radius> <Nmax>
+\end{verbatim}
+
+answers that question directly: the landmarks within \texttt{radius} of a given point, nearest
+first.  It searches rather than enumerates.  Since $|\sigma| < 1$, the coefficients enter
+$Q(\sigma)$ with geometrically decreasing weight, so a \emph{prefix} of them already determines
+$Q(\sigma)$ up to a tail: with $A_0,\dots,A_{m-1}$ fixed, the rest of $A$ can contribute at most
+$|1-\sigma^b|\rho^m/(1-\rho)$ and all of $B$ at most $\rho^a/(1-\rho)$, where $\rho=|\sigma|$.
+Against that stands a no-root certificate: every coefficient of $Q$ is at most $3$ in modulus, so
+$|Q'| \le 3/(1-\rho-\varepsilon)^2$ on the disc of radius $\varepsilon$, and hence $Q$ has no
+root there once $|Q(\sigma)| > 3\varepsilon/(1-\rho-\varepsilon)^2$.  A prefix whose partial value
+already exceeds that threshold plus its tail bound cannot be completed to a polynomial with a root
+near $\sigma$, and $3^{a-m}\cdot 3^{b}$ candidates are discarded at once.
+
+This is the polynomial form of the observation that near $\partial\mathcal{M}$ only words sharing a
+long prefix can meet: the outermost letters are the low-order coefficients, they carry the largest
+weight, and asking for $Q(\sigma)\approx 0$ pins them down first.  The cost then scales with the
+number of surviving prefixes rather than with $3^{\texttt{Nmax}}$.  At radius $10^{-5}$ around
+$\sigma = 0.4615377 + 0.4591253i$ the search reaches $396$ leaves against the $531{,}441$
+polynomials of the exhaustive pass, and returns the one landmark there.  It is a conservative
+filter, never discarding a landmark inside the disc; checked against the exhaustive enumerator,
+which for $\texttt{Nmax} \le 9$ reports exactly the same landmarks in a given disc.  Set
+\texttt{FD\_LMNEAR\_STATS=1} to see the leaf and prune counts.
+
+The interactive program uses whichever is appropriate without being told: with a zoomed-in window
+the Landmarks layer switches to the targeted search over that window and allows the complexity
+bound to run to $12$, and at a wide view it falls back to the exhaustive list and holds the bound
+at $9$.
+
+The finite coincidences have the same pair of tools:
+\begin{verbatim}
+funddom roots     <maxdeg>
+funddom rootsnear <re> <im> <radius> <maxdeg>
+\end{verbatim}
+listing every $s$ with $u(0) = v(0)$ for some pair of finite words of length $\le
+\texttt{maxdeg}+1$, respectively every such $s$ within a radius of a given point.  The pruning
+is the same, and simpler: here the polynomial \emph{is} the unknown, its coefficients are
+bounded by $1$ rather than $3$, so a prefix $d_0,\dots,d_{m-1}$ fixes $Q(\sigma)$ to within
+$\rho^m/(1-\rho)$ and there is no root within $\varepsilon$ once
+$|Q(\sigma)| > \varepsilon/(1-\rho-\varepsilon)^2$.  Checked against the exhaustive pass the
+same way: for $\texttt{maxdeg} \le 8$ the two agree exactly on which roots lie in a given disc.
+Each line carries a \texttt{coin:u:v:k} specification naming the coincidence, which
+\texttt{funddom} accepts as a query (not as a core for a coverage run) --- the canonical
+representative, since a $d$-vector with a zero entry is realised by more than one word pair.
 \begin{verbatim}
 $ ./funddom landmarks 4
 # sigma_re sigma_im |sigma| arg_deg a b deg

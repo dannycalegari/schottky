@@ -2,9 +2,11 @@
 """render_funddom.py -- turn a funddom raster into a PNG.
 
 funddom writes two bytes per pixel, (level, gamma): `level` is the least tail length c at
-which that limit-trap parameter C was certified (254 = certified at no c up to cmax,
-255 = C is outside T_sigma, so no limit trap is possible even in the limit), and `gamma`
-records the survival test.  This colors them:
+which that limit-trap parameter C was certified.  The two reserved values are the way
+round funddom writes them, which is the opposite of what this docstring said until
+2026-08-06: **255 = never certified up to cmax, 254 = outside the plotted disc** (in ann
+mode, |C| > rho).  Whether C is in T_sigma at all is carried separately, by `gamma`.
+This colors them:
 
     blue    certified early, i.e. at a shallow renormalization depth
     orange  certified only deep

@@ -8,6 +8,8 @@
 #include "figure_export.h"
 #include <fstream>
 #include <cstdio>
+#include <ctime>
+#include <sys/time.h>
 #include <sstream>
 
 
@@ -24,11 +26,29 @@
  * Bitword's std::bitset (ifs.h:101); past that the words that name a trap or
  * a uv pair silently lose their leading letters.
  ***************************************************************************/
+/* 64 because that is a STRUCTURAL limit, not a matter of taste: a word is a Bitword, which
+   holds a std::bitset<64>, so beyond 64 letters the word silently wraps.
+   It was briefly 32, on the theory that a ceiling nobody can reach is not a ceiling -- the
+   cost of these passes doubles with every level, so a full-view limit set at depth 30 takes
+   about a minute and depth 40 is hours.  That was a mistake: how much time to spend is the
+   user's call, and deep zooms need deep words.  Checking that the holes of M keep
+   accumulating at 1e-5 and below needs a connectedness depth well past 32, and capping it
+   there simply removed the ability to look.  The protection against a runaway is Escape,
+   which now aborts the parameter-space repaint AND the limit-set redraw, plus the fact that
+   the picture visibly fills in as it goes -- not a low ceiling. */
 #define MAX_WORD_DEPTH 64
+#define MAX_POINT_DEPTH 64
 #define MAX_UV_GRAPH_DEPTH 16    //2^depth labelled circles get drawn, one per ball
-#define MAX_MOVIE_LENGTH 100000
+/* ifs_movie_from_path refuses anything over 2000 frames, so a limit of 100000 only let
+   the user pick a value that could never work -- and the refusal went to stdout, where a
+   GUI user never sees it.  movie_length is in SECONDS and is multiplied by the frame
+   rate, so this has to leave room for that: see S_mand_path_create_movie. */
+#define MAX_MOVIE_LENGTH 2000
 #define MIN_PICTURE_SIZE 50
-#define MAX_PICTURE_SIZE 10000   //10000^2 pixels of RGB is already 300MB
+/* 10000 was too generous to be usable: 10^8 cells is two 300 MB RGB copies, an EPS of
+   about 150 MB, and several minutes with no progress and no way out.  4000 is 16 Mcell,
+   ~50 MB per copy, and still four times the finest on-screen mesh. */
+#define MAX_PICTURE_SIZE 4000
 //the initial parameter-space view is [-1,1]^2, which already contains all of |s| < 1;
 //outside that the maps are not contractions, so there is nothing to draw
 #define MAND_MAX_RADIUS 1.0
@@ -70,6 +90,158 @@ static bool parse_double_strict(const std::string& tok, double& out) {
   while (*endp == ' ' || *endp == '\t') ++endp;
   if (*endp != '\0') return false;
   out = v;
+  return true;
+}
+
+/* Parse a pair of eventually-periodic words -- "fg(fffffggggg) gf(gggggfffff)", or the
+   same thing in bits, "01(0000011111) 10(1111100000)" -- into the sign strings A and B of
+   the landmark parameterisation.
+ *
+ * A coincidence u(0) = v(0) with u = P_u (C_u)^inf and v = P_v (C_v)^inf gives, letter by
+ * letter, A_j = (eps(u_j) - eps(v_j))/2 over the prefix and B_k the same over the cycle,
+ * with eps(f) = -1 and eps(g) = +1; then sigma is a root of
+ * Q(z) = A(z)(1 - z^b) + z^a B(z).  So the whole job here is differencing the two words.
+ *
+ * The prefixes must have the same length (a) and the cycles the same length (b), or the two
+ * orbits are not being compared at matching times.  The first letters must differ, since
+ * u_0 = v_0 means the coincidence factors through a shorter one.  A_0 is then +-1, and the
+ * convention is A_0 = -1, so u and v are swapped if needed -- which negates Q and leaves its
+ * roots alone. */
+/* Parse the FINITE form -- two words, no brackets, "fgff gfgg" or "0100 1011" -- into the
+   f/g strings the coincidence solver wants.
+ *
+ * These are roots rather than landmarks: u and v are finite, and one asks for the s at which
+ * u(0) = v(0) exactly.  That is a statement in the PAPER's normalization, f(z) = sz-1 and
+ * g(z) = sz+1, where w(0) = sum_j eps_j s^j with j = 0 the outermost letter; so the condition
+ * is a {0,+-1} polynomial in s and its roots are what the search returns.  (The program's own
+ * base-1/2 normalization never enters, which is why the same kernel serves both.)
+ *
+ * Bits are translated to f/g here, because fd_core_from_coin takes f/g.  Equal lengths and
+ * differing first letters are required, and the reason is the same as for the landmark form:
+ * the words are compared letter by letter, and if they agreed at the first letter the
+ * coincidence would factor through a shorter one. */
+bool parse_uv_finite(const std::string& raw, std::string& u, std::string& v,
+                     std::string& why) {
+  std::string s = trim_ws(raw);
+  if (s.empty()) { why = "nothing typed"; return false; }
+  if (s.find('(') != std::string::npos || s.find(')') != std::string::npos) {
+    why = "for roots give two FINITE words with no brackets, e.g. fgff gfgg"
+          " (brackets mean an eventually periodic word, which is the landmark search)";
+    return false;
+  }
+  std::string tok[2];
+  { std::string cur; int nt = 0;
+    for (size_t i = 0; i <= s.size(); ++i) {
+      char c = (i < s.size() ? s[i] : ' ');
+      if (c == ' ' || c == '\t' || c == ',') {
+        if (!cur.empty()) { if (nt < 2) tok[nt] = cur; ++nt; cur.clear(); }
+      } else cur += c;
+    }
+    if (nt != 2) { why = "give exactly two words, u then v, e.g. fgff gfgg"; return false; } }
+  for (int k = 0; k < 2; ++k)
+    for (size_t i = 0; i < tok[k].size(); ++i)
+      if (tok[k][i] != 'f' && tok[k][i] != 'g' && tok[k][i] != '0' && tok[k][i] != '1') {
+        why = std::string("the letters must be f/g or bits 0/1, not '") + tok[k][i] + "'";
+        return false;
+      }
+  if (tok[0].size() != tok[1].size()) {
+    why = "u and v must be the same length (they are compared letter by letter)";
+    return false;
+  }
+  if (tok[0].size() < 2) { why = "the words must be at least two letters long"; return false; }
+  if (tok[0].size() > 60) { why = "the words must be at most 60 letters long"; return false; }
+  u.clear(); v.clear();
+  for (size_t i = 0; i < tok[0].size(); ++i) {
+    u += (tok[0][i] == 'g' || tok[0][i] == '1') ? 'g' : 'f';
+    v += (tok[1][i] == 'g' || tok[1][i] == '1') ? 'g' : 'f';
+  }
+  if (u[0] == v[0]) {
+    why = "u and v must start with different letters, or the coincidence factors "
+          "through a shorter one";
+    return false;
+  }
+  return true;
+}
+
+bool parse_uv_pair(const std::string& raw, std::string& A, std::string& B,
+                   std::string& why) {
+  std::string s = trim_ws(raw);
+  if (s.empty()) { why = "nothing typed"; return false; }
+  /* two whitespace- or comma-separated words */
+  std::string tok[2];
+  { std::string cur;
+    int nt = 0;
+    for (size_t i = 0; i <= s.size(); ++i) {
+      char c = (i < s.size() ? s[i] : ' ');
+      if (c == ' ' || c == '\t' || c == ',') {
+        if (!cur.empty()) { if (nt < 2) tok[nt] = cur; ++nt; cur.clear(); }
+      } else cur += c;
+    }
+    if (nt != 2) {
+      why = "give exactly two words, u then v, e.g. fg(fffffggggg) gf(gggggfffff)";
+      return false;
+    } }
+
+  std::string pre[2], cyc[2];
+  for (int k = 0; k < 2; ++k) {
+    size_t o = tok[k].find('(');
+    size_t c = tok[k].find(')');
+    if (o == std::string::npos || c == std::string::npos || c < o || c + 1 != tok[k].size()) {
+      why = "each word needs its periodic part in brackets, as in fg(fffffggggg)";
+      return false;
+    }
+    pre[k] = tok[k].substr(0, o);
+    cyc[k] = tok[k].substr(o + 1, c - o - 1);
+    for (int part = 0; part < 2; ++part) {
+      const std::string& t = (part == 0 ? pre[k] : cyc[k]);
+      for (size_t i = 0; i < t.size(); ++i)
+        if (t[i] != 'f' && t[i] != 'g' && t[i] != '0' && t[i] != '1') {
+          why = std::string("the letters must be f/g or bits 0/1, not '") + t[i] + "'";
+          return false;
+        }
+    }
+  }
+  if (pre[0].size() != pre[1].size()) {
+    why = "the two prefixes must be the same length (they are compared letter by letter)";
+    return false;
+  }
+  if (cyc[0].size() != cyc[1].size()) {
+    why = "the two periodic parts must be the same length";
+    return false;
+  }
+  if (pre[0].empty()) {
+    why = "the prefix cannot be empty: the parameterisation needs a >= 1";
+    return false;
+  }
+  if (cyc[0].empty()) { why = "the periodic part cannot be empty"; return false; }
+  if (pre[0].size() > 12 || cyc[0].size() > 12) {
+    why = "a and b are each at most 12 (the kernel's LM_MAXN)";
+    return false;
+  }
+  /* eps(f) = -1, eps(g) = +1; bits are 0 = f, 1 = g */
+  int u0 = (pre[0][0] == 'g' || pre[0][0] == '1') ? +1 : -1;
+  int v0 = (pre[1][0] == 'g' || pre[1][0] == '1') ? +1 : -1;
+  if (u0 == v0) {
+    why = "u and v must start with different letters, or the coincidence factors "
+          "through a shorter one";
+    return false;
+  }
+  int swap = (u0 > v0) ? 1 : 0;      //want A_0 = -1, i.e. u starting f
+  const std::string& Pu = pre[swap], &Pv = pre[1-swap];
+  const std::string& Cu = cyc[swap], &Cv = cyc[1-swap];
+  A.clear(); B.clear();
+  for (size_t j = 0; j < Pu.size(); ++j) {
+    int eu = (Pu[j] == 'g' || Pu[j] == '1') ? +1 : -1;
+    int ev = (Pv[j] == 'g' || Pv[j] == '1') ? +1 : -1;
+    int d = (eu - ev)/2;
+    A += (d < 0 ? '-' : (d > 0 ? '+' : '0'));
+  }
+  for (size_t k = 0; k < Cu.size(); ++k) {
+    int eu = (Cu[k] == 'g' || Cu[k] == '1') ? +1 : -1;
+    int ev = (Cv[k] == 'g' || Cv[k] == '1') ? +1 : -1;
+    int d = (eu - ev)/2;
+    B += (d < 0 ? '-' : (d > 0 ? '+' : '0'));
+  }
   return true;
 }
 
@@ -263,7 +435,7 @@ XFontStruct* IFSGui::gui_font() {
      wanted for legibility -- medium 11 was too thin to read comfortably -- and it only fits
      because the longest labels were shortened at the same time ("Connectedness:" became
      "Connected:", "Plot uv graph" became "uv graph").  Widths of the worst survivor,
-     "Contains 1/2:", measured:
+     "Contains 0:", measured:
          helvetica medium 11   63
          helvetica bold 11     67
          helvetica bold 12     77   <- used; 8px of margin
@@ -848,6 +1020,30 @@ void IFSGui::S_limit_nifs(XEvent* e) {
     W_limit_2d.redraw();
     //W_limit_gifs.redraw();
   }
+  /* FRAME THE DIFFERENCE SET.  Lambda - Lambda is centred at 0 and is bigger than Lambda,
+     which sits around 1/2; drawn in the limit set's own window it came out off centre and
+     clipped, and since there is no way to pan, there was no way to see the rest of it.
+     The interesting point is 2/s -- s is in M exactly when 2/s lies in the difference set
+     -- so the frame is chosen to include it.  Toggling back restores the previous view. */
+  if (limit_nifs) {
+    nifs_saved_ll = limit_ll;
+    nifs_saved_ur = limit_ur;
+    nIFS nifs(3, IFS.z);
+    nifs.centers[0] = -1; nifs.centers[1] = 0; nifs.centers[2] = 1;
+    double r = nifs.minimal_initial_radius();
+    if (r > 0) {
+      double want = std::abs(1.0/IFS.z);
+      if (want > r) r = want;              //keep 1/s in view
+      r *= 1.15;
+      limit_ll = cpx(-r, -r);
+      limit_ur = cpx( r,  r);
+      limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(W_limit_plot.width);
+    }
+  } else {
+    limit_ll = nifs_saved_ll;
+    limit_ur = nifs_saved_ur;
+    limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(W_limit_plot.width);
+  }
   draw_limit();
   mand_grid_connected_valid = false;
   if (mand_connected) draw_mand();
@@ -925,10 +1121,14 @@ void IFSGui::S_mand_draw(XEvent* e) {
        trap only exists at an exact renormalization point: landing near sigma is not
        good enough, and a hand-placed click never hits it.  Only on a real
        ButtonPress -- a drag must still sweep the parameter freely. */
-    if (mand_landmarks && e->type == ButtonPress) {
+    /* mand_roots as well as mand_landmarks: the two layers share the marked-point list, so
+       whichever of them is showing, a click near a mark should snap to it.  Gating this on
+       the landmarks alone meant the roots were drawn but not selectable -- and a mark you
+       cannot click is not much use, since selecting is how the annulus button is aimed. */
+    if ((mand_landmarks || mand_roots) && e->type == ButtonPress) {
       int k = mand_landmark_near(widget_x, widget_y, 6);
       if (k >= 0) {
-        /* A second click on the landmark already selected means "zoom to it".  The
+        /* A second click on the mark already selected means "zoom to it".  The
            asymptotic self-similarity only becomes visible once you are deep in, and
            clicking twice is a lot less work than repeated Recenter and Zoom. */
         bool again = (mand_landmark_selected == k);
@@ -937,7 +1137,10 @@ void IFSGui::S_mand_draw(XEvent* e) {
         cpx sig(L.sigma_re, L.sigma_im);
         std::stringstream T;
         T.precision(15);
-        T << "landmark " << L.spec << "  sigma = " << L.sigma_re << " " << L.sigma_im
+        /* a root's spec begins "coin:", a landmark's "lm:"; they are different objects and
+           the status line should not call one by the other's name */
+        T << (L.spec[0] == 'c' ? "root " : "landmark ") << L.spec
+          << "  sigma = " << L.sigma_re << " " << L.sigma_im
           << "  a=" << L.a << " b=" << L.b << " deg=" << L.deg;
         set_status(T.str());
         change_highlighted_ifs(sig);
@@ -1125,28 +1328,161 @@ void IFSGui::S_mand_trap_decrease_depth(XEvent* e) {
 }
 
 /* Landmark points -- the renormalization points where CKW Lemma 9.2.5 applies, so
-   the parameters at which a limit-trap search is meaningful at all.  Enumerated by
-   funddom's kernel (fd_landmarks), cached because the list depends only on the
-   complexity bound and not on the window. */
+   the parameters at which a limit-trap search is meaningful at all.
+ *
+ * TWO WAYS TO GET THEM, and the choice is forced by the window.
+ *
+ * Enumerating every landmark with a+b <= N costs 3^N polynomials, and the count of points
+ * grows by about 4.3 per level: 2421 at N = 7, 46201 at N = 9, past 100000 at N = 10.  So
+ * the exhaustive list stops being useful at exactly the point where it starts to matter.
+ * And it is the wrong thing to want at a deep zoom: a hole spiral accumulates on a
+ * landmark of HIGH complexity, and one wants that one point, not a hundred thousand
+ * others.  fd_landmarks_near searches instead of enumerating -- branch and bound on the
+ * coefficients of Q, pruned by the geometric tail bound (see funddom.c) -- so a small
+ * window is cheap right up to the a+b ceiling.
+ *
+ * So: whenever the window is small enough for the pruning bound to apply, use the targeted
+ * search over the window's circumscribed disc and allow the full complexity range; when it
+ * is not (a wide view, where the bound degenerates), fall back to the exhaustive list and
+ * hold N down to 9, which is the most it can deliver without truncating.
+ *
+ * The cache therefore has to key on the window as well as on N, and the SELECTION has to
+ * survive a rebuild -- it is an index, so it is re-found by its sigma; otherwise zooming
+ * in on a chosen landmark would silently unselect it and the annulus button would then
+ * claim nothing was selected. */
 void IFSGui::mand_rebuild_landmarks() {
-  if (mand_landmark_list_N == mand_landmarks_N) return;   //cache is current
+  /* a list that came from a typed u,v pair is not a function of the window, so nothing
+     about panning or zooming should discard it */
+  if (mand_landmark_list_from_uv) return;
+  double half_w = 0.5*(mand_ur.real() - mand_ll.real());
+  double half_h = 0.5*(mand_ur.imag() - mand_ll.imag());
+  cpx ctr = 0.5*(mand_ll + mand_ur);
+  double rad = std::sqrt(half_w*half_w + half_h*half_h);   //circumscribes the window
+  //the pruning bound needs |sigma| + radius < 1, and there is no point searching a
+  //window that covers most of the disc anyway
+  bool targeted = (std::abs(ctr) + rad < 0.98) && (rad < 0.25);
+
+  if (mand_landmark_list_N == mand_landmarks_N &&
+      mand_landmark_list_targeted == targeted &&
+      mand_root_list_deg == mand_roots_deg && mand_root_list_on == mand_roots &&
+      (!targeted || (mand_landmark_list_ll == mand_ll &&
+                     mand_landmark_list_ur == mand_ur))) return;   //cache is current
+
+  /* remember the selected point so it can be re-found after the rebuild */
+  bool had_sel = (mand_landmark_selected >= 0 &&
+                  mand_landmark_selected < (int)mand_landmark_list.size());
+  double sel_re = 0.0, sel_im = 0.0;
+  if (had_sel) { sel_re = mand_landmark_list[mand_landmark_selected].sigma_re;
+                 sel_im = mand_landmark_list[mand_landmark_selected].sigma_im; }
   mand_landmark_list.clear();
   mand_landmark_selected = -1;
-  //room for every landmark at N = 9; fd_landmarks returning exactly the cap means
-  //it truncated, so size generously rather than silently showing a partial set
+
+  int N = mand_landmarks_N;
+  if (!targeted && N > 9) N = 9;      //more than the exhaustive list can deliver
+  { std::stringstream T;
+    T << "landmarks: " << (targeted ? "searching for" : "enumerating")
+      << " renormalization points with a+b <= " << N;
+    if (targeted) T << " in this window";
+    else if (N >= 9) T << " -- this takes a few seconds";
+    set_status(T.str()); }
+
+  //fd_landmarks returning exactly the cap means it truncated, so size generously
+  //rather than silently showing a partial set
   std::vector<fd_landmark> buf(60000);
-  int n = fd_landmarks(mand_landmarks_N, &buf[0], (int)buf.size());
+  /* ~3.5 seconds' worth at the measured 28000 leaves a second.  This runs on every zoom and
+     nothing can interrupt it, so it must be bounded rather than merely usually quick: at
+     a+b <= 12 an unbudgeted search takes 10 s at radius 0.02 and 88 s at 0.05. */
+  const long LM_LEAF_BUDGET = 100000;
+  int truncated = 0, root_truncated = 0;
+  int n = !mand_landmarks ? 0
+        : targeted
+        ? fd_landmarks_near(ctr.real(), ctr.imag(), rad, N, &buf[0], (int)buf.size(),
+                            LM_LEAF_BUDGET, &truncated)
+        : fd_landmarks(N, &buf[0], (int)buf.size());
   if (n < 0) {
-    set_status("landmarks: bad complexity bound");
-    mand_landmark_list_N = mand_landmarks_N;
-    return;
+    /* the targeted bound can still decline (a window straddling |s| = 1, say); say so
+       and fall back rather than showing an empty set as though there were none */
+    if (targeted) {
+      n = fd_landmarks(N > 9 ? 9 : N, &buf[0], (int)buf.size());
+      targeted = false;
+    }
+    if (n < 0) {
+      set_status("landmarks: bad complexity bound");
+      mand_landmark_list_N = mand_landmarks_N;
+      mand_landmark_list_targeted = targeted;
+      mand_landmark_list_ll = mand_ll; mand_landmark_list_ur = mand_ur;
+      return;
+    }
   }
   buf.resize(n);
   mand_landmark_list = buf;
+  /* ROOTS TOO, if asked for: the finite coincidences u(0) = v(0) of degree <= the stepper.
+     They go in the same list as the landmarks -- so they are drawn, clicked, selected and
+     handed to the annulus button by the same code -- and are told apart by their spec, which
+     begins "coin:" rather than "lm:", which is also what picks their colour. */
+  int nroots = 0;
+  if (mand_roots) {
+    std::stringstream R;
+    R << "roots: enumerating finite coincidences of degree <= " << mand_roots_deg;
+    if (!targeted && mand_roots_deg >= 10)
+      R << " over the whole plane -- this takes "
+        << (mand_roots_deg >= 12 ? "40" : "16") << " seconds or so; zoom in and it is quick";
+    set_status(R.str());
+    std::vector<fd_landmark> rbuf(200000);
+    /* Targeted in a zoomed window, exhaustive at a wide view -- the same choice, for the same
+       reason, as the landmark list above.  Only words with a long shared prefix can have
+       u(0) = v(0) near a given s, so a small disc prunes almost everything and the degree can
+       run far past what 3^d affords. */
+    nroots = targeted
+           ? fd_roots_near(ctr.real(), ctr.imag(), rad, mand_roots_deg,
+                           &rbuf[0], (int)rbuf.size(), LM_LEAF_BUDGET, &root_truncated)
+           : fd_roots(mand_roots_deg, &rbuf[0], (int)rbuf.size());
+    if (nroots > 0) {
+      rbuf.resize(nroots);
+      mand_landmark_list.insert(mand_landmark_list.end(), rbuf.begin(), rbuf.end());
+    } else nroots = 0;
+  }
+  mand_root_list_deg = mand_roots_deg;
+  mand_root_list_on = mand_roots;
   mand_landmark_list_N = mand_landmarks_N;
+  mand_landmark_list_targeted = targeted;
+  mand_landmark_list_ll = mand_ll;
+  mand_landmark_list_ur = mand_ur;
+
+  if (had_sel)
+    for (int i = 0; i < n; ++i)
+      if (std::abs(mand_landmark_list[i].sigma_re - sel_re) < 1e-12 &&
+          std::abs(mand_landmark_list[i].sigma_im - sel_im) < 1e-12) {
+        mand_landmark_selected = i; break;
+      }
+
   std::stringstream T;
-  T << "landmarks: " << n << " renormalization points with a+b <= " << mand_landmarks_N;
-  if (n == 60000) T << " (list truncated)";
+  if (mand_roots) {
+    T << "roots: " << nroots << " finite coincidence" << (nroots == 1 ? "" : "s")
+      << " of degree <= " << mand_roots_deg;
+    if (nroots == 200000 || root_truncated) T << " (list incomplete: "
+        << (root_truncated ? "search cut short -- zoom in further or lower the degree"
+                           : "hit the 200000 cap") << ")";
+    if (targeted) T << ", within " << rad << " of this window's centre";
+    T << ".  ";
+  }
+  T << "landmarks: " << n << " renormalization point" << (n == 1 ? "" : "s")
+    << " with a+b <= " << N;
+  if (targeted) {
+    T << " within " << rad << " of this window's centre";
+    /* the highest complexity present is the useful number here: a hole spiral
+       accumulates on a landmark of high a+b, so if the largest is small the search
+       has not reached deep enough to see it */
+    int best = 0;
+    for (int i = 0; i < n; ++i) if (mand_landmark_list[i].a + mand_landmark_list[i].b > best)
+      best = mand_landmark_list[i].a + mand_landmark_list[i].b;
+    if (n > 0) T << "; deepest is a+b = " << best;
+    if (truncated)
+      T << " -- SEARCH CUT SHORT at this radius, so the list is incomplete: zoom in"
+           " further, or lower the complexity bound";
+  } else if (n == 60000) T << " (list truncated)";
+  if (!targeted && mand_landmarks_N > 9)
+    T << "  [a+b > 9 needs a zoomed-in window: the exhaustive list cannot go further]";
   set_status(T.str());
 }
 
@@ -1258,21 +1594,61 @@ void IFSGui::S_mand_circle_sqrt2(XEvent* e) {
 }
 
 void IFSGui::mand_draw_landmarks() {
-  if (!mand_landmarks || window_mode == LIMIT) return;
+  if ((!mand_landmarks && !mand_roots) || window_mode == LIMIT) return;
   Widget& MW = W_mand_plot;
   int col = get_rgb_color(0.05, 0.85, 0.1);       //green: distinct from every layer
   int sel = get_rgb_color(1.0, 0.1, 0.9);
+  int rootcol = get_rgb_color(1.0, 0.85, 0.0);    //amber: the finite-coincidence roots
+
+  /* A DARK HALO UNDER EVERY DOT, and the whole lot BATCHED.
+   *
+   * The halo is what makes a mark legible whatever layer is underneath: green reads well on
+   * the connectedness layer, which is dark, but not on "contains 0", which is a light mauve of
+   * much the same brightness, and a mark that vanishes when you change layer is no use.  One
+   * black pixel of surround lets the dot supply its own contrast.
+   *
+   * The batching matters because a root set is not small: degree <= 10 is 95776 points, and
+   * one XFillArc each -- two, with the halo -- would be 190000 X requests per repaint.
+   * XFillArcs takes an array, so the whole field costs three requests: haloes, landmarks,
+   * roots.  Same trick as draw_limit. */
+  std::vector<XArc> halo, dots[2];     //[0] landmarks, [1] roots
+  int selected_x = 0, selected_y = 0;
+  bool have_sel = false;
   for (int i = 0; i < (int)mand_landmark_list.size(); ++i) {
     cpx c(mand_landmark_list[i].sigma_re, mand_landmark_list[i].sigma_im);
     if (c.real() < mand_ll.real() || c.real() > mand_ur.real() ||
         c.imag() < mand_ll.imag() || c.imag() > mand_ur.imag()) continue;
     Point2d<int> p = mand_cpx_to_pixel(c);
     bool is_sel = (i == mand_landmark_selected);
-    XSetForeground(display, MW.gc, is_sel ? sel : col);
+    if (is_sel) { selected_x = p.x; selected_y = p.y; have_sel = true; }
     int r = is_sel ? 4 : 1;
-    XFillArc(display, MW.p, MW.gc, p.x-r, p.y-r, 2*r, 2*r, 0, 23040);
-    if (is_sel)   //a ring, so the selection stays visible against a dense field
-      XDrawArc(display, MW.p, MW.gc, p.x-7, p.y-7, 14, 14, 0, 23040);
+    XArc a;
+    a.x = (short)(p.x-r-1); a.y = (short)(p.y-r-1);
+    a.width = (unsigned short)(2*r+2); a.height = (unsigned short)(2*r+2);
+    a.angle1 = 0; a.angle2 = 23040;
+    halo.push_back(a);
+    a.x = (short)(p.x-r); a.y = (short)(p.y-r);
+    a.width = (unsigned short)(2*r); a.height = (unsigned short)(2*r);
+    /* a root's spec begins "coin:", a landmark's "lm:" -- the two kinds are different
+       objects and worth telling apart at a glance */
+    dots[mand_landmark_list[i].spec[0] == 'c' ? 1 : 0].push_back(a);
+  }
+  if (!halo.empty()) {
+    XSetForeground(display, MW.gc, BlackPixel(display, screen));
+    XFillArcs(display, MW.p, MW.gc, &halo[0], (int)halo.size());
+  }
+  for (int k = 0; k < 2; ++k)
+    if (!dots[k].empty()) {
+      XSetForeground(display, MW.gc, k ? rootcol : col);
+      XFillArcs(display, MW.p, MW.gc, &dots[k][0], (int)dots[k].size());
+    }
+  if (have_sel) {   //the selection last, and ringed, so it stays visible in a dense field
+    XSetForeground(display, MW.gc, BlackPixel(display, screen));
+    XFillArc(display, MW.p, MW.gc, selected_x-5, selected_y-5, 10, 10, 0, 23040);
+    XDrawArc(display, MW.p, MW.gc, selected_x-8, selected_y-8, 16, 16, 0, 23040);
+    XSetForeground(display, MW.gc, sel);
+    XFillArc(display, MW.p, MW.gc, selected_x-4, selected_y-4, 8, 8, 0, 23040);
+    XDrawArc(display, MW.p, MW.gc, selected_x-7, selected_y-7, 14, 14, 0, 23040);
   }
 }
 
@@ -1290,20 +1666,65 @@ int IFSGui::mand_landmark_near(int wx, int wy, int tol_px) {
   return best;
 }
 
+void IFSGui::S_mand_roots(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  mand_roots = !mand_roots;
+  W_mand_roots_check.checked = mand_roots;
+  W_mand_roots_check.redraw();
+  if (mand_landmark_list_from_uv) {   //asking for the enumerated sets back
+    mand_landmark_list_from_uv = false;
+    mand_landmark_list_N = -1;
+  }
+  mand_root_list_deg = -1;            //force a rebuild either way
+  mand_rebuild_landmarks();
+  draw_mand();
+}
+
+void IFSGui::S_mand_roots_increase(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  int d = clamp_int(mand_roots_deg + 1, 1, 20);
+  if (d == mand_roots_deg) return;
+  mand_roots_deg = d;
+  std::stringstream T; T << mand_roots_deg;
+  W_mand_roots_label.update_text(T.str());
+  if (mand_landmark_list_from_uv) { mand_landmark_list_from_uv = false;
+                                    mand_landmark_list_N = -1; }
+  if (mand_roots) { mand_root_list_deg = -1; mand_rebuild_landmarks(); draw_mand(); }
+}
+
+void IFSGui::S_mand_roots_decrease(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  int d = clamp_int(mand_roots_deg - 1, 1, 20);
+  if (d == mand_roots_deg) return;
+  mand_roots_deg = d;
+  std::stringstream T; T << mand_roots_deg;
+  W_mand_roots_label.update_text(T.str());
+  if (mand_landmark_list_from_uv) { mand_landmark_list_from_uv = false;
+                                    mand_landmark_list_N = -1; }
+  if (mand_roots) { mand_root_list_deg = -1; mand_rebuild_landmarks(); draw_mand(); }
+}
+
 void IFSGui::S_mand_landmarks(XEvent* e) {
   if (e->type != ButtonPress) return;
   mand_landmarks = !mand_landmarks;
   W_mand_landmarks_check.checked = mand_landmarks;
   W_mand_landmarks_check.redraw();
+  /* toggling is how the user asks for the enumerated landmarks back after a u,v search */
+  if (mand_landmark_list_from_uv) {
+    mand_landmark_list_from_uv = false;
+    mand_landmark_list_N = -1;
+  }
   if (mand_landmarks) mand_rebuild_landmarks();
   draw_mand();
 }
 
 void IFSGui::S_mand_landmarks_decrease(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int N = clamp_int(mand_landmarks_N - 1, 3, 9);
+  int N = clamp_int(mand_landmarks_N - 1, 3, 12);
   if (N == mand_landmarks_N) return;
   mand_landmarks_N = N;
+  if (mand_landmark_list_from_uv) { mand_landmark_list_from_uv = false;
+                                    mand_landmark_list_N = -1; }
   std::stringstream T; T << mand_landmarks_N;
   W_mand_landmarks_label.update_text(T.str());
   if (mand_landmarks) { mand_rebuild_landmarks(); draw_mand(); }
@@ -1311,12 +1732,16 @@ void IFSGui::S_mand_landmarks_decrease(XEvent* e) {
 
 void IFSGui::S_mand_landmarks_increase(XEvent* e) {
   if (e->type != ButtonPress) return;
-  /* 9 is the ceiling on purpose: it is 46201 points, about 14% of the pane's
-     pixels and some seconds to enumerate, which reads as noise rather than as a
-     set of marks.  7 (2421 points, 0.12s) is the default. */
-  int N = clamp_int(mand_landmarks_N + 1, 3, 9);
+  /* 12 is the kernel's ceiling (LM_MAXN).  Above 9 the exhaustive list cannot deliver
+     -- it passes 100000 points and truncates -- so a+b > 9 is only reachable with a
+     zoomed-in window, where mand_rebuild_landmarks switches to the targeted search.
+     7 (2421 points, 0.12s) is still the default, because at a wide view anything more
+     reads as noise rather than as a set of marks. */
+  int N = clamp_int(mand_landmarks_N + 1, 3, 12);
   if (N == mand_landmarks_N) return;
   mand_landmarks_N = N;
+  if (mand_landmark_list_from_uv) { mand_landmark_list_from_uv = false;
+                                    mand_landmark_list_N = -1; }
   std::stringstream T; T << mand_landmarks_N;
   W_mand_landmarks_label.update_text(T.str());
   if (mand_landmarks) { mand_rebuild_landmarks(); draw_mand(); }
@@ -1348,9 +1773,23 @@ void IFSGui::S_mand_annulus(XEvent* e) {
   const fd_landmark& L = mand_landmark_list[mand_landmark_selected];
   cpx sigma(L.sigma_re, L.sigma_im);
 
-  /* the renormalization data, rebuilt from the landmark's own spec so that this and
-     the command line cannot disagree */
-  std::string spec(L.spec);           //"lm:<A>:<B>:<k>"
+  /* A ROOT IS NOT A LANDMARK, and this figure is only about landmarks.
+   *
+   * The selection can now be either kind: "lm:<A>:<B>:<k>" is a landmark, "coin:<u>:<v>:<k>"
+   * a root of a finite coincidence.  This picture is the set of C admitting a LIMIT trap for
+   * the asymptotic family sigma + C sigma^{bn}, which is what a landmark's infinite
+   * coincidence provides.  At a finite coincidence u(0) = v(0) the agreement is already exact
+   * and there is no asymptotic renormalization to take a limit of, so there is no annulus of
+   * E_sigma to cover -- the formulae would still evaluate (Delta = 0 there, and rho_max comes
+   * out positive), which is exactly why this has to refuse explicitly rather than quietly
+   * produce a picture of nothing. */
+  std::string spec(L.spec);
+  if (spec.compare(0, 5, "coin:") == 0) {
+    set_status("the annulus figure is for LANDMARK points, not roots: " + spec + " is a finite"
+               " coincidence u(0) = v(0), which is exact rather than asymptotic, so there is no"
+               " fundamental annulus of E_sigma to cover.  Select a landmark (green) instead");
+    return;
+  }
   std::string A, B; int pick = 0;
   { size_t p1 = spec.find(':'), p2 = spec.find(':', p1+1), p3 = spec.find(':', p2+1);
     A = spec.substr(p1+1, p2-p1-1);
@@ -1366,8 +1805,15 @@ void IFSGui::S_mand_annulus(XEvent* e) {
   ifs F; F.set_params(sigma, sigma); F.depth = mand_annulus_ball_depth;
   std::vector<Ball> TLB;
   double d = 1e-9;
+  /* ngaps, ntrials, nradial = 40, 14, 8 -- the same sweep the command line uses
+     (`certify_arc dumptlbmanyz <re> <im> 20 1e-9 40 14 8`) and the README quotes.  This
+     used to be 40, 8, 6, which is a materially weaker set: at the landmark
+     lm:-:++----++:0 it yielded 502 balls where the CLI settings give 1087, and the
+     coverage of one fundamental annulus went 90.69% with the weak set against 97.65%
+     with the strong one.  Beyond about a thousand balls it saturates, so there is no
+     point going further. */
   if (!F.trap_like_balls_many(TLB, sigma-cpx(d,d), sigma+cpx(d,d),
-                              mand_annulus_ball_depth, 40, 8, 6, true, 0)
+                              mand_annulus_ball_depth, 40, 14, 8, true, 0)
       || TLB.size() == 0) {
     set_status("annulus: no trap-like balls at this landmark");
     return;
@@ -1405,14 +1851,45 @@ void IFSGui::S_mand_annulus(XEvent* e) {
    * cmax is derived from the descent rather than guessed -- a small rho with a
    * cmax chosen for rho_max would show a spuriously uncovered picture. */
   const double ASYMP_FRACTION = 1.0/70.0;
-  double rho = ASYMP_FRACTION*info.rho_max;
+  double rho_outer = ASYMP_FRACTION*info.rho_max;
   double abs_sigma = std::abs(sigma);
+  /* WHICH PERIOD TO RENDER, and why not the outermost one.
+   *
+   * The certification is ONE-SIDED: certified at tail length c implies sigma^b C is
+   * certified at c + b, but NOT conversely.  So a period further in is strictly EASIER
+   * for the test than the one outside it -- and since the set of C admitting a limit
+   * trap is exactly invariant under C -> sigma^b C, covering ANY ONE period settles
+   * every C.  Rendering the outermost period therefore reports the hardest case and
+   * understates the answer, sometimes badly: at the landmark lm:-:++----++:0 the
+   * outermost period plateaus at 97.68% however much depth it is given, while the next
+   * one in reaches 100.0000% -- checked to 1080x1080, i.e. 1.17M pixels with none
+   * uncovered.  The outermost period is also the one that still remembers the finite
+   * scale, since its outer edge sits at rho_max/70 rather than at zero.
+   *
+   * So the picture is the disc |C| <= rho_outer*|sigma|^(PERIOD*b), and the annulus
+   * marked in red inside it is that period -- a fundamental domain of E_sigma either
+   * way, just a scale-invariant copy further in. */
+  const int PERIOD = 1;
+  double rho = rho_outer*std::pow(abs_sigma, (double)(PERIOD*core.b));
   int extra = 0;
   if (abs_sigma > 0.0 && abs_sigma < 1.0)
-    extra = (int)std::ceil(std::log(info.rho_max/rho)/std::log(1.0/abs_sigma));
+    extra = (int)std::ceil(std::log(info.rho_max/rho_outer)/std::log(1.0/abs_sigma));
+  /* ...and (PERIOD+1)*b more.  The descent term above only pays for getting from
+     rho_max down to rho_outer.  One fundamental annulus spans a factor |sigma|^b in
+     radius and each such factor inward costs b more levels, so reaching the INNER edge
+     of period PERIOD costs (PERIOD+1)*b beyond that descent.  At b = 1 this is nearly
+     invisible, which is why it went unnoticed at s0; at b = 8 it is sixteen levels, and
+     without them the deep part of the picture comes out spuriously uncovered -- which is
+     exactly how a picture that ought to be invariant under C -> sigma^b C ends up
+     looking as though it is not. */
   const int RES = mand_annulus_res;
-  int cmax = mand_annulus_cmax + extra;
-  if (cmax > 45) cmax = 45;          /* the raster byte reserves 254/255 */
+  int cmax = mand_annulus_cmax + extra + (PERIOD+1)*core.b;
+  /* 120, not 45.  cmax has to reach base + extra + (PERIOD+1)*b, and b is not small at
+     every landmark: at lm:-:+-----++++:0, where b = 10, the formula asks for 60, so a cap
+     of 45 silently truncated the depth exactly where a large b makes depth matter most.
+     funddom's own limit is 253 (the raster byte reserves 254 and 255); the reason not to go
+     there is cost, which grows with cmax -- though mildly, since the search prunes. */
+  if (cmax > 120) cmax = 120;
   figexp::Figure fig;
   fig.title = "limit traps at " + spec;
   fig.set_window(-rho, -rho, rho, rho);
@@ -1426,6 +1903,18 @@ void IFSGui::S_mand_annulus(XEvent* e) {
   double inner_r = rho*std::pow(abs_sigma, core.b);
   long inside = 0, covered = 0;          /* over the whole disc, for reference */
   long ann_inside = 0, ann_covered = 0;  /* over one fundamental annulus */
+  /* For the verdict below: how much of the annulus lies in T_sigma at all (the ceiling
+     any covering could reach), and how much was already certified b levels shallower.
+     Both come free from the per-pixel level that is computed anyway. */
+  long ann_in_T = 0, ann_cov_shallow = 0;
+  /* Depth of the survival test that decides T_sigma.  This was 8, which is far too weak
+     to be worth reporting: at the CKW hexahole -- a PROVED boundary point, and the one
+     control where the answer is known -- depth 8 says 100% of the annulus is in T_sigma,
+     while depth 26 finds 0.107% of it that provably is not.  That 0.107% is the whole
+     signal (see the verdict below), so a test that cannot see it makes the ceiling
+     useless.  It is also nearly free: 26 costs about 2% more than 8, because surv()
+     prunes as hard as the certification does. */
+  const int SURV_DEPTH = 26;
   bool aborted = false;
   for (int iy = 0; iy < RES && !aborted; ++iy) {
     if ((iy % 16) == 0) {
@@ -1448,10 +1937,15 @@ void IFSGui::S_mand_annulus(XEvent* e) {
         if (in_annulus) ++ann_inside;
         int lev = fd_level(x, y, cmax);
         if (lev < 0) {
-          if (!fd_survives(x, y, 8)) { r = g = b = 205; }   //gray: outside T_sigma
+          if (!fd_survives(x, y, SURV_DEPTH)) { r = g = b = 205; } //gray: outside T_sigma
+          else if (in_annulus) ++ann_in_T;                  //in T_sigma, not certified
         } else {
           ++covered;
-          if (in_annulus) ++ann_covered;
+          if (in_annulus) {
+            ++ann_covered;
+            ++ann_in_T;                                     //certified => in T_sigma
+            if (lev <= cmax - core.b) ++ann_cov_shallow;
+          }
           /* viridis by tail length: dark for shallow, bright yellow for deep.  Same
              ramp as render_funddom.py, which is why it lives in figure_export. */
           double t = (cmax > 1 ? double(lev)/double(cmax) : 0.0);
@@ -1483,6 +1977,77 @@ void IFSGui::S_mand_annulus(XEvent* e) {
     if (figexp::write_auto(fig, opt, name, &err)) wrote += (wrote.empty()?"":" ") + name;
     else failed += (failed.empty()?"":"; ") + err;
   }
+  /* THE VERDICT.
+   *
+   * A coverage percentage on its own says nothing: at the CKW hexahole, a proved BOUNDARY
+   * point, coverage reaches 99.87% and stops, and at s0, a proved INTERIOR point, it
+   * reaches 99.93% and keeps climbing.  Thresholding a number that close is hopeless, and
+   * an earlier attempt to do it -- with constants fitted to those two points -- reported
+   * s0 itself as "inconclusive".
+   *
+   * What separates them is not the coverage but the CEILING.  Two facts do the work:
+   *
+   *   (1) The survival test is a NECESSARY condition.  If C fails it, C admits no limit
+   *       trap at all, however deep one searches.  So the fraction of the annulus in
+   *       T_sigma is a hard ceiling on any covering, and a ceiling BELOW 100% means a
+   *       positive-measure set of C provably has none -- an obstruction, not a shortage
+   *       of depth.  Being scale-invariant, that hole recurs at every scale: exactly the
+   *       boundary-point signature.  It is also independent of cmax, which is what makes
+   *       it a stable thing to test: at the hexahole the ceiling reads 99.8927% at cmax
+   *       26, 34 and 42 alike.
+   *
+   *   (2) Conversely the certified set is invariant under C -> sigma^b C, so covering ONE
+   *       fundamental annulus covers every C, and sigma is interior.  Reaching 100% here
+   *       is therefore a real (floating-point) certificate, not a suggestive number.
+   *
+   * Hence three outcomes, in this order, and each is a statement rather than a guess:
+   * ceiling short of 100% -> boundary; else coverage at 100% -> interior; else the run is
+   * too shallow and says so.  Measured, with PERIOD = 1 and SURV_DEPTH = 26:
+   *     CKW hexahole (BOUNDARY, proved)  ceiling 99.8927%, coverage 99.8742% -> boundary?
+   *     s0           (INTERIOR, proved)  ceiling 100%,     coverage 100.0000% -> interior?
+   *     lm:-:++----++:0                  ceiling 100%,     coverage 100.0000% -> interior?
+   * All three come out right, and the first two are the only points where the answer is
+   * known independently.
+   *
+   * The tolerances are in PIXELS, not in percent, because that is what the raster can
+   * actually resolve: a percentage threshold silently means a different number of pixels
+   * at a different RES. */
+  double ann_pct   = ann_inside ? 100.0*ann_covered/ann_inside : 0.0;
+  double ceil_pct  = ann_inside ? 100.0*ann_in_T/ann_inside    : 0.0;
+  double gain_pct  = ann_inside ? 100.0*(ann_covered - ann_cov_shallow)/ann_inside : 0.0;
+  double short_pct = ceil_pct - ann_pct;
+  long ann_missing = ann_inside - ann_covered;     /* uncovered pixels of the annulus */
+  long ann_out_T   = ann_inside - ann_in_T;        /* pixels PROVABLY not in T_sigma */
+  /* A handful of pixels is noise -- a curve clipping a pixel corner, or one parameter
+     landing a rounding error away from a ball.  A hundred is a region. */
+  const long PIX_NOISE = 5;      /* this many uncovered still counts as "covered" */
+  const long PIX_REGION = 20;    /* this many outside T_sigma counts as a real hole */
+  const char* verdict_short;
+  std::string verdict;
+  if (ann_out_T >= PIX_REGION) {
+    verdict_short = "boundary?";
+    verdict = "a positive-measure set of C (that gray region) FAILS the survival test, so"
+              " it admits no limit trap at any depth; the hole is scale-invariant, so"
+              " sigma most likely lies on the BOUNDARY of M -- as at the CKW hexahole,"
+              " whose ceiling is 99.89%";
+  } else if (ann_missing <= PIX_NOISE) {
+    verdict_short = "interior?";
+    verdict = "one whole fundamental annulus of E_sigma is certified, and the limit-trap"
+              " set is invariant under C -> sigma^b C, so every C is covered: sigma lies"
+              " in the INTERIOR of M, up to floating point";
+  } else {
+    verdict_short = "too shallow";
+    verdict = "the annulus is not yet closed, but nothing in it is ruled out either (the"
+              " ceiling is 100%), so this is a shortage of depth rather than an"
+              " obstruction -- raise cmax and it should close";
+  }
+  { std::stringstream V;
+    V.precision(3);
+    V << ".  " << ann_missing << " of " << ann_inside << " pixels uncovered, of which "
+      << ann_out_T << " provably admit no limit trap; the last " << core.b
+      << " levels of depth bought " << gain_pct << "%";
+    verdict += V.str(); }
+
   { std::ofstream sc((std::string(base) + ".txt").c_str());
     if (sc) {
       sc.precision(17);
@@ -1492,28 +2057,45 @@ void IFSGui::S_mand_annulus(XEvent* e) {
       sc << "a b         " << core.a << " " << core.b << "\n";
       sc << "Delta       " << core.Delta_re << " " << core.Delta_im << "\n";
       sc << "Pprime      " << core.Pp_re << " " << core.Pp_im << "\n";
-      sc << "rho         " << rho << "\n";
+      sc << "period      " << PERIOD
+         << "   # which fundamental annulus; deeper is strictly easier for the test,\n";
+      sc << "            "
+         << "    # and covering any ONE settles every C (see S_mand_annulus)\n";
+      sc << "rho_outer   " << rho_outer << "   # outer edge of period 0\n";
+      sc << "rho         " << rho << "   # outer edge of the period rendered\n";
       sc << "rho_max     " << info.rho_max << "\n";
       sc << "inner_rho   " << inner_r << "\n";
-      sc << "cmax        " << cmax << "  (" << mand_annulus_cmax << " + "
-         << (cmax - mand_annulus_cmax) << " for the descent to rho)\n";
-      sc << "regime      asymptotic: rho = rho_max/" << (int)(1.0/ASYMP_FRACTION)
+      sc << "cmax        " << cmax << "  (" << mand_annulus_cmax << " + " << extra
+         << " for the descent to rho_outer + " << (PERIOD+1)*core.b << " = ("
+         << PERIOD << "+1)*b to reach the inner edge of period " << PERIOD << ")\n";
+      sc << "regime      asymptotic: rho_outer = rho_max/" << (int)(1.0/ASYMP_FRACTION)
          << ", so the picture should be invariant under C -> sigma^b C\n";
       sc << "resolution  " << RES << "\n";
       sc << "ball_depth  " << mand_annulus_ball_depth << "\n";
       sc << "balls       " << TLB.size() << "\n";
+      sc << "surv_depth  " << SURV_DEPTH << "   # depth of the T_sigma survival test\n";
       sc << "R_Gamma     " << info.R_Gamma << "\n";
-      sc << "annulus_certified_percent " << (ann_inside ? 100.0*ann_covered/ann_inside : 0.0) << "\n";
+      sc << "annulus_certified_percent " << ann_pct << "\n";
       sc << "disc_certified_percent    " << (inside ? 100.0*covered/inside : 0.0) << "\n";
+      sc << "annulus_in_T_sigma_percent " << ceil_pct
+         << "   # the CEILING: nothing outside T_sigma can ever be certified\n";
+      sc << "shortfall_percent          " << short_pct << "\n";
+      sc << "annulus_pixels             " << ann_inside << "\n";
+      sc << "uncovered_pixels           " << ann_missing << "\n";
+      sc << "no_limit_trap_pixels       " << ann_out_T
+         << "   # PROVABLY admit no limit trap: >= " << PIX_REGION << " means boundary\n";
+      sc << "gain_from_last_" << core.b << "_levels  " << gain_pct
+         << "   # is more depth still buying coverage?\n";
+      sc << "reference_hexahole_ceiling 99.8927   # a PROVED boundary point: ceiling < 100%\n";
+      sc << "reference_s0_ceiling       100.0     # a PROVED interior point: ceiling = 100%\n";
+      sc << "verdict     " << verdict << "\n";
     } }
 
   std::stringstream T;
   T.precision(4);
-  T << "asymptotic annulus at " << spec << ": "
-    << (ann_inside ? 100.0*ann_covered/ann_inside : 0.0)
-    << "% of the fundamental annulus certified (" << (inside ? 100.0*covered/inside : 0.0)
-    << "% of the disc; rho=" << rho << " = rho_max/" << (int)(1.0/ASYMP_FRACTION)
-    << ", " << TLB.size() << " balls, cmax " << cmax << ") -- wrote "
+  T << "annulus at " << spec << " period " << PERIOD << ": " << ann_pct
+    << "% certified of a " << ceil_pct << "% ceiling -- " << verdict
+    << "  (" << TLB.size() << " balls, cmax " << cmax << ") -- wrote "
     << base << ".{png,eps,pdf,txt}";
   if (!failed.empty()) T << "  [" << failed << "]";
   set_status(T.str());
@@ -1521,7 +2103,7 @@ void IFSGui::S_mand_annulus(XEvent* e) {
      number the whole exercise exists to produce */
   { std::stringstream R;
     R.precision(4);
-    R << (ann_inside ? 100.0*ann_covered/ann_inside : 0.0) << "% " << spec;
+    R << ann_pct << "% " << verdict_short;   /* stays under the 190px column */
     mand_annulus_last = R.str();
     W_mand_annulus_result.update_text(mand_annulus_last); }
 }
@@ -1538,6 +2120,14 @@ void IFSGui::S_mand_output_window(XEvent* e) {
 
 void IFSGui::S_mand_output_picture(XEvent* e) {
   if (e->type != ButtonPress) return;
+  /* Say so before starting.  This recomputes the whole view at the chosen resolution with
+     no progress and no abort -- at the top of the range that is 16 Mcell and tens of
+     seconds -- so the one thing it can do is not leave the user wondering whether the
+     click registered. */
+  { std::stringstream T;
+    T << "writing a " << mand_output_picture_size << "x" << mand_output_picture_size
+      << " picture -- recomputing the view, which cannot be stopped once started";
+    set_status(T.str()); }
   std::vector<std::vector<Point3d<unsigned char> > > bmp(mand_output_picture_size);
   for (int i=0; i<mand_output_picture_size; ++i) {
     bmp[i].resize(mand_output_picture_size);
@@ -1676,6 +2266,151 @@ void IFSGui::S_point_param_entered(XEvent* e) {
   set_status("moved to " + W_point_param_entry.text);
 }
 
+/* The landmark points belonging to a u,v pair the user typed.
+ *
+ * Given the pair, sigma is not chosen but SOLVED FOR: it is a root of
+ * Q(z) = A(z)(1 - z^b) + z^a B(z).  Q has integer coefficients, so its roots come in a
+ * Galois orbit and there is generally more than one -- but only those with 1/2 < |sigma| < 1
+ * are of any use (outside the unit circle the maps are not contractions, and inside |s| = 1/2
+ * the attractor is a Cantor set, so nothing can meet), and of each conjugate pair only the
+ * one with Im sigma > 0 is new, since M is symmetric under conjugation.  Those are exactly
+ * the roots fd_core_from_lm calls admissible, and it returns their count, so the whole orbit
+ * comes out of the same code path funddom uses -- which means every spec reported here can be
+ * handed straight back to the command line.
+ *
+ * The results are loaded into the landmark list, so they are drawn, clicked and selected by
+ * the machinery that already exists: a click within 6 pixels snaps to one, a second click
+ * zooms to it, and the annulus button then works on it unchanged.  The list stays until the
+ * user asks for the enumerated landmarks again (by toggling Landmarks or moving N), which
+ * is what mand_landmark_list_from_uv guards. */
+void IFSGui::S_point_uv_entered(XEvent* e) {
+  /* Brackets mean an eventually periodic word, i.e. the landmark search; two bare words mean
+     a finite coincidence, i.e. the roots search.  Dispatching on the syntax means Enter does
+     the right thing without the user having to remember which control to press, and the
+     `roots` button is there for when one wants to be explicit. */
+  if (W_point_uv_entry.text.find('(') == std::string::npos) { do_uv_roots_search(); return; }
+  std::string A, B, why;
+  if (!parse_uv_pair(W_point_uv_entry.text, A, B, why)) {
+    set_status("uv pair: " + why);
+    return;
+  }
+  fd_core core;
+  int n = fd_core_from_lm(A.c_str(), B.c_str(), 0, &core);
+  if (n < 0) {
+    set_status("uv pair: A = " + A + ", B = " + B +
+               " is not an admissible sign pair for the landmark parameterisation");
+    return;
+  }
+  if (n == 0) {
+    set_status("uv pair: A = " + A + ", B = " + B + " gives no root with 1/2 < |s| < 1 and"
+               " Im s > 0, so this pair has no landmark point (the roots are all outside the"
+               " annulus where an attractor can be connected)");
+    return;
+  }
+  std::vector<fd_landmark> found;
+  for (int pick = 0; pick < n; ++pick) {
+    fd_core c2;
+    if (fd_core_from_lm(A.c_str(), B.c_str(), pick, &c2) <= 0) continue;
+    fd_landmark L;
+    L.sigma_re = c2.sigma_re; L.sigma_im = c2.sigma_im;
+    L.a = c2.a; L.b = c2.b; L.deg = c2.a + c2.b;
+    std::snprintf(L.spec, sizeof L.spec, "lm:%s:%s:%d", A.c_str(), B.c_str(), pick);
+    found.push_back(L);
+  }
+  if (found.empty()) { set_status("uv pair: could not rebuild the roots"); return; }
+
+  uv_show_results(found, "uv pair -> A = " + A + ", B = " + B, "landmark point");
+}
+
+/* The tail shared by the landmark and the root searches: show the points, select one, take
+   the view to it, and say what was found.  Both put their results into the landmark list, so
+   the drawing, the 6px click-snap, the second-click zoom and the annulus button all work
+   without knowing which search produced them. */
+void IFSGui::uv_show_results(const std::vector<fd_landmark>& found,
+                             const std::string& lead, const char* what) {
+  mand_landmark_list = found;
+  mand_landmark_list_from_uv = true;
+  mand_landmark_selected = 0;
+  if (!mand_landmarks) {                 //no point finding them and not showing them
+    mand_landmarks = true;
+    W_mand_landmarks_check.checked = true;
+    W_mand_landmarks_check.redraw();
+  }
+  /* take the view to the first root if it is off screen, exactly as typing a parameter
+     into the s = box does -- otherwise the answer is invisible */
+  cpx sig(found[0].sigma_re, found[0].sigma_im);
+  IFS.set_params(sig, sig);
+  if (sig.real() < mand_ll.real() || sig.real() > mand_ur.real() ||
+      sig.imag() < mand_ll.imag() || sig.imag() > mand_ur.imag()) {
+    mand_recenter();
+    recompute_point_data();        //mand_recenter does not, change_highlighted_ifs does
+  } else {
+    change_highlighted_ifs(sig);   //this recomputes the point data itself
+    draw_mand();
+  }
+
+  std::stringstream T;
+  T.precision(15);
+  T << lead << " (a=" << found[0].a << " b=" << found[0].b << "): " << found.size()
+    << " " << what << (found.size() == 1 ? "" : "s") << " -- ";
+  for (int i = 0; i < (int)found.size(); ++i) {
+    if (i) T << " ; ";
+    T << "[" << i << "] " << found[i].sigma_re << (found[i].sigma_im < 0 ? "" : "+")
+      << found[i].sigma_im << "i";
+  }
+  T << ".  Click one to select it, twice to zoom in; " << found[0].spec
+    << " names the first on the command line";
+  set_status(T.str());
+}
+
+/* The `roots` search: the s at which two FINITE words agree, u(0) = v(0).
+ *
+ * Unlike a landmark, where the coincidence is asymptotic, here it is exact and finite -- so
+ * sigma is a root of a {0,+-1} polynomial and there are generally several, a Galois orbit,
+ * of which the useful ones are those with 1/2 < |sigma| < 1 and Im sigma > 0.  Since u and v
+ * then denote the same affine map, sigma is a renormalization point with b = 1, so everything
+ * downstream (including the annulus run) works at it exactly as at a landmark.
+ *
+ * The solver is funddom's own coincidence_data, reached through fd_core_from_coin, so the
+ * specs reported here (coin:u:v:k) can be handed straight to the command line. */
+void IFSGui::S_point_roots(XEvent* e) {
+  if (e->type != ButtonPress) return;
+  do_uv_roots_search();
+}
+
+void IFSGui::do_uv_roots_search() {
+  std::string u, v, why;
+  if (!parse_uv_finite(W_point_uv_entry.text, u, v, why)) {
+    set_status("roots: " + why);
+    return;
+  }
+  fd_core c0;
+  int n = fd_core_from_coin(u.c_str(), v.c_str(), 0, &c0);
+  if (n == -2) { set_status("roots: those words are too long"); return; }
+  if (n < 0) {
+    set_status("roots: u = " + u + ", v = " + v + " is not a legal coincidence pair");
+    return;
+  }
+  if (n == 0) {
+    set_status("roots: u = " + u + ", v = " + v + " has no root with 1/2 < |s| < 1 and"
+               " Im s > 0 -- the coincidence polynomial has roots, but none in the annulus"
+               " where the attractor can be connected with interior");
+    return;
+  }
+  std::vector<fd_landmark> found;
+  for (int pick = 0; pick < n; ++pick) {
+    fd_core c2;
+    if (fd_core_from_coin(u.c_str(), v.c_str(), pick, &c2) <= 0) continue;
+    fd_landmark L;
+    L.sigma_re = c2.sigma_re; L.sigma_im = c2.sigma_im;
+    L.a = c2.a; L.b = c2.b; L.deg = c2.a;
+    std::snprintf(L.spec, sizeof L.spec, "coin:%s:%s:%d", u.c_str(), v.c_str(), pick);
+    found.push_back(L);
+  }
+  if (found.empty()) { set_status("roots: could not rebuild the roots"); return; }
+  uv_show_results(found, "roots of u = " + u + ", v = " + v, "root");
+}
+
 void IFSGui::S_point_connected(XEvent* e) {
   if (e->type != ButtonPress) return;
   point_connected_check = !point_connected_check;
@@ -1686,7 +2421,7 @@ void IFSGui::S_point_connected(XEvent* e) {
 
 void IFSGui::S_point_connected_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_connected_depth+1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_connected_depth+1, 1, MAX_POINT_DEPTH);
   if (d == point_connected_depth) return;
   point_connected_depth = d;
   std::stringstream T; T.str(""); T << point_connected_depth;
@@ -1696,7 +2431,7 @@ void IFSGui::S_point_connected_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_connected_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_connected_depth-1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_connected_depth-1, 1, MAX_POINT_DEPTH);
   if (d == point_connected_depth) return;
   point_connected_depth = d;
   std::stringstream T; T.str(""); T << point_connected_depth;
@@ -1714,7 +2449,7 @@ void IFSGui::S_point_contains_half(XEvent* e) {
 
 void IFSGui::S_point_contains_half_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_contains_half_depth+1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_contains_half_depth+1, 1, MAX_POINT_DEPTH);
   if (d == point_contains_half_depth) return;
   point_contains_half_depth = d;
   std::stringstream T; T.str(""); T << point_contains_half_depth;
@@ -1724,7 +2459,7 @@ void IFSGui::S_point_contains_half_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_contains_half_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_contains_half_depth-1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_contains_half_depth-1, 1, MAX_POINT_DEPTH);
   if (d == point_contains_half_depth) return;
   point_contains_half_depth = d;
   std::stringstream T; T.str(""); T << point_contains_half_depth;
@@ -1742,7 +2477,7 @@ void IFSGui::S_point_uv_words(XEvent* e) {
 
 void IFSGui::S_point_uv_words_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_uv_words_depth+1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_uv_words_depth+1, 1, MAX_POINT_DEPTH);
   if (d == point_uv_words_depth) return;
   point_uv_words_depth = d;
   std::stringstream T; T.str(""); T << point_uv_words_depth;
@@ -1752,7 +2487,7 @@ void IFSGui::S_point_uv_words_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_uv_words_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_uv_words_depth-1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_uv_words_depth-1, 1, MAX_POINT_DEPTH);
   if (d == point_uv_words_depth) return;
   point_uv_words_depth = d;
   std::stringstream T; T.str(""); T << point_uv_words_depth;
@@ -1771,7 +2506,7 @@ void IFSGui::S_point_trap(XEvent* e) {
 
 void IFSGui::S_point_trap_increase_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_trap_depth+1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_trap_depth+1, 1, MAX_POINT_DEPTH);
   if (d == point_trap_depth) return;
   point_trap_depth = d;
   std::stringstream T; T.str(""); T << point_trap_depth;
@@ -1781,7 +2516,7 @@ void IFSGui::S_point_trap_increase_depth(XEvent* e) {
 
 void IFSGui::S_point_trap_decrease_depth(XEvent* e) {
   if (e->type != ButtonPress) return;
-  int d = clamp_int(point_trap_depth-1, 1, MAX_WORD_DEPTH);
+  int d = clamp_int(point_trap_depth-1, 1, MAX_POINT_DEPTH);
   if (d == point_trap_depth) return;
   point_trap_depth = d;
   std::stringstream T; T.str(""); T << point_trap_depth;
@@ -1807,13 +2542,32 @@ void IFSGui::S_mand_path_create_by_boundary(XEvent* e) {
                                        std::vector<bool>(mand_num_pixel_groups, false));
   for (int i=0; i<mand_num_pixel_groups; ++i) {
     for (int j=0; j<mand_num_pixel_groups; ++j) {
-      grid[i][j] = (mand_data_grid[i][mand_num_pixel_groups-j-1].x > 0);
+      /* >= 0, not > 0.  A pixel is in M exactly when this entry is non-negative -- that is
+         what mand_get_color tests, and what the connectedness pass writes (-1 for "not
+         connected", otherwise a shade).  Testing > 0 threw away every pixel whose shade is
+         0, which is most of M: those are the ones that render black.  The trace then
+         started inside what it took to be a hole and returned a path bounding nothing,
+         while the movie path just below already used >= 0.  Same grid, two conventions. */
+      grid[i][j] = (mand_data_grid[i][mand_num_pixel_groups-j-1].x >= 0);
     }
   }
   Point2d<int> p = mand_cpx_to_pixel_group(IFS.z);
   p.y = mand_num_pixel_groups - p.y -1;
   path = IFSPath();
-  IFS.hole_boundary_containing_point_from_grid(path.path, path.closed, grid, p, mand_ll, mand_ur, 0); 
+  IFS.hole_boundary_containing_point_from_grid(path.path, path.closed, grid, p, mand_ll, mand_ur, 0);
+  /* An empty trace is the normal outcome when the selected parameter is not inside a hole
+     of M at all, and it used to be indistinguishable from success: path.is_valid went true
+     regardless and the whole "Path options" panel appeared, its buttons all operating on
+     nothing.  Say what happened and leave the panel alone. */
+  if (path.path.size() == 0) {
+    path = IFSPath();
+    set_status(mand_connected
+      ? "no hole boundary here: the selected parameter is not inside a component of the"
+        " complement of M in this window -- pick one in a white region and try again"
+      : "no hole boundary here: the Connected layer is off, so there is no computed grid"
+        " of M to trace the boundary of -- switch it on first");
+    return;
+  }
   path.is_valid = true;
   make_path_task_buttons(false);
   draw_mand();
@@ -1873,11 +2627,27 @@ void IFSGui::S_mand_path_create_movie(XEvent* e) {
       }
     }
   }
-  (void)ifs_movie_from_path(IFS, path.path, path.closed, "ifs_movie",
-                            limit_ll, limit_ur, limit_depth, 
-                            path.movie_with_mandelbrot, &mand_ll, &mand_ur, &mand_connected_grid, 
-                            W_limit_plot.width, W_limit_plot.height, 
+  /* ifs_movie_from_path refuses more than 2000 frames, and said so only on stdout -- so
+     from the GUI the button simply did nothing.  Check here, where the status line is. */
+  long frames = (long)path.movie_fps*(long)path.movie_length;
+  if (frames > 2000) {
+    std::stringstream T;
+    T << "movie: " << path.movie_fps << " fps x " << path.movie_length << " s = " << frames
+      << " frames, and at most 2000 can be written -- lower the movie length to "
+      << (2000/(path.movie_fps > 0 ? path.movie_fps : 1)) << " s or less";
+    set_status(T.str());
+    return;
+  }
+  { std::stringstream T;
+    T << "movie: writing " << frames << " frames to ifs_movie* -- this cannot be stopped"
+         " once started";
+    set_status(T.str()); }
+  bool movie_ok = ifs_movie_from_path(IFS, path.path, path.closed, "ifs_movie",
+                            limit_ll, limit_ur, limit_depth,
+                            path.movie_with_mandelbrot, &mand_ll, &mand_ur, &mand_connected_grid,
+                            W_limit_plot.width, W_limit_plot.height,
                             path.movie_fps, path.movie_length, 1);
+  set_status(movie_ok ? "movie: wrote ifs_movie*" : "movie: failed (see the terminal)");
 }
 
 void IFSGui::S_mand_path_movie_decrease_length(XEvent* e) {
@@ -2149,7 +2919,16 @@ void IFSGui::draw_nifs_limit() {
   colors[4] = get_rgb_color(0,1,1);
   
   nBall initial_ball(0,min_r,1);
-  
+
+  /* The point the picture exists to locate -- and it is 1/s, not 2/s.
+     Lambda is connected iff f(Lambda) meets g(Lambda), i.e. iff s a - 1 = s b + 1 for some
+     a, b in Lambda, i.e. iff 2/s lies in Lambda - Lambda.  But the set drawn here is the
+     attractor E of z -> s z + c with c in {-1, 0, +1}, whereas the differences of the two
+     translations are {-2, 0, +2}: so Lambda - Lambda = 2E, and the test on the plotted set
+     is 1/s in E.  (Checked numerically as well as algebraically: on |s| = 1/sqrt2, where s
+     is certainly in M, 1/s lands in E at 45, 60 and 84 degrees and 2/s lands outside.) */
+  cpx crit_point = 1.0/IFS.z;
+
   std::vector< nBall_stuff > stack(0);
   stack.push_back( nBall_stuff(false, -1, 0, initial_ball) );
   while (stack.size() > 0) {
@@ -2197,7 +2976,16 @@ void IFSGui::draw_nifs_limit() {
       XFillArc(display, LW.p, LW.gc, p.x-3, p.y-3, 3, 3, 23040, 23040);
     }
   }
-  
+
+  /* the cross at 1/s, drawn last so it is never buried under the set */
+  if (limit_ll.real() < crit_point.real() && crit_point.real() < limit_ur.real() &&
+      limit_ll.imag() < crit_point.imag() && crit_point.imag() < limit_ur.imag()) {
+    Point2d<int> p = limit_cpx_to_pixel(crit_point);
+    XSetForeground(display, LW.gc, BlackPixel(display, screen));
+    XDrawLine(display, LW.p, LW.gc, p.x-6, p.y, p.x+6, p.y);
+    XDrawLine(display, LW.p, LW.gc, p.x, p.y-6, p.x, p.y+6);
+  }
+
   LW.redraw();
 }
 
@@ -2306,10 +3094,17 @@ void IFSGui::draw_2d_limit() {
   //set up the IFS and get the initial rectangle 
   double rz = std::real(IFS.z);
   if (rz < 0.6 || rz > 0.68) {
+    /* Say so.  This used to return silently, leaving a blank white pane and no clue that
+       the layer had simply declined to draw -- which reads as a broken feature. */
+    std::stringstream T;
+    T.precision(6);
+    T << "2d IFS: only defined for 0.6 <= Re(s) <= 0.68 (the box sizes are tabulated over"
+         " that range); Re(s) is " << rz << " here";
+    set_status(T.str());
     LW.redraw();
     return;
   }
-  
+
   ifs2d IFS2d;
   IFS2d.gens.resize(2);
   IFS2d.gens[0] = AffineMap( rz, 0, 1, rz, 0, 0 );
@@ -2317,12 +3112,11 @@ void IFSGui::draw_2d_limit() {
   double box_sizes[17] = {1.98593, 2.08085, 2.1883, 2.31103, 2.45263, 2.61793, 2.81353,
                           3.04875, 3.33714, 3.69922, 4.16762, 4.79755, 5.69039, 7.05483,
                           9.46713, 14.6384, 33.0532};
-  int ub_ind = 0;
-  double upper_bound = 0.6;
-  while (upper_bound < rz) {
-    upper_bound += 0.005;
-    ub_ind++;
-  };
+  /* Index directly and clamp.  Accumulating 0.005 at a time and counting the steps lands
+     on 16 at rz = 0.68 only because 0.6 + 16*0.005 happens to round up to >= 0.68; one ulp
+     the other way reads box_sizes[17], one past the end. */
+  int ub_ind = (int)std::ceil((rz - 0.6)/0.005);
+  ub_ind = clamp_int(ub_ind, 0, 16);
   double bs = box_sizes[ub_ind];
   
   std::vector<Point2d<double> > initial_box(4);
@@ -2445,13 +3239,43 @@ void IFSGui::draw_limit() {
   int blue_color = (limit_uv_graph ? get_rgb_color(0.5,0.9,1) : get_rgb_color(0,0.6,1.0));
   int yellow_color = (limit_uv_graph ? get_rgb_color(1,0.8,0.5) : get_rgb_color(1.0,0.6,0));
   
+  /* BATCH THE LEAVES.  One leaf ball used to be one X request -- and there are 2^n of
+     them, so at depth 22 that is four million requests for a picture of at most 319,225
+     pixels.  XDrawPoints and XFillArcs take arrays, so the leaves are collected per
+     colour and flushed in blocks; the picture is identical and the request count drops
+     by three orders of magnitude.  Two buckets because the colour can only be one of
+     two (blue = last generator f, yellow = g), and with `Colors` off only one is used. */
+  const int LIMIT_BATCH = 4096;
+  std::vector<XPoint> pts[2];
+  std::vector<XArc>   arcs[2];
+  pts[0].reserve(LIMIT_BATCH); pts[1].reserve(LIMIT_BATCH);
+  arcs[0].reserve(LIMIT_BATCH); arcs[1].reserve(LIMIT_BATCH);
+  /* With `Colors` off the old code set no foreground at all, so the leaves inherited the
+     BlackPixel left by the border above.  Batching has to set a foreground explicitly, so
+     that has to be black here or the picture would silently turn blue. */
+  int leaf_colors[2];
+  if (limit_colors) { leaf_colors[0] = blue_color; leaf_colors[1] = yellow_color; }
+  else { leaf_colors[0] = leaf_colors[1] = BlackPixel(display, screen); }
+
   Ball initial_ball(0.5,(IFS.z-1.0)/2.0,(1.0-IFS.w)/2.0,min_r);
   std::vector<std::pair<bool,Ball> > stack(0);
   stack.push_back(std::make_pair(false, initial_ball));
+  /* Escape has to work here too.  The word length goes up to MAX_WORD_DEPTH and the cost
+     doubles with every level, so this loop can run for many minutes, and until now the
+     only way out was to kill the process.  Polling on a counter rather than per ball
+     because XCheckMaskEvent is a good deal dearer than one iteration of this loop. */
+  bool limit_aborted = false;
+  long balls_done = 0;
   while (stack.size() > 0) {
+    if ((++balls_done & 0xFFFF) == 0) {
+      XEvent ev;
+      while (XCheckMaskEvent(display, KeyPressMask, &ev))
+        if (XLookupKeysym(&ev.xkey, 0) == XK_Escape) limit_aborted = true;
+      if (limit_aborted) break;
+    }
     std::pair<bool,Ball> b = stack.back();
     stack.pop_back();
-    //if the ball is disjoint from the window, we might as well 
+    //if the ball is disjoint from the window, we might as well
     //get rid of it
     if (!b.first && b.second.is_disjoint(limit_ll, limit_ur)) continue;
     if ( (!limit_auto_depth && b.second.word_len >= limit_depth) ||
@@ -2459,13 +3283,31 @@ void IFSGui::draw_limit() {
       Point2d<int> p = limit_cpx_to_pixel(b.second.center);
       double r = b.second.radius / limit_pixel_width;
       if (r <= 1.0) r = 1.0;
-      if (limit_colors) {
-        XSetForeground(display, LW.gc, (b.second.last_gen_index()==0 ? blue_color : yellow_color));
-      }
+      int k = (limit_colors && b.second.last_gen_index() != 0) ? 1 : 0;
       if (limit_chunky) {
-        XFillArc(display, LW.p, LW.gc, p.x-r, p.y-r, int(2.0*r), int(2.0*r), 23040, 23040);
+        /* (int)(p.x - r), NOT p.x - (int)r.  The XFillArc call this replaces passed the
+           double expression p.x - r straight into an int parameter, so it truncated the
+           whole thing; rounding r first moves edge pixels by one and the picture is
+           visibly not the same. */
+        XArc a;
+        a.x = (short)(int)(p.x - r); a.y = (short)(int)(p.y - r);
+        a.width = (unsigned short)(int)(2.0*r);
+        a.height = (unsigned short)(int)(2.0*r);
+        a.angle1 = 23040; a.angle2 = 23040;
+        arcs[k].push_back(a);
+        if ((int)arcs[k].size() >= LIMIT_BATCH) {
+          XSetForeground(display, LW.gc, leaf_colors[k]);
+          XFillArcs(display, LW.p, LW.gc, &arcs[k][0], (int)arcs[k].size());
+          arcs[k].clear();
+        }
       } else {
-        XDrawPoint(display, LW.p, LW.gc, p.x, p.y);
+        XPoint q; q.x = (short)p.x; q.y = (short)p.y;
+        pts[k].push_back(q);
+        if ((int)pts[k].size() >= LIMIT_BATCH) {
+          XSetForeground(display, LW.gc, leaf_colors[k]);
+          XDrawPoints(display, LW.p, LW.gc, &pts[k][0], (int)pts[k].size(), CoordModeOrigin);
+          pts[k].clear();
+        }
       }
       continue;
     }
@@ -2485,7 +3327,20 @@ void IFSGui::draw_limit() {
       }
     }
   }
-  
+  //whatever is left in the buckets
+  for (int k=0; k<2; ++k) {
+    if (!arcs[k].empty()) {
+      XSetForeground(display, LW.gc, leaf_colors[k]);
+      XFillArcs(display, LW.p, LW.gc, &arcs[k][0], (int)arcs[k].size());
+    }
+    if (!pts[k].empty()) {
+      XSetForeground(display, LW.gc, leaf_colors[k]);
+      XDrawPoints(display, LW.p, LW.gc, &pts[k][0], (int)pts[k].size(), CoordModeOrigin);
+    }
+  }
+  if (limit_aborted)
+    set_status("limit set: stopped -- the picture is incomplete; lower the depth");
+
   //draw the marked points 0, 1/2, 1
   for (int i=0; i<(int)limit_marked_points.size(); ++i) {
     cpx& c = limit_marked_points[i];
@@ -2723,6 +3578,29 @@ int IFSGui::mand_get_color(PointNd<4,int>& p) {
   }
 }
 
+/* Paint one mesh cell into the client-side raster of draw_mand.  A NULL image means
+   XCreateImage failed, in which case fall back to drawing the cell straight into the
+   pixmap -- slow, but correct, and it keeps the failure from blanking the picture. */
+void IFSGui::mand_put_cell(XImage* img, int i, int j, unsigned long col) {
+  Widget& MW = W_mand_plot;
+  int x0 = i*mand_pixel_group_size, y0 = j*mand_pixel_group_size;
+  if (img == NULL) {
+    XSetForeground(display, MW.gc, col);
+    XFillRectangle(display, MW.p, MW.gc, x0, y0,
+                   mand_pixel_group_size, mand_pixel_group_size);
+    return;
+  }
+  for (int dy = 0; dy < mand_pixel_group_size; ++dy) {
+    int y = y0 + dy;
+    if (y >= MW.height) break;
+    for (int dx = 0; dx < mand_pixel_group_size; ++dx) {
+      int x = x0 + dx;
+      if (x >= MW.width) break;
+      XPutPixel(img, x, y, col);
+    }
+  }
+}
+
 void IFSGui::mand_draw_ball(const Ball& b, int col) {
   Point2d<int> p = mand_cpx_to_pixel(b.center);
   Widget& MP = W_mand_plot;
@@ -2757,14 +3635,41 @@ void IFSGui::draw_mand() {
                     (mand_contains_half && !mand_grid_contains_half_valid) ||
                     (mand_trap && !mand_grid_trap_valid));
   bool aborted = false;
+  clock_t tmr_t0 = clock();
+  struct timeval tmr_w0; gettimeofday(&tmr_w0, NULL);
+  struct timeval tmr_last_blit = tmr_w0;
+  int pending_from = 0;          //first column not yet shown on screen
+
+  /* NO PROGRESS REPORT HERE, deliberately.  The picture fills in column by column as it
+     is computed, so the user can watch the progress directly -- a bar saying the same
+     thing in words is redundant, and it was not free: redrawing the status text and the
+     bar cost about eleven X requests and two XFlushes each time.  The status line still
+     says once, up front, that Escape stops it, and the annulus figure (which produces no
+     visual feedback at all until it finishes) keeps its bar. */
+  if (computing)
+    set_status("mandelbrot: computing (Escape to stop)");
+
+  /* ONE XImage FOR THE WHOLE PANE, blitted a column at a time.
+   *
+   * The cell-by-cell drawing this replaces issued XSetForeground + XFillRectangle per
+   * cell -- 638,450 X requests at the finest mesh, for a picture of 319,225 pixels.  That
+   * made the repaint X-bound rather than compute-bound: measured at mesh 1 with three
+   * layers, 1.12 s of CPU inside this function but 6.0 s of wall clock.  Writing the
+   * pixels into a client-side image costs no X traffic at all, and one XPutImage per
+   * column puts the finished strip into the pixmap.  XPutPixel rather than raw stores
+   * because it is the only way to be correct for every visual and byte order. */
+  XImage* raster = XCreateImage(display, DefaultVisual(display, screen),
+                                DefaultDepth(display, screen), ZPixmap, 0, NULL,
+                                MW.width, MW.height, 32, 0);
+  if (raster) {
+    raster->data = (char*)malloc((size_t)raster->bytes_per_line * MW.height);
+    if (!raster->data) { XDestroyImage(raster); raster = NULL; }
+  }
+  const unsigned long white = WhitePixel(display, screen);
 
   for (int i=0; i<(int)mand_num_pixel_groups; ++i) {
 
     if (computing) {
-      std::stringstream S;
-      S << "mandelbrot: column " << i+1 << " of " << mand_num_pixel_groups
-        << "   (Escape to stop)";
-      set_progress(double(i+1)/double(mand_num_pixel_groups), S.str());
       //Poll for an abort.  This pane is the only thing in the program that can
       //take minutes, and until now there was no way out of it but to kill the
       //process.  Draining KeyPressMask here does swallow other keystrokes typed
@@ -2786,11 +3691,7 @@ void IFSGui::draw_mand() {
          background color makes the picture stop at a circle instead of fading into
          black, and saves computing them at all. */
       if (std::abs(c) > 1.0) {
-        XSetForeground(display, MW.gc, WhitePixel(display, screen));
-        XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size,
-                                             j*mand_pixel_group_size,
-                                             mand_pixel_group_size,
-                                             mand_pixel_group_size);
+        mand_put_cell(raster, i, j, white);
         continue;
       }
       temp_IFS.set_params(c,c);
@@ -2840,22 +3741,56 @@ void IFSGui::draw_mand() {
         mand_data_grid[i][j].z = (diff < 0 ? -1 : get_rgb_color(0, double(diff)/100, 1.0));
       }
 
-      //draw the pixel for the impatient
-      int col = mand_get_color(mand_data_grid[i][j]);
-      XSetForeground(display, MW.gc, col);
-      XFillRectangle(display, MW.p, MW.gc, i*mand_pixel_group_size, 
-                                           j*mand_pixel_group_size, 
-                                           mand_pixel_group_size, 
-                                           mand_pixel_group_size);
-      XCopyArea(display, MW.p, main_window, MW.gc, i*mand_pixel_group_size, 
-                                                   j*mand_pixel_group_size, 
-                                                   mand_pixel_group_size, 
-                                                   mand_pixel_group_size, 
-                                                   MW.ul.x + i*mand_pixel_group_size,
-                                                   MW.ul.y + j*mand_pixel_group_size);
+      //record the cell in the client-side image; no X traffic
+      mand_put_cell(raster, i, j, mand_get_color(mand_data_grid[i][j]));
+    }
+
+    /* SHOW THE FINISHED COLUMNS -- but not one blit per column.
+     *
+     * A blit to the on-screen window is expensive out of all proportion to its size: on
+     * XQuartz each one makes the server update the screen, and 565 of them cost about
+     * 4 seconds of wall clock against 1.1 seconds of actual computation.  (That is what
+     * was left after the earlier fix, which had already cut one blit per CELL down to one
+     * per column.)  So accumulate finished columns and blit the whole strip at once, at
+     * most every BLIT_SEC, plus whatever remains at the end.  Twenty updates a second is
+     * already smoother than the eye needs, and the picture still fills in left to right. */
+    const double BLIT_SEC = 0.05;
+    struct timeval now; gettimeofday(&now, NULL);
+    double since = (now.tv_sec - tmr_last_blit.tv_sec)
+                 + 1e-6*(now.tv_usec - tmr_last_blit.tv_usec);
+    bool last_col = (i + 1 == (int)mand_num_pixel_groups);
+    if (since >= BLIT_SEC || last_col) {
+      int gx = pending_from*mand_pixel_group_size;
+      int gw = (i - pending_from + 1)*mand_pixel_group_size;
+      if (gx + gw > MW.width) gw = MW.width - gx;
+      if (gw > 0) {
+        if (raster)
+          XPutImage(display, MW.p, MW.gc, raster, gx, 0, gx, 0, gw, MW.height);
+        XCopyArea(display, MW.p, main_window, MW.gc, gx, 0, gw, MW.height,
+                  MW.ul.x + gx, MW.ul.y);
+      }
+      pending_from = i + 1;
+      tmr_last_blit = now;
     }
   }
-  
+  /* an abort leaves the last few columns unblitted; the pixmap is what everything else
+     reads, so it must still get them even though the picture is being discarded */
+  if (raster && pending_from < (int)mand_num_pixel_groups) {
+    int gx = pending_from*mand_pixel_group_size;
+    int gw = MW.width - gx;
+    if (gw > 0) XPutImage(display, MW.p, MW.gc, raster, gx, 0, gx, 0, gw, MW.height);
+  }
+
+  if (raster) XDestroyImage(raster);   //frees raster->data too
+
+  if (getenv("SCHOTTKY_TIMING")) {
+    struct timeval tv; gettimeofday(&tv, NULL);
+    fprintf(stderr, "[TIMING] draw_mand cpu %.3f s  wall %.3f s, %ld columns\n",
+            double(clock()-tmr_t0)/CLOCKS_PER_SEC,
+            (tv.tv_sec - tmr_w0.tv_sec) + 1e-6*(tv.tv_usec - tmr_w0.tv_usec),
+            (long)mand_num_pixel_groups);
+  }
+
   //an aborted pass left most of the grid at its -1 fill, so the layers must stay
   //invalid or the half-finished picture becomes the cached answer forever
   if (!aborted) {
@@ -2952,7 +3887,20 @@ void IFSGui::draw_mand() {
   if (aborted) {
     set_status("mandelbrot: stopped -- the picture is incomplete, so nothing was cached");
   } else if (computing) {
-    if (mand_trap && !found_TLB) set_status("mandelbrot: done (no trap-like balls in this window)");
+    if (mand_trap && !found_TLB) {
+      /* Say HOW MUCH more zoom is wanted.  "No trap-like balls in this window" is true but
+         unhelpful: the balls have to be common to the whole window, so the window has to be
+         very small -- around 1e-8 across, which is about twenty-eight halvings from the
+         initial view.  Told only "well zoomed-in", a user reasonably concludes after a few
+         zooms that the feature is broken.  It is not: at 4e-9 across the whole pane comes
+         out certified. */
+      std::stringstream T;
+      T.precision(2);
+      T << "mandelbrot: done -- no trap-like balls common to this whole window, which is "
+        << (mand_ur.real() - mand_ll.real()) << " across; traps want it below about 1e-8"
+           " (right-click to zoom, or use Zoom in repeatedly)";
+      set_status(T.str());
+    }
     else                         set_status("mandelbrot: done");
   }
 }
@@ -3017,6 +3965,8 @@ void IFSGui::mand_zoom(double radius_multiplier) {
   mand_ll = c - cpx(radius, radius);
   mand_ur = c + cpx(radius, radius);
   mand_reset_mesh();
+  //the targeted landmark list is built for one window, so it goes stale on a zoom
+  if (mand_landmarks) mand_rebuild_landmarks();
   draw_mand();
 }
 
@@ -3029,6 +3979,7 @@ void IFSGui::mand_recenter() {
   mand_grid_connected_valid = false;
   mand_grid_contains_half_valid = false;
   mand_grid_trap_valid = false;
+  if (mand_landmarks) mand_rebuild_landmarks();
   draw_mand();
 }
 
@@ -3091,7 +4042,13 @@ void IFSGui::recompute_point_data() {
   if (!point_uv_words_check) {
     T.str(""); T << "(disabled)";
   } else {
-    IFS.find_closest_uv_words(point_uv_words, point_uv_words_depth);
+    /* CAP THE BEAM.  Unbounded (the default) this search quadruples its working set at
+       every level, and at a parameter where the coincidence is exact -- a landmark, which
+       is exactly where one asks -- it runs the machine out of memory instead of answering.
+       Nothing here can interrupt it either: recompute_point_data has no abort.  20000 is
+       far more beam than the answer needs at any depth reachable from the stepper, and the
+       truncation keeps the closest candidates, so the minimiser is not thrown away. */
+    IFS.find_closest_uv_words(point_uv_words, point_uv_words_depth, 0.0, 20000);
     T.str("");
     //find_closest_uv_words gives up and leaves the list empty when the IFS has
     //no minimal enclosing ball, which happens in the corners of the default view
@@ -3133,7 +4090,13 @@ void IFSGui::find_traps_along_path(int verbose) {
     if (path.path[i].imag() < box_ll.imag()) {
       box_ll = cpx(box_ll.real(), path.path[i].imag());
     }
-    if (path.path[i].imag() > box_ur.real()) {
+    /* box_ur.imag(), not box_ur.real().  Comparing the imaginary part of a path point
+       against the REAL part of the running upper bound is a copy-paste slip that has been
+       here since 2014: whenever a path's imaginary coordinates never exceed its real ones
+       -- the common case -- this test never fires, the top edge of the box stays pinned to
+       the first point's height, and the trap search below runs on a box that does not
+       contain the path. */
+    if (path.path[i].imag() > box_ur.imag()) {
       box_ur = cpx(box_ur.real(), path.path[i].imag());
     }
   }
@@ -3359,8 +4322,11 @@ void IFSGui::set_status(const std::string& s) {
    reporting "row 403 of 565" is legible only if you read it; a bar is legible at a
    glance, which is the point of a progress indicator. */
 void IFSGui::set_progress(double frac, const std::string& t) {
-  set_status(t);
   if (!status_widget_ready) return;
+  /* update_text redraws and blits the widget but does not flush; the single XFlush at
+     the end of this function covers both it and the bar.  Calling set_status here
+     instead would flush twice for one visible change. */
+  W_status.update_text(t);
   if (frac < 0.0) frac = 0.0;
   if (frac > 1.0) frac = 1.0;
   Widget& S = W_status;
@@ -3391,9 +4357,35 @@ int IFSGui::get_rgb_color(double r, double g, double b) {
 
 
 
+/* Where the user actually sees this window, which is the position of the window MANAGER's
+   frame and not of our own window: under a reparenting WM ours sits at a small offset
+   inside the frame, so recreating it at our own absolute coordinates would walk it down
+   and to the right by the border width on every mode switch.  Walk up to the child of the
+   root -- that is the frame -- and take its origin.  False if anything is unavailable, in
+   which case the caller keeps whatever it had. */
+bool IFSGui::window_frame_origin(int& ox, int& oy) {
+  if (!main_window_initialized) return false;
+  Window the_root = RootWindow(display, screen);
+  Window w = main_window;
+  for (int guard = 0; guard < 32; ++guard) {
+    Window r = 0, parent = 0, *kids = NULL;
+    unsigned int nkids = 0;
+    if (!XQueryTree(display, w, &r, &parent, &kids, &nkids)) return false;
+    if (kids) XFree(kids);
+    if (parent == the_root || parent == 0) break;
+    w = parent;
+  }
+  XWindowAttributes a;
+  if (!XGetWindowAttributes(display, w, &a)) return false;
+  ox = a.x; oy = a.y;
+  return true;
+}
+
 void IFSGui::reset_and_pack_window() {
   //destroy the main window, if it exists
   if (main_window_initialized) {
+    int fx = 0, fy = 0;
+    if (window_frame_origin(fx, fy)) { main_window_x = fx; main_window_y = fy; }
     XDestroyWindow(display, main_window);
   }
   //figure out how big to make the window (here ss = sidebar size)
@@ -3429,8 +4421,12 @@ void IFSGui::reset_and_pack_window() {
   limit_pixel_width = (limit_ur.real() - limit_ll.real())/double(x);
   
   //create the window
-  main_window = XCreateSimpleWindow(display, 
-                                    RootWindow(display, screen), 20, 20,
+  /* Reuse wherever the user last had it.  Switching window mode destroys and recreates
+     this window, and hard-coding (20,20) snapped it back to the corner every time, undoing
+     whatever placement they had chosen.  main_window_x/y are updated from ConfigureNotify. */
+  main_window = XCreateSimpleWindow(display,
+                                    RootWindow(display, screen),
+                                    main_window_x, main_window_y,
                                     main_window_width, main_window_height, 4,
                                     BlackPixel(display, screen), WhitePixel(display, screen));
   //the window used to have no name at all, so window lists and screenshot tools
@@ -3478,6 +4474,10 @@ void IFSGui::reset_and_pack_window() {
   //to spare, so nothing is clipped and the line stays pasteable in full
   W_point_point = WidgetText(this, "initializing", 700, 20);
   W_point_param_entry = WidgetEntry(this, "s = ", "", 340, 20, &IFSGui::S_point_param_entered);
+    /* Beside it on the same row: a u,v pair, which is the other way of naming a parameter --
+       not by its coordinates but by the coincidence it realises.  It shares the row because
+       the bottom panel has the width to spare and no rows to spare. */
+    W_point_uv_entry = WidgetEntry(this, "uv = ", "", 360, 20, &IFSGui::S_point_uv_entered);
   W_point_connected_check = WidgetCheck(this, "Connected", 105, 20, point_connected_check, &IFSGui::S_point_connected);
   W_point_connected_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_connected_decrease_depth);
   T.str(""); T << point_connected_depth;
@@ -3485,7 +4485,7 @@ void IFSGui::reset_and_pack_window() {
   W_point_connected_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_point_connected_increase_depth);
   W_point_connected_status = WidgetText(this, "initializing", -1, 20);
   
-  W_point_contains_half_check = WidgetCheck(this, "Contains 1/2", 105, 20, point_contains_half_check, &IFSGui::S_point_contains_half);
+  W_point_contains_half_check = WidgetCheck(this, "Contains 0", 105, 20, point_contains_half_check, &IFSGui::S_point_contains_half);
   W_point_contains_half_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_point_contains_half_decrease_depth);
   T.str(""); T << point_contains_half_depth;
   W_point_contains_half_depth_label = WidgetText(this, T.str(), -1, 20);
@@ -3587,7 +4587,7 @@ void IFSGui::reset_and_pack_window() {
     T.str("");  T << mand_connected_depth;
     W_mand_connected_depth_label = WidgetText(this, T.str(), -1, 20);
     W_mand_connected_depth_rightarrow = WidgetRightArrow(this, 20,20, &IFSGui::S_mand_connected_increase_depth);
-    W_mand_contains_half_check = WidgetCheck(this, "Contains 1/2:", 105, 20, (mand_contains_half ? 1 : 0), &IFSGui::S_mand_contains_half);
+    W_mand_contains_half_check = WidgetCheck(this, "Contains 0:", 105, 20, (mand_contains_half ? 1 : 0), &IFSGui::S_mand_contains_half);
     W_mand_contains_half_depth_leftarrow = WidgetLeftArrow(this, 20,20, &IFSGui::S_mand_contains_half_decrease_depth);
     T.str("");  T << mand_contains_half_depth;
     W_mand_contains_half_depth_label = WidgetText(this, T.str(), -1, 20);
@@ -3600,13 +4600,24 @@ void IFSGui::reset_and_pack_window() {
     W_mand_scale_check = WidgetCheck(this, "Scale + axes", 105, 20, (mand_scale ? 1 : 0), &IFSGui::S_mand_scale);
     W_mand_circle_half_check = WidgetCheck(this, "|s|=1/2", 105, 20, (mand_circle_half ? 1 : 0), &IFSGui::S_mand_circle_half);
     W_mand_circle_sqrt2_check = WidgetCheck(this, "|s|=1/sqrt2", 105, 20, (mand_circle_sqrt2 ? 1 : 0), &IFSGui::S_mand_circle_sqrt2);
+    /* The other reading of the uv box: two FINITE words, whose exact coincidence
+       u(0) = v(0) gives roots rather than landmark points.  Laid out exactly like Landmarks
+       below it, because it is the same kind of thing: a set of marked parameters with a
+       complexity bound. */
+    W_mand_roots_check = WidgetCheck(this, "Roots:", 105, 20, (mand_roots ? 1 : 0), &IFSGui::S_mand_roots);
+    W_mand_roots_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_roots_decrease);
+    { std::stringstream RT; RT << mand_roots_deg;
+      W_mand_roots_label = WidgetText(this, RT.str(), 20, 20); }
+    W_mand_roots_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_roots_increase);
     W_mand_landmarks_check = WidgetCheck(this, "Landmarks:", 105, 20, (mand_landmarks ? 1 : 0), &IFSGui::S_mand_landmarks);
     W_mand_landmarks_leftarrow = WidgetLeftArrow(this, 20, 20, &IFSGui::S_mand_landmarks_decrease);
     T.str("");  T << mand_landmarks_N;
     W_mand_landmarks_label = WidgetText(this, T.str(), 20, 20);
     W_mand_landmarks_rightarrow = WidgetRightArrow(this, 20, 20, &IFSGui::S_mand_landmarks_increase);
     W_mand_annulus_button = WidgetButton(this, "Limit traps in annulus", -1, 20, &IFSGui::S_mand_annulus);
-    W_mand_annulus_result = WidgetText(this, mand_annulus_last, 190, 20);
+    /* 165, not 190: mand_sidebar_size is 170, so a 190px readout has its right edge (and
+       its border) clipped off the end of the panel in every window mode. */
+    W_mand_annulus_result = WidgetText(this, mand_annulus_last, 165, 20);
     W_mand_legend = WidgetText(this, "color:", 190, 20);
 
     W_mand_mouse_label = WidgetText(this, "Mouse:", 50, 20);
@@ -3688,6 +4699,13 @@ void IFSGui::reset_and_pack_window() {
     pack_widget_upper_right(&W_mand_plot, &W_mand_scale_check);
     pack_widget_upper_right(&W_mand_plot, &W_mand_circle_half_check);
     pack_widget_upper_right(&W_mand_plot, &W_mand_circle_sqrt2_check);
+    /* `roots` sits directly above Landmarks: both put marks on the parameter plane, and the
+       two searches the uv box drives belong next to the control that shows their results.
+       Everything below moves down a row, which the packer does by itself. */
+    pack_widget_upper_right(&W_mand_plot, &W_mand_roots_check);
+    pack_widget_upper_right(&W_mand_roots_check, &W_mand_roots_leftarrow);
+    pack_widget_upper_right(&W_mand_roots_leftarrow, &W_mand_roots_label);
+    pack_widget_upper_right(&W_mand_roots_label, &W_mand_roots_rightarrow);
     pack_widget_upper_right(&W_mand_plot, &W_mand_landmarks_check);
     pack_widget_upper_right(&W_mand_landmarks_check, &W_mand_landmarks_leftarrow);
     pack_widget_upper_right(&W_mand_landmarks_leftarrow, &W_mand_landmarks_label);
@@ -3766,6 +4784,7 @@ void IFSGui::reset_and_pack_window() {
   //instead of silently dropping it, but it is worth keeping this panel
   //inside its budget rather than relying on that.
   pack_widget_upper_right(NULL, &W_point_param_entry);
+  pack_widget_upper_right(&W_point_param_entry, &W_point_uv_entry);
 
   //the status line is the last row, under everything else.  If there was no
   //room for it, leave set_status inert rather than blitting to a stale position.
@@ -3798,27 +4817,27 @@ void IFSGui::reset_and_pack_window() {
   W_limit_depth_title.help = "word length n: the picture is the image of a point (or disk) under all words in f,g of length n";
   W_limit_depth_auto.help = "adjust n automatically so the picture stays sharp while zooming";
   W_limit_chunky.help = "draw disks instead of points; then the picture provably CONTAINS the limit set";
-  W_limit_colors.help = "color f(Lambda) and g(Lambda) differently";
+  W_limit_colors.help = "color f(Lambda) and g(Lambda) differently; where they overlap g is drawn on top";
   W_limit_uv_graph.help = "label the balls at the given depth and join closest f/g pairs; paths in this graph are short-hop paths";
   W_limit_trap.help = "draw the trap certifying this parameter: the two words u,v whose clusters interleave, in magenta and green";
   W_limit_trap_depth_leftarrow.help = "shorter trap words: faster, but a trap may exist only at greater length";
   W_limit_trap_depth_rightarrow.help = "longer trap words: finds traps closer to the boundary of M, and costs more";
   W_limit_trap_zoom.help = "take the view to the trap, which is only a few pixels across at this scale";
-  W_limit_nifs.help = "plot the 3-generator IFS of DIFFERENCES of points of Lambda; s is in M exactly when 2/s lies in it";
+  W_limit_nifs.help = "plot half the difference set Lambda-Lambda (the 3-generator IFS with translations -1,0,1); s is in M exactly when the marked point 1/s lies in it";
   W_limit_2d.help = "the affine limit set; only meaningful for real part of s between 0.6 and 0.68";
   W_mand_plot.help = "parameter space: left-click picks a parameter (drag to sweep), right-click picks and zooms in";
   W_mand_recenter.help = "recenter the window on the selected parameter";
   W_mand_mesh_title.help = "how many screen pixels make up one computed cell; smaller is sharper and slower";
   W_mand_connected_check.help = "plot M, the set where Lambda_s is connected; the shade shows how hard a touching pair was to find";
-  W_mand_contains_half_check.help = "plot M_0, the parameters whose limit set contains the point 1/2";
+  W_mand_contains_half_check.help = "plot M_0, the parameters whose limit set contains the point 0 (the program works internally in a normalization where that point is 1/2, hence contains_half in the source)";
   W_mand_trap_check.help = "search for CKW traps, which certify a whole disk of parameters inside M; needs a well zoomed-in window and works best near the boundary of M";
   W_mand_scale_check.help = "draw a scale bar and the coordinate axes; a deep zoom is otherwise impossible to place";
   W_mand_circle_half_check.help = "draw the circle |s| = 1/2; below it the attractor is a Cantor set, so dM lies outside";
   W_mand_circle_sqrt2_check.help = "draw the circle |s| = 1/sqrt2; at or above it the attractor is robustly connected, so dM lies inside";
   W_mand_landmarks_check.help = "mark the renormalization points of complexity a+b <= N, where the limit-trap mechanism applies; click one to select it exactly";
   W_mand_landmarks_leftarrow.help = "lower the complexity bound N (fewer, simpler landmark points)";
-  W_mand_landmarks_rightarrow.help = "raise the complexity bound N; 9 gives 46201 points, which reads as noise";
-  W_mand_annulus_button.help = "at the selected landmark, certify limit traps over one fundamental annulus of E_sigma and write the figure as png/eps/pdf; Escape aborts";
+  W_mand_landmarks_rightarrow.help = "raise the complexity bound N (up to 12); above 9 needs a zoomed-in window, where the landmarks are found by a targeted search instead of by enumerating all of them";
+  W_mand_annulus_button.help = "at the selected LANDMARK (green -- not a root, whose coincidence is exact rather than asymptotic), certify limit traps over one fundamental annulus of E_sigma and write the figure as png/eps/pdf; Escape aborts";
   W_mand_annulus_result.help = "result of the last annulus run; it stays here after the status line moves on";
   W_mand_legend.help = "priority order of the color layers: the first one with a value wins; white means disconnected, or |s| > 1 where there is no attractor";
   W_mand_output_window.help = "print the current window corners to the terminal";
@@ -3826,12 +4845,27 @@ void IFSGui::reset_and_pack_window() {
   W_mand_path_create_by_drawing_button.help = "draw a path in parameter space by clicking a sequence of points";
   W_mand_path_create_by_boundary_button.help = "trace the boundary of the component of the complement of M containing the selected parameter";
   W_point_param_entry.help = "type a parameter and press Enter: 're im', 're+imi', a bare angle in degrees on |s|=1/sqrt2, or 'deg@r'";
+  W_point_uv_entry.help = "with brackets, prefix(period) for each, Enter marks the LANDMARK points where u,v agree asymptotically, e.g. fg(fffffggggg) gf(gggggfffff); without brackets, two finite words, Enter marks the ROOTS where u(0)=v(0) exactly, e.g. fgff gfgg";
+  W_mand_roots_check.help = "mark every s with u(0) = v(0) for some pair of FINITE words -- the roots of the {0,+-1} polynomials -- up to the degree at right; amber, against the landmarks' green, and click one to select it.  Only Im s > 0 is marked, one per conjugate pair, so the lower half is bare by convention and not for want of roots";
+  W_mand_roots_leftarrow.help = "lower the degree bound (fewer roots)";
+  W_mand_roots_rightarrow.help = "raise the degree bound; in a zoomed window the search is targeted and cheap, at a wide view it enumerates all 3^d polynomials (degree 10 is 95776 roots and some seconds)";
   W_point_point.help = "the selected parameter: real, imaginary, |s|, arg in degrees -- select and copy it";
   W_point_connected_check.help = "test whether Lambda_s is connected at the selected parameter";
-  W_point_contains_half_check.help = "test whether Lambda_s contains the point 1/2";
+  W_point_contains_half_check.help = "test whether Lambda_s contains the point 0, the fixed point of the symmetry of the pair f(z)=sz-1, g(z)=sz+1";
   W_point_uv_words_check.help = "find the closest pair of words u,v with u(Lambda) meeting v(Lambda)";
   W_point_trap_check.help = "search for a trap at the selected parameter, certifying a disk of parameters around it inside M";
   W_status.help = "status line: progress, results, and this help";
+  /* SCHOTTKY_DUMP_WIDGETS: print the packed rectangle of every widget, with its help
+     line as a name.  There is no other way to find out where a control ended up --
+     the packer places everything relative to everything else -- so a test script
+     otherwise has to guess pixel coordinates off a screenshot, which silently rots
+     the moment a label changes width.  Three lines, gated on getenv, like
+     SCHOTTKY_TIMING in draw_mand. */
+  if (getenv("SCHOTTKY_DUMP_WIDGETS"))
+    for (int i=0; i<(int)widgets.size(); ++i)
+      fprintf(stderr, "[WIDGET] %3d  x %4d y %4d w %4d h %3d  %s\n", i,
+              widgets[i]->ul.x, widgets[i]->ul.y, widgets[i]->width,
+              widgets[i]->height, widgets[i]->help.c_str());
   if (window_mode != MANDELBROT) draw_limit();
   if (window_mode != LIMIT) draw_mand();
   
@@ -3962,16 +4996,30 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
      inside mand_rebuild_landmarks, which only runs if the user toggles Landmarks on,
      so pressing the annulus button first would have used uninitialised values. */
   mand_annulus_res = 360;
-  mand_annulus_cmax = 14;            /* base, before the descent term; see S_mand_annulus */
+  /* Base tail length, before the descent term and the per-period term; see
+     S_mand_annulus.  30 rather than 14 because 14 is not enough to close the annulus at
+     s0, a PROVED interior point: there the descent costs 13 and the two periods 2, so a
+     base of 14 gives cmax 29 and 96 uncovered pixels, while 30 gives cmax 45 and none.
+     The cost of the extra levels is mild -- the search prunes, so cmax 45 is about 2.6x
+     cmax 29, not (3/2)^16 -- and cmax is capped at 45 by the raster byte anyway. */
+  mand_annulus_cmax = 30;
   mand_annulus_ball_depth = 20;
   mand_annulus_last = "annulus: not run yet";
   mand_scale = true;          /* on by default: knowing the scale is never unwanted */
   mand_circle_half = false;
   mand_circle_sqrt2 = false;
   mand_landmarks = false;
+  mand_roots = false;
+  mand_roots_deg = 8;            /* 7520 roots, about a second; see S_mand_roots_increase */
+  mand_root_list_deg = -1;
+  mand_root_list_on = false;
   mand_landmarks_N = 7;              /* 2421 points, 0.12s -- see S_mand_landmarks_increase */
   mand_landmark_list_N = -1;
   mand_landmark_selected = -1;
+  mand_landmark_list_targeted = false;
+  mand_landmark_list_from_uv = false;
+  mand_landmark_list_ll = cpx(0.0, 0.0);
+  mand_landmark_list_ur = cpx(0.0, 0.0);
   mand_output_picture_size = 1000;
   
   point_connected_check = true;
@@ -4018,10 +5066,12 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
     return;
   }
   main_window_initialized = false;
+  main_window_x = 20;              //until the WM tells us otherwise
+  main_window_y = 20;
   the_gui_font = NULL;
   
   //reset (set) the window
-  limit_sidebar_size = 130;
+  limit_sidebar_size = 145;   /* was 130, which clipped "Switch to mandelbrot" (137px) */
   mand_sidebar_size = 170;
   reset_and_pack_window();
   

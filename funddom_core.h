@@ -83,6 +83,31 @@ int fd_core_builtin(const char *name, fd_core *out);
    -2 if `pick` is out of range. */
 int fd_core_from_lm(const char *A, const char *B, int pick, fd_core *out);
 
+/* A renormalization point from a FINITE coincidence u(0) = v(0), with u and v equal-length
+   f/g words starting with different letters.  Note that u(0) = v(0) is a statement in the
+   PAPER's normalization f(z) = sz-1, g(z) = sz+1 -- not in the program's base-1/2 one -- so
+   sigma is a root of the {0,+-1} polynomial sum_j d_j z^j with d_j = (eps^u_j - eps^v_j)/2.
+   `pick` selects among the admissible roots (1/2 < |sigma| < 1, Im sigma > 0).  Returns the
+   NUMBER of admissible roots, 0 if none, -1 if (u,v) is not a legal pair, -2 if the words are
+   too long, -3 if `pick` is out of range. */
+int fd_core_from_coin(const char *u, const char *v, int pick, fd_core *out);
+
+/* Every root of a FINITE coincidence u(0) = v(0) of degree <= maxdeg: the companion of
+   fd_landmarks, and the same thing as enumerating the roots in 1/2 < |s| < 1, Im s > 0 of
+   the {0,+-1} polynomials with nonzero constant term.  Writes at most maxout and returns the
+   count (== maxout means truncated), or -1 for a bad maxdeg.  Cost is 3^maxdeg polynomials.
+   `spec` gives the canonical (u,v) realising each: d = -1 -> (f,g), +1 -> (g,f), 0 -> (f,f). */
+int fd_roots(int maxdeg, fd_landmark *out, int maxout);
+
+/* The same roots, but only those within `radius` of one point, found by branch and bound on
+   the coefficients instead of by enumerating all 3^maxdeg of them -- the roots analogue of
+   fd_landmarks_near, and simpler, since here the coefficients are bounded by 1.  That is what
+   makes the layer usable at a deep zoom: only words sharing a long prefix can have u(0)=v(0)
+   near a given s, which in coefficient terms is the low-order d_j being pinned first.
+   `leaf_budget` and `*truncated` behave as in fd_landmarks_near; either may be 0/NULL. */
+int fd_roots_near(double c_re, double c_im, double radius, int maxdeg,
+                  fd_landmark *out, int maxout, long leaf_budget, int *truncated);
+
 /* Enumerate the landmark points of complexity a+b <= N, in increasing a+b.
    Writes at most maxout of them and returns the count, or -1 if N is out of range.
    A return value EQUAL to maxout means the list was truncated -- there may be more.
@@ -91,6 +116,26 @@ int fd_core_from_lm(const char *A, const char *B, int pick, fd_core *out);
    caller that wants it needs room for all 46201.  Cost grows like (N-1)*3^(N-1)
    polynomials: N=8 is under a second, N=9 a few seconds, N=10 about sixteen. */
 int fd_landmarks(int N, fd_landmark *out, int maxout);
+
+/* The landmarks within `radius` of one point, found by branch and bound on the
+   coefficients of Q rather than by enumerating all 3^N of them: the coefficients enter
+   Q(sigma) with geometrically decreasing weight, so a prefix plus a tail bound rules out
+   whole subtrees at once.  See the long comment on fd_landmarks_near in funddom.c.
+   That makes a SMALL window cheap right up to the a+b ceiling, which is what a deep zoom
+   needs -- a hole spiral accumulates on a landmark of high complexity, and the exhaustive
+   list passes 100000 points at N = 10 and truncates.  Verified against fd_landmarks: for
+   N <= 9 the two agree exactly on which landmarks lie in a given disc.
+   Returns the count, or -1 for a bad N or radius, or if |sigma| + radius >= 1, where the
+   bound degenerates.  Set FD_LMNEAR_STATS=1 to see the leaf and prune counts.
+
+   `leaf_budget` bounds the work in leaves (calls to the root finder), which is where the
+   time goes -- about 28000 a second, and the cost climbs steeply with the radius.  Pass 0
+   for no limit, which suits a command-line caller who can wait and can interrupt; an
+   interactive caller that cannot be interrupted should pass a budget.  `*truncated` is set
+   when the budget or `maxout` stopped the search early, so the caller can say the list is
+   incomplete rather than presenting it as everything there is.  Either may be NULL/0. */
+int fd_landmarks_near(double c_re, double c_im, double radius, int N,
+                      fd_landmark *out, int maxout, long leaf_budget, int *truncated);
 
 /*-------------------------------------------------------------- the solver ---*/
 
