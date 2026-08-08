@@ -354,7 +354,26 @@ certifies a whole fundamental domain and so puts $\sigma$ in the interior.  The 
 therefore reports \texttt{boundary?}, \texttt{interior?} or \texttt{too shallow}, and that
 verdict comes out right on the two points where the answer is known independently: the CKW
 hexahole, which is on $\partial\mathcal{M}$, has a ceiling of $99.89\%$, while $s_0$, which
-is interior, reaches $100\%$ of a $100\%$ ceiling.  The verdict stays on screen after the
+is interior, reaches $100\%$ of a $100\%$ ceiling.
+
+A more emphatic boundary example, and a good one to try first, is
+\begin{center}
+\texttt{lm:--0:0-+-0+-:2}, \quad $a = 3$, \quad $b = 7$,\\[2pt]
+$\sigma = -0.59759976439861895 + 0.35355293830678886\,i$,
+\end{center}
+which shows the same converging family of holes as the hexahole but far more plainly: the ceiling
+is $97.46\%$, so about one part in forty of the fundamental annulus \emph{provably} admits no
+limit trap at any depth --- $2584$ pixels of $101164$, against the hexahole's $51$ --- while the
+coverage sits at $93.38\%$ and the last $b$ levels of depth buy $0.016\%$, so it has plainly
+stopped climbing.  Note $b = 7$ puts the required tail length at $56$: this is exactly the sort of
+point that the old cap of $45$ truncated silently.
+
+It is worth saying how it was found, because the method generalises: by eye, from a sequence of
+converging holes in a zoomed view, and then confirmed by the ceiling.  That is the right thing to
+screen on.  A ceiling short of $100\%$ is a \emph{sound} obstruction, since failing the survival
+test is a necessary condition and rules those $C$ out at every depth; low coverage on its own is
+just as likely to mean too little depth.  The ceiling is also independent of \texttt{cmax}, which
+makes it cheap to test.  The verdict stays on screen after the
 run, and everything needed to reproduce the figure goes in the sidecar.
 \item[Write window coords] This outputs the window to the terminal.
 \item[Write picture]  This recomputes the current picture at the given resolution

@@ -1362,127 +1362,148 @@ void IFSGui::mand_rebuild_landmarks() {
   //window that covers most of the disc anyway
   bool targeted = (std::abs(ctr) + rad < 0.98) && (rad < 0.25);
 
-  if (mand_landmark_list_N == mand_landmarks_N &&
-      mand_landmark_list_targeted == targeted &&
-      mand_root_list_deg == mand_roots_deg && mand_root_list_on == mand_roots &&
-      (!targeted || (mand_landmark_list_ll == mand_ll &&
-                     mand_landmark_list_ur == mand_ur))) return;   //cache is current
+  /* THE TWO HALVES ARE CACHED SEPARATELY, each against its own key.
+   *
+   * They used to share one, and the key recorded whether the ROOTS were included but not
+   * whether the LANDMARKS were -- so this sequence left the display empty and believed it was
+   * up to date: Landmarks on (list = landmarks), Landmarks off (no rebuild, list kept),
+   * Roots on (rebuild -- landmarks excluded, since the layer is off), Roots off (rebuild --
+   * now nothing is on, so the list is emptied), Landmarks on (every field of the key matches,
+   * so the empty list is served as current, and no landmarks appear).  Keying each half on
+   * its own "is this layer on" flag is what fixes that.
+   *
+   * Separate caches also mean toggling one layer does not re-run the other's search, which
+   * matters: the root enumeration is 16 seconds at degree 10. */
+  bool lm_stale = (mand_landmark_list_on != mand_landmarks ||
+                   mand_landmark_list_N  != mand_landmarks_N ||
+                   mand_landmark_list_targeted != targeted ||
+                   (targeted && (mand_landmark_list_ll != mand_ll ||
+                                 mand_landmark_list_ur != mand_ur)));
+  bool rt_stale = (mand_root_list_on != mand_roots ||
+                   mand_root_list_deg != mand_roots_deg ||
+                   mand_root_list_targeted != targeted ||
+                   (targeted && (mand_root_list_ll != mand_ll ||
+                                 mand_root_list_ur != mand_ur)));
+  if (!lm_stale && !rt_stale) return;
 
-  /* remember the selected point so it can be re-found after the rebuild */
+  /* ~3.5 seconds' worth at the measured 28000 leaves a second.  These run on every zoom and
+     nothing can interrupt them, so they must be bounded rather than merely usually quick. */
+  const long LM_LEAF_BUDGET = 100000;
+  int N = mand_landmarks_N;
+  if (!targeted && N > 9) N = 9;      //more than the exhaustive list can deliver
+
+  if (lm_stale) {
+    mand_lm_cache.clear();
+    mand_lm_truncated = false;
+    if (mand_landmarks) {
+      { std::stringstream T;
+        T << "landmarks: " << (targeted ? "searching for" : "enumerating")
+          << " renormalization points with a+b <= " << N;
+        if (targeted) T << " in this window";
+        else if (N >= 9) T << " -- this takes a few seconds";
+        set_status(T.str()); }
+      //fd_landmarks returning exactly the cap means it truncated, so size generously
+      //rather than silently showing a partial set
+      std::vector<fd_landmark> buf(60000);
+      int trunc = 0;
+      int n = targeted
+            ? fd_landmarks_near(ctr.real(), ctr.imag(), rad, N, &buf[0], (int)buf.size(),
+                                LM_LEAF_BUDGET, &trunc)
+            : fd_landmarks(N, &buf[0], (int)buf.size());
+      /* the targeted bound can still decline (a window straddling |s| = 1, say); fall back
+         rather than showing an empty set as though there were none */
+      if (n < 0 && targeted) { n = fd_landmarks(N > 9 ? 9 : N, &buf[0], (int)buf.size());
+                               trunc = 0; }
+      if (n > 0) { buf.resize(n); mand_lm_cache = buf; }
+      mand_lm_truncated = (trunc != 0) || (n == 60000);
+    }
+    mand_landmark_list_on = mand_landmarks;
+    mand_landmark_list_N = mand_landmarks_N;
+    mand_landmark_list_targeted = targeted;
+    mand_landmark_list_ll = mand_ll;
+    mand_landmark_list_ur = mand_ur;
+  }
+
+  if (rt_stale) {
+    mand_rt_cache.clear();
+    mand_rt_truncated = false;
+    if (mand_roots) {
+      { std::stringstream R;
+        R << "roots: " << (targeted ? "searching for" : "enumerating")
+          << " finite coincidences of degree <= " << mand_roots_deg;
+        if (targeted) R << " in this window";
+        else if (mand_roots_deg >= 10)
+          R << " over the whole plane -- this takes "
+            << (mand_roots_deg >= 12 ? "40" : "16") << " seconds or so; zoom in and it is quick";
+        set_status(R.str()); }
+      std::vector<fd_landmark> rbuf(200000);
+      int trunc = 0;
+      /* Targeted in a zoomed window, exhaustive at a wide view -- the same choice, for the
+         same reason, as the landmarks: only words with a long shared prefix can have
+         u(0) = v(0) near a given s, so a small disc prunes almost everything. */
+      int nr = targeted
+             ? fd_roots_near(ctr.real(), ctr.imag(), rad, mand_roots_deg,
+                             &rbuf[0], (int)rbuf.size(), LM_LEAF_BUDGET, &trunc)
+             : fd_roots(mand_roots_deg, &rbuf[0], (int)rbuf.size());
+      if (nr > 0) { rbuf.resize(nr); mand_rt_cache = rbuf; }
+      mand_rt_truncated = (trunc != 0) || (nr == 200000);
+    }
+    mand_root_list_on = mand_roots;
+    mand_root_list_deg = mand_roots_deg;
+    mand_root_list_targeted = targeted;
+    mand_root_list_ll = mand_ll;
+    mand_root_list_ur = mand_ur;
+  }
+
+  /* remember the selected point so it can be re-found after the rebuild: the selection is an
+     index, and either half changing length moves it */
   bool had_sel = (mand_landmark_selected >= 0 &&
                   mand_landmark_selected < (int)mand_landmark_list.size());
   double sel_re = 0.0, sel_im = 0.0;
   if (had_sel) { sel_re = mand_landmark_list[mand_landmark_selected].sigma_re;
                  sel_im = mand_landmark_list[mand_landmark_selected].sigma_im; }
-  mand_landmark_list.clear();
+
+  mand_landmark_list = mand_lm_cache;
+  mand_landmark_list.insert(mand_landmark_list.end(),
+                            mand_rt_cache.begin(), mand_rt_cache.end());
   mand_landmark_selected = -1;
-
-  int N = mand_landmarks_N;
-  if (!targeted && N > 9) N = 9;      //more than the exhaustive list can deliver
-  { std::stringstream T;
-    T << "landmarks: " << (targeted ? "searching for" : "enumerating")
-      << " renormalization points with a+b <= " << N;
-    if (targeted) T << " in this window";
-    else if (N >= 9) T << " -- this takes a few seconds";
-    set_status(T.str()); }
-
-  //fd_landmarks returning exactly the cap means it truncated, so size generously
-  //rather than silently showing a partial set
-  std::vector<fd_landmark> buf(60000);
-  /* ~3.5 seconds' worth at the measured 28000 leaves a second.  This runs on every zoom and
-     nothing can interrupt it, so it must be bounded rather than merely usually quick: at
-     a+b <= 12 an unbudgeted search takes 10 s at radius 0.02 and 88 s at 0.05. */
-  const long LM_LEAF_BUDGET = 100000;
-  int truncated = 0, root_truncated = 0;
-  int n = !mand_landmarks ? 0
-        : targeted
-        ? fd_landmarks_near(ctr.real(), ctr.imag(), rad, N, &buf[0], (int)buf.size(),
-                            LM_LEAF_BUDGET, &truncated)
-        : fd_landmarks(N, &buf[0], (int)buf.size());
-  if (n < 0) {
-    /* the targeted bound can still decline (a window straddling |s| = 1, say); say so
-       and fall back rather than showing an empty set as though there were none */
-    if (targeted) {
-      n = fd_landmarks(N > 9 ? 9 : N, &buf[0], (int)buf.size());
-      targeted = false;
-    }
-    if (n < 0) {
-      set_status("landmarks: bad complexity bound");
-      mand_landmark_list_N = mand_landmarks_N;
-      mand_landmark_list_targeted = targeted;
-      mand_landmark_list_ll = mand_ll; mand_landmark_list_ur = mand_ur;
-      return;
-    }
-  }
-  buf.resize(n);
-  mand_landmark_list = buf;
-  /* ROOTS TOO, if asked for: the finite coincidences u(0) = v(0) of degree <= the stepper.
-     They go in the same list as the landmarks -- so they are drawn, clicked, selected and
-     handed to the annulus button by the same code -- and are told apart by their spec, which
-     begins "coin:" rather than "lm:", which is also what picks their colour. */
-  int nroots = 0;
-  if (mand_roots) {
-    std::stringstream R;
-    R << "roots: enumerating finite coincidences of degree <= " << mand_roots_deg;
-    if (!targeted && mand_roots_deg >= 10)
-      R << " over the whole plane -- this takes "
-        << (mand_roots_deg >= 12 ? "40" : "16") << " seconds or so; zoom in and it is quick";
-    set_status(R.str());
-    std::vector<fd_landmark> rbuf(200000);
-    /* Targeted in a zoomed window, exhaustive at a wide view -- the same choice, for the same
-       reason, as the landmark list above.  Only words with a long shared prefix can have
-       u(0) = v(0) near a given s, so a small disc prunes almost everything and the degree can
-       run far past what 3^d affords. */
-    nroots = targeted
-           ? fd_roots_near(ctr.real(), ctr.imag(), rad, mand_roots_deg,
-                           &rbuf[0], (int)rbuf.size(), LM_LEAF_BUDGET, &root_truncated)
-           : fd_roots(mand_roots_deg, &rbuf[0], (int)rbuf.size());
-    if (nroots > 0) {
-      rbuf.resize(nroots);
-      mand_landmark_list.insert(mand_landmark_list.end(), rbuf.begin(), rbuf.end());
-    } else nroots = 0;
-  }
-  mand_root_list_deg = mand_roots_deg;
-  mand_root_list_on = mand_roots;
-  mand_landmark_list_N = mand_landmarks_N;
-  mand_landmark_list_targeted = targeted;
-  mand_landmark_list_ll = mand_ll;
-  mand_landmark_list_ur = mand_ur;
-
   if (had_sel)
-    for (int i = 0; i < n; ++i)
+    for (int i = 0; i < (int)mand_landmark_list.size(); ++i)
       if (std::abs(mand_landmark_list[i].sigma_re - sel_re) < 1e-12 &&
           std::abs(mand_landmark_list[i].sigma_im - sel_im) < 1e-12) {
         mand_landmark_selected = i; break;
       }
 
+  int n = (int)mand_lm_cache.size(), nroots = (int)mand_rt_cache.size();
   std::stringstream T;
   if (mand_roots) {
     T << "roots: " << nroots << " finite coincidence" << (nroots == 1 ? "" : "s")
       << " of degree <= " << mand_roots_deg;
-    if (nroots == 200000 || root_truncated) T << " (list incomplete: "
-        << (root_truncated ? "search cut short -- zoom in further or lower the degree"
-                           : "hit the 200000 cap") << ")";
-    if (targeted) T << ", within " << rad << " of this window's centre";
+    if (targeted) T << " within " << rad << " of this window's centre";
+    if (mand_rt_truncated) T << " (list incomplete: zoom in further or lower the degree)";
     T << ".  ";
   }
-  T << "landmarks: " << n << " renormalization point" << (n == 1 ? "" : "s")
-    << " with a+b <= " << N;
-  if (targeted) {
-    T << " within " << rad << " of this window's centre";
-    /* the highest complexity present is the useful number here: a hole spiral
-       accumulates on a landmark of high a+b, so if the largest is small the search
-       has not reached deep enough to see it */
-    int best = 0;
-    for (int i = 0; i < n; ++i) if (mand_landmark_list[i].a + mand_landmark_list[i].b > best)
-      best = mand_landmark_list[i].a + mand_landmark_list[i].b;
-    if (n > 0) T << "; deepest is a+b = " << best;
-    if (truncated)
-      T << " -- SEARCH CUT SHORT at this radius, so the list is incomplete: zoom in"
-           " further, or lower the complexity bound";
-  } else if (n == 60000) T << " (list truncated)";
-  if (!targeted && mand_landmarks_N > 9)
-    T << "  [a+b > 9 needs a zoomed-in window: the exhaustive list cannot go further]";
+  if (mand_landmarks) {
+    T << "landmarks: " << n << " renormalization point" << (n == 1 ? "" : "s")
+      << " with a+b <= " << N;
+    if (targeted) {
+      T << " within " << rad << " of this window's centre";
+      /* the highest complexity present is the useful number here: a hole spiral
+         accumulates on a landmark of high a+b, so if the largest is small the search
+         has not reached deep enough to see it */
+      int best = 0;
+      for (int i = 0; i < n; ++i)
+        if (mand_lm_cache[i].a + mand_lm_cache[i].b > best)
+          best = mand_lm_cache[i].a + mand_lm_cache[i].b;
+      if (n > 0) T << "; deepest is a+b = " << best;
+      if (mand_lm_truncated)
+        T << " -- SEARCH CUT SHORT at this radius, so the list is incomplete: zoom in"
+             " further, or lower the complexity bound";
+    } else if (mand_lm_truncated) T << " (list truncated)";
+    if (!targeted && mand_landmarks_N > 9)
+      T << "  [a+b > 9 needs a zoomed-in window: the exhaustive list cannot go further]";
+  }
+  if (!mand_landmarks && !mand_roots) T << "landmarks and roots both off: nothing marked";
   set_status(T.str());
 }
 
@@ -1675,8 +1696,7 @@ void IFSGui::S_mand_roots(XEvent* e) {
     mand_landmark_list_from_uv = false;
     mand_landmark_list_N = -1;
   }
-  mand_root_list_deg = -1;            //force a rebuild either way
-  mand_rebuild_landmarks();
+  mand_rebuild_landmarks();           //the keys decide what actually gets rebuilt
   draw_mand();
 }
 
@@ -1689,7 +1709,7 @@ void IFSGui::S_mand_roots_increase(XEvent* e) {
   W_mand_roots_label.update_text(T.str());
   if (mand_landmark_list_from_uv) { mand_landmark_list_from_uv = false;
                                     mand_landmark_list_N = -1; }
-  if (mand_roots) { mand_root_list_deg = -1; mand_rebuild_landmarks(); draw_mand(); }
+  if (mand_roots) { mand_rebuild_landmarks(); draw_mand(); }
 }
 
 void IFSGui::S_mand_roots_decrease(XEvent* e) {
@@ -1701,7 +1721,7 @@ void IFSGui::S_mand_roots_decrease(XEvent* e) {
   W_mand_roots_label.update_text(T.str());
   if (mand_landmark_list_from_uv) { mand_landmark_list_from_uv = false;
                                     mand_landmark_list_N = -1; }
-  if (mand_roots) { mand_root_list_deg = -1; mand_rebuild_landmarks(); draw_mand(); }
+  if (mand_roots) { mand_rebuild_landmarks(); draw_mand(); }
 }
 
 void IFSGui::S_mand_landmarks(XEvent* e) {
@@ -1714,7 +1734,9 @@ void IFSGui::S_mand_landmarks(XEvent* e) {
     mand_landmark_list_from_uv = false;
     mand_landmark_list_N = -1;
   }
-  if (mand_landmarks) mand_rebuild_landmarks();
+  /* unconditionally, not just when turning ON: turning the layer off has to drop its marks
+     from the shared list, or they stay on screen while the other layer is showing */
+  mand_rebuild_landmarks();
   draw_mand();
 }
 
@@ -2088,6 +2110,7 @@ void IFSGui::S_mand_annulus(XEvent* e) {
          << "   # is more depth still buying coverage?\n";
       sc << "reference_hexahole_ceiling 99.8927   # a PROVED boundary point: ceiling < 100%\n";
       sc << "reference_s0_ceiling       100.0     # a PROVED interior point: ceiling = 100%\n";
+      sc << "reference_lm--0_ceiling    97.4612   # lm:--0:0-+-0+-:2, a vivid boundary case\n";
       sc << "verdict     " << verdict << "\n";
     } }
 
@@ -5017,6 +5040,12 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_landmark_list_N = -1;
   mand_landmark_selected = -1;
   mand_landmark_list_targeted = false;
+  mand_landmark_list_on = false;
+  mand_root_list_targeted = false;
+  mand_root_list_ll = cpx(0.0, 0.0);
+  mand_root_list_ur = cpx(0.0, 0.0);
+  mand_lm_truncated = false;
+  mand_rt_truncated = false;
   mand_landmark_list_from_uv = false;
   mand_landmark_list_ll = cpx(0.0, 0.0);
   mand_landmark_list_ur = cpx(0.0, 0.0);

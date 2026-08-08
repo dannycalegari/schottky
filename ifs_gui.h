@@ -605,6 +605,13 @@ struct IFSGui {
   //the window the cached landmark list was built for, and whether it came from the
   //targeted search (which depends on the window) or the exhaustive one (which does not)
   bool mand_landmark_list_targeted;
+  //the two halves of the marked-point list are cached separately, each against its own key,
+  //so toggling one layer neither re-runs the other's search nor serves a stale list
+  std::vector<fd_landmark> mand_lm_cache, mand_rt_cache;
+  bool mand_landmark_list_on;      //were the landmarks included when the cache was built?
+  bool mand_root_list_targeted;
+  cpx  mand_root_list_ll, mand_root_list_ur;
+  bool mand_lm_truncated, mand_rt_truncated;
   //the list came from a typed u,v pair rather than from enumeration or search, so it does
   //not depend on the window and must not be rebuilt when the window changes
   bool mand_landmark_list_from_uv;

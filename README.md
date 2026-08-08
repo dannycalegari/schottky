@@ -174,35 +174,14 @@ disc that contains the difference set and report a vacuous 0%.
 The coverage stalls just below the `T_sigma` ceiling and stays there however far `cmax` is pushed:
 the uncovered part is a scale-invariant set, which is CKW's hole spiral.
 
-**Working from a coincidence instead of a built-in core.** The three named cores (`s0`, `s1`,
-`hex`) have their renormalization data compiled in, but any *finite* coincidence supplies its own.
-Give the two words and `funddom` solves for the parameter itself:
-
-    ./funddom coin:fgff:gfgg
-
-    coincidence u = fgff , v = gfgg   (m = 4)
-      d = (-1,+1,-1,-1)
-      polynomial (degree 3):  -1 + z - z^2 - z^3  =  0
-      admissible roots (1/2 < |sigma| < 1, Im sigma > 0): 1
-       [0] sigma = 0.419643377607081+0.606290729207199i   |sigma| = 0.737352705760   arg = 55.311003 deg
-           a = 4, b = 1, s = t = f;  Delta = 0;  P'(sigma) = 1.470353793-5.478273590i
-
-**`coin:` is a query, not a core.** It solves the coincidence and reports the parameter; it is
-*not* accepted for a coverage run, and the program refuses it as one. The figure a run produces
-covers the `C` admitting a **limit** trap for the asymptotic family `sigma + C sigma^(bn)`, which
-needs an *infinite* coincidence — a landmark point. At a finite coincidence `u(0) = v(0)` the
-agreement is already exact, so there is no asymptotic renormalization to take a limit of and no
-fundamental annulus of `E_sigma` to cover. The reason the refusal is explicit rather than
-implicit is that everything still *evaluates* at such a sigma (`Delta = 0`, `b = 1`, and
-`rho_max` comes out positive), so a run would hand back a plausible raster and a coverage
-percentage that means nothing. Use a `lm:` core for a coverage run.
-
-If the coincidence polynomial has several admissible roots, `coin:<u>:<v>:<k>` names the `k`-th;
-run the query form to list them. Note the three named cores are *infinite* coincidences and so
-cannot be reached this way — indeed no finite coincidence can lie on `|s| = 1/sqrt2` at all, since
-a `{0,±1}` polynomial with nonzero constant and leading coefficients is monic up to sign, making
-its roots algebraic integers, while `|s|^2 = 1/2` would force `s conj(s) = 1/2` to be a rational
-algebraic integer.
+**A finite coincidence is not one of these points.** It is worth being explicit, because the
+definition above admits it degenerately: if `u(0) = v(0)` then `u` and `v` are the *same* affine
+map, so taking `s = t = f` makes `pi(u s^inf) = pi(v t^inf)` hold trivially, with `a = |u|`,
+`b = 1` and `Delta = 0`. Nothing asymptotic is happening there, though — the agreement is already
+exact — so there is no family `sigma + C sigma^{bn}` to trap and no fundamental domain of
+`E_sigma` to cover, and `funddom` refuses such a `sigma` as a core for a coverage run. Those
+parameters are *roots*, they are interesting in their own right, and they are covered under
+[Landmark points](#landmark-points-where-the-limit-trap-mechanism-applies) below.
 
 Three practical points, all learned the hard way:
 
@@ -250,6 +229,10 @@ three built-in cores are of that kind. So:
 
     ./funddom landmarks 8
 
+which lists every landmark point of complexity `a + b <= 8`, one per line, with `sigma`, `a`, `b`,
+the degree, `Delta`, `P'(sigma)`, and a spec that feeds straight back in. There are 1, 18, 99, 533,
+2421, 10958 and 46201 of them for `Nmax = 3..9`.
+
 `landmarks` is exhaustive, so it costs `3^Nmax` polynomials and passes 100,000 points at
 `Nmax = 10`.  For a deep zoom -- where a hole spiral accumulates on one landmark of high
 complexity -- ask for that neighbourhood instead:
@@ -263,7 +246,22 @@ landmark inside the disc, and agrees exactly with `landmarks` for `Nmax <= 9`.
 For a **finite** coincidence `u(0) = v(0)` -- a root rather than a landmark -- use the `coin:`
 selector, which solves for `s` as a root of `sum_j d_j s^j` with `d_j = (eps^u_j - eps^v_j)/2`:
 
-    ./funddom coin:fgff:gfgg              # lists the admissible roots and their data
+    ./funddom coin:fgff:gfgg
+
+    coincidence u = fgff , v = gfgg   (m = 4)
+      d = (-1,+1,-1,-1)
+      polynomial (degree 3):  -1 + z - z^2 - z^3  =  0
+      admissible roots (1/2 < |sigma| < 1, Im sigma > 0): 1
+       [0] sigma = 0.419643377607081+0.606290729207199i   |sigma| = 0.737352705760   arg = 55.311003 deg
+           a = 4, b = 1, s = t = f;  Delta = 0;  P'(sigma) = 1.470353793-5.478273590i
+
+If the polynomial has several admissible roots, `coin:<u>:<v>:<k>` names the `k`-th. This is a
+**query only**: it reports the parameter, and is refused as a core for a coverage run, for the
+reason given under [What happens near a renormalization point?](#what-happens-near-a-renormalization-point)
+above. Note also that no finite coincidence can lie on `|s| = 1/sqrt2` at all, since a `{0,±1}`
+polynomial with nonzero constant and leading coefficients is monic up to sign, making its roots
+algebraic integers, while `|s|^2 = 1/2` would force `s conj(s) = 1/2` to be a rational algebraic
+integer.
 
 Both are reachable from the interactive program's `uv =` box, which dispatches on whether the
 words carry brackets (eventually periodic, so landmarks) or not (finite, so roots).
@@ -278,10 +276,7 @@ coefficient prefixes the same way `lmnear` does, so degree 20 near a point takes
 instead of the 3.5 billion polynomials an exhaustive pass would need.  Both are the `Roots:`
 layer of the interactive program, which picks between them by how far you are zoomed in.
 
-lists every landmark point of complexity `a + b <= 8`, one per line, with `sigma`, `a`, `b`, the
-degree, `Delta`, `P'(sigma)`, and a spec that feeds straight back in. There are 1, 18, 99, 533,
-2421, 10958 and 46201 of them for `Nmax = 3..9`; cost grows like `(N-1)*3^(N-1)` polynomials, so
-`Nmax` 8 takes under a second and 10 about sixteen. The three cores are marked in the output:
+The three cores are marked in the output:
 
     0.500000000000000 0.500000000000000 ... 2 1 2 ... lm:-+:-:0          <== s0 (twindragon)
     0.250000000000000 0.661437827766148 ... 1 4 4 ... lm:-:+--+:0        <== s1 (tame twindragon)
