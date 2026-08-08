@@ -612,6 +612,7 @@ struct IFSGui {
   bool mand_root_list_targeted;
   cpx  mand_root_list_ll, mand_root_list_ur;
   bool mand_lm_truncated, mand_rt_truncated;
+  int  mand_drawn_lm, mand_drawn_rt;   //what the last draw actually put on screen
   //the list came from a typed u,v pair rather than from enumeration or search, so it does
   //not depend on the window and must not be rebuilt when the window changes
   bool mand_landmark_list_from_uv;

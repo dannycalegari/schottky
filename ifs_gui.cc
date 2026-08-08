@@ -1615,6 +1615,7 @@ void IFSGui::S_mand_circle_sqrt2(XEvent* e) {
 }
 
 void IFSGui::mand_draw_landmarks() {
+  mand_drawn_lm = mand_drawn_rt = 0;   //so an early return cannot leave a stale count
   if ((!mand_landmarks && !mand_roots) || window_mode == LIMIT) return;
   Widget& MW = W_mand_plot;
   int col = get_rgb_color(0.05, 0.85, 0.1);       //green: distinct from every layer
@@ -1654,6 +1655,8 @@ void IFSGui::mand_draw_landmarks() {
        objects and worth telling apart at a glance */
     dots[mand_landmark_list[i].spec[0] == 'c' ? 1 : 0].push_back(a);
   }
+  mand_drawn_lm = (int)dots[0].size();      //for SCHOTTKY_DUMP_STATE
+  mand_drawn_rt = (int)dots[1].size();
   if (!halo.empty()) {
     XSetForeground(display, MW.gc, BlackPixel(display, screen));
     XFillArcs(display, MW.p, MW.gc, &halo[0], (int)halo.size());
@@ -3646,7 +3649,13 @@ void IFSGui::draw_mand() {
   double TLB_C,TLB_Z;
   bool found_TLB = false;
   if (mand_trap && !mand_grid_trap_valid) {
-    //std::cout << "About to find TLB\n";
+    /* NOTE the set_params below is vestigial, and that matters for reading the cache logic:
+       TLB_for_region overwrites z with the centre of the region it is given and restores it
+       on the way out, so this grid depends only on (mand_ll, mand_ur) and mand_trap_depth,
+       NOT on the selected parameter.  That is why mand_grid_trap_valid needs no invalidation
+       in change_highlighted_ifs -- a question worth an hour of audit until the assignment
+       above is read.  Left in place rather than deleted because it is harmless and removing
+       it would silently change which overload of the region search is exercised. */
     temp_IFS.set_params(IFS.z, IFS.z);
     temp_IFS.TLB_for_region(TLB, mand_ll, mand_ur, 16, &TLB_C, &TLB_Z, 0);
     found_TLB = (TLB.size() != 0);
@@ -3906,6 +3915,34 @@ void IFSGui::draw_mand() {
   mand_draw_guide_circles();
   mand_draw_landmarks();
   MW.redraw();
+
+  /* SCHOTTKY_DUMP_STATE: one line describing the marked-point layers, their caches and the
+     keys those caches were built against.  This exists so a test can check COHERENCE exactly
+     -- "is this layer on?" against "was it on when the cache was built?" -- instead of trying
+     to infer it from pixels.  The bug it was written for had a layer on, an empty cache, and a
+     key that matched in every field it recorded. */
+  if (getenv("SCHOTTKY_DUMP_STATE")) {
+    int inwin_lm = 0, inwin_rt = 0;
+    for (int i = 0; i < (int)mand_landmark_list.size(); ++i) {
+      cpx c(mand_landmark_list[i].sigma_re, mand_landmark_list[i].sigma_im);
+      if (c.real() < mand_ll.real() || c.real() > mand_ur.real() ||
+          c.imag() < mand_ll.imag() || c.imag() > mand_ur.imag()) continue;
+      if (mand_landmark_list[i].spec[0] == 'c') ++inwin_rt; else ++inwin_lm;
+    }
+    fprintf(stderr,
+      "[STATE] lm_on=%d lm_key_on=%d lm_N=%d lm_key_N=%d lm_cache=%d lm_inwin=%d lm_drawn=%d"
+      " rt_on=%d rt_key_on=%d rt_deg=%d rt_key_deg=%d rt_cache=%d rt_inwin=%d rt_drawn=%d"
+      " tgt=%d lm_key_tgt=%d rt_key_tgt=%d list=%d sel=%d uv=%d"
+      " win=%.17g,%.17g,%.17g,%.17g\n",
+      mand_landmarks?1:0, mand_landmark_list_on?1:0, mand_landmarks_N, mand_landmark_list_N,
+      (int)mand_lm_cache.size(), inwin_lm, mand_drawn_lm,
+      mand_roots?1:0, mand_root_list_on?1:0, mand_roots_deg, mand_root_list_deg,
+      (int)mand_rt_cache.size(), inwin_rt, mand_drawn_rt,
+      0, mand_landmark_list_targeted?1:0, mand_root_list_targeted?1:0,
+      (int)mand_landmark_list.size(), mand_landmark_selected,
+      mand_landmark_list_from_uv?1:0,
+      mand_ll.real(), mand_ll.imag(), mand_ur.real(), mand_ur.imag());
+  }
 
   if (aborted) {
     set_status("mandelbrot: stopped -- the picture is incomplete, so nothing was cached");
@@ -4850,6 +4887,13 @@ void IFSGui::reset_and_pack_window() {
   W_limit_2d.help = "the affine limit set; only meaningful for real part of s between 0.6 and 0.68";
   W_mand_plot.help = "parameter space: left-click picks a parameter (drag to sweep), right-click picks and zooms in";
   W_mand_recenter.help = "recenter the window on the selected parameter";
+  /* The zoom buttons had no hover help at all, in either pane -- the one omission left in the
+     help list, and worth filling because the mandelbrot zoom is where the landmark and root
+     layers change behaviour: below a quarter across they switch to the targeted search. */
+  W_mand_zoom_in.help = "halve the width of the parameter window, keeping the selected parameter centred; below about a quarter across the landmark and root layers switch to their targeted searches";
+  W_mand_zoom_out.help = "double the width of the parameter window; it will not go past |s| = 1, where there is nothing";
+  W_limit_zoom_in.help = "magnify the limit set about the centre of the pane";
+  W_limit_zoom_out.help = "shrink the limit set about the centre of the pane";
   W_mand_mesh_title.help = "how many screen pixels make up one computed cell; smaller is sharper and slower";
   W_mand_connected_check.help = "plot M, the set where Lambda_s is connected; the shade shows how hard a touching pair was to find";
   W_mand_contains_half_check.help = "plot M_0, the parameters whose limit set contains the point 0 (the program works internally in a normalization where that point is 1/2, hence contains_half in the source)";
@@ -4999,6 +5043,8 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   limit_trap_located = false;
   limit_trap_radius = 0.0;
   limit_nifs = false;
+  nifs_saved_ll = cpx(0.0, 0.0);   //written before read (the toggle sets them), but an
+  nifs_saved_ur = cpx(0.0, 0.0);   //uninitialised window is a trap for any future caller
   limit_gifs = false;
   limit_2d = false;
   limit_marked_points.resize(3);
@@ -5046,6 +5092,8 @@ void IFSGui::launch(IFSWindowMode m, const cpx& c) {
   mand_root_list_ur = cpx(0.0, 0.0);
   mand_lm_truncated = false;
   mand_rt_truncated = false;
+  mand_drawn_lm = 0;
+  mand_drawn_rt = 0;
   mand_landmark_list_from_uv = false;
   mand_landmark_list_ll = cpx(0.0, 0.0);
   mand_landmark_list_ur = cpx(0.0, 0.0);
