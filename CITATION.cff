@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "schottky: tools for the space of two-generator semigroups of dilations of the plane"
+authors:
+  - family-names: Calegari
+    given-names: Danny
+    orcid: "https://orcid.org/0009-0007-9304-2822"
+    affiliation: "University of Chicago"
+  - family-names: Walker
+    given-names: Alden
+repository-code: "https://github.com/dannycalegari/schottky"
+license: GPL-3.0
+abstract: "Tools for studying the parameter space of two-generator iterated function systems of complex dilations of the plane: an interactive program, and headless tools that certify parameters rigorously."
